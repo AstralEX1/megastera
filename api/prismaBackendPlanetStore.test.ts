@@ -26,4 +26,23 @@ describe('PrismaBackendPlanetStore', () => {
     await expect(store.generatePlanet(proof)).rejects.toThrow('proof is not persisted');
     expect(prisma.ticketPurchase.findUnique).toHaveBeenCalledOnce();
   });
+
+  it('rejects proof fields that conflict with the persisted receipt row', async () => {
+    const prisma = {
+      ticketPurchase: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'ticket-row',
+          ticketId: { toFixed: () => '999' },
+          drawingId: { toFixed: () => '1' },
+          recipient: proof.recipient,
+          bonusBall: proof.bonusBall,
+          normals: proof.normals,
+        }),
+      },
+      backendPlanet: { findUnique: vi.fn() },
+    } as unknown as PrismaClient;
+    const store = new PrismaBackendPlanetStore(prisma);
+
+    await expect(store.generatePlanet(proof)).rejects.toThrow('conflicts with persisted ticket');
+  });
 });

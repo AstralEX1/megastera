@@ -207,6 +207,16 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
       },
     });
     if (!ticket) throw new Error('Backend Planet proof is not persisted.');
+    if (
+      ticket.ticketId.toFixed(0) !== normalized.ticketId.toString() ||
+      ticket.drawingId.toFixed(0) !== normalized.drawingId.toString() ||
+      ticket.recipient !== getAddress(normalized.recipient).toLowerCase() ||
+      ticket.bonusBall !== normalized.bonusBall ||
+      ticket.normals.length !== normalized.normals.length ||
+      ticket.normals.some((normal, index) => normal !== normalized.normals[index])
+    ) {
+      throw new Error('Backend Planet proof conflicts with persisted ticket provenance.');
+    }
     const existing = await this.prisma.backendPlanet.findUnique({
       where: { ticketPurchaseId: ticket.id },
       include: { ticketPurchase: true },
