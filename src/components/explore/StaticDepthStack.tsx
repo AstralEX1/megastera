@@ -24,12 +24,9 @@ export function StaticDepthStack({
   const itemSize = visibleCards === 1 ? 560 : Math.max(180, 620 - (visibleCards - 1) * 55);
   const radiusX = visibleCards === 1 ? 1 : Math.min(620, Math.max(120, 700 - itemSize / 2 - 20));
   const radiusY = visibleCards === 1 ? 1 : Math.min(190, Math.max(90, 72 + visibleCards * 5));
-  const visualHeight = 500;
-
   return (
     <fieldset
-      className="relative m-0 flex w-full min-w-0 items-center justify-center overflow-hidden border-0 p-0"
-      style={{ height: `${visualHeight}px` }}
+      className="relative m-0 flex h-[200px] w-full min-w-0 items-center justify-center overflow-hidden border-0 p-0 min-[381px]:h-[300px] sm:h-[360px] xl:h-[clamp(360px,calc(100svh-420px),500px)]"
       aria-label="Selected planets visualization"
     >
       <OrbitImages
@@ -42,7 +39,7 @@ export function StaticDepthStack({
         rotation={-16}
         duration={35}
         itemSize={itemSize}
-        height={visualHeight}
+        height="100%"
         responsive
       />
     </fieldset>

@@ -14,9 +14,15 @@ import { requestBackendPlanetGeneration, type BackendPlanet } from '@/lib/backen
 import { BULK_THRESHOLD, type CustomTicket, isValidTicket, totalCost } from '@/lib/tickets';
 import type { PurchasedTicket } from '@/lib/purchaseReceipt';
 
+const GENERATION_RETRY_DELAYS_MS = [0, 1_000, 2_000, 4_000, 8_000, 16_000] as const;
+
+function waitForGenerationRetry(delayMs: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, delayMs));
+}
+
 export function Play() {
   const { address, isConnected } = useAccount();
-  const { state, drawingId, phase, refetch: refetchJackpot } = useJackpotState();
+  const { state, drawingId, phase, isLoading: isJackpotLoading, error: jackpotError, refetch: refetchJackpot } = useJackpotState();
   const [count, setCount] = useState(3);
   const [automaticQuickPick, setAutomaticQuickPick] = useState(true);
   const [staticTickets, setStaticTickets] = useState<readonly CustomTicket[]>([]);
@@ -24,6 +30,8 @@ export function Play() {
   const [generatedPlanets, setGeneratedPlanets] = useState<BackendPlanet[]>([]);
   const [generationError, setGenerationError] = useState<Error | null>(null);
   const generatedKeys = useRef(new Set<string>());
+  const generationInFlight = useRef(new Set<string>());
+  const generationRunId = useRef(0);
 
   const bounds = useMemo(
     () => (state ? { ballMax: state.ballMax, bonusballMax: state.bonusballMax } : null),
@@ -42,30 +50,52 @@ export function Play() {
   const purchase = isBulk ? bulk.create : direct;
   const approvalSpender = isBulk ? BATCH_PURCHASE_FACILITATOR_ADDRESS : JACKPOT_ADDRESS;
   const approvalAmount = isBulk ? (bulkReady ? total : 0n) : directReady ? total : 0n;
-  const checkoutDisabled = !isConnected || phase !== 'open' || purchase.isPending || !(isBulk ? bulkReady : directReady);
+  const jackpotStatus = isJackpotLoading ? 'loading' : jackpotError || !state ? 'error' : 'ready';
+  const checkoutDisabled = jackpotStatus !== 'ready' || !isConnected || phase !== 'open' || purchase.isPending || !(isBulk ? bulkReady : directReady);
   const purchasedTickets: readonly PurchasedTicket[] = isBulk ? bulk.confirmedTickets : direct.purchasedTickets;
   const activeBatch = bulk.orderInfo?.[0];
 
   useEffect(() => {
-    if (!flowActive || !address) return;
+    if (!flowActive || !address || purchasedTickets.length === 0) return;
+    const runId = generationRunId.current;
     for (const ticket of purchasedTickets) {
       const key = `${ticket.originTxHash.toLowerCase()}:${ticket.logIndex.toString()}`;
-      if (generatedKeys.current.has(key)) continue;
+      if (generatedKeys.current.has(key) || generationInFlight.current.has(key)) continue;
       generatedKeys.current.add(key);
-      setGenerationError(null);
-      void requestBackendPlanetGeneration({
-        transactionHash: ticket.originTxHash,
-        logIndex: ticket.logIndex,
-        recipient: address,
-      })
-        .then((planet) => setGeneratedPlanets((current) => current.some((item) => item.planetId === planet.planetId) ? current : [...current, planet]))
-        .catch((error) => setGenerationError(error instanceof Error ? error : new Error('Planet generation failed.')));
+      generationInFlight.current.add(key);
+      void (async () => {
+        let lastError = new Error('Planet generation failed.');
+        try {
+          for (const delayMs of GENERATION_RETRY_DELAYS_MS) {
+            if (runId !== generationRunId.current) return;
+            if (delayMs > 0) await waitForGenerationRetry(delayMs);
+            if (runId !== generationRunId.current) return;
+            try {
+              const planet = await requestBackendPlanetGeneration({
+                transactionHash: ticket.originTxHash,
+                logIndex: ticket.logIndex,
+                recipient: address,
+              });
+              if (runId !== generationRunId.current) return;
+              setGeneratedPlanets((current) => current.some((item) => item.planetId === planet.planetId) ? current : [...current, planet]);
+              return;
+            } catch (error) {
+              lastError = error instanceof Error ? error : new Error('Planet generation failed.');
+            }
+          }
+          if (runId === generationRunId.current) setGenerationError(lastError);
+        } finally {
+          generationInFlight.current.delete(key);
+        }
+      })();
     }
   }, [address, flowActive, purchasedTickets]);
 
   const launch = () => {
     if (!address || drawingId === undefined) return;
     generatedKeys.current.clear();
+    generationInFlight.current.clear();
+    generationRunId.current += 1;
     setGeneratedPlanets([]);
     setGenerationError(null);
     setFlowActive(true);
@@ -74,30 +104,36 @@ export function Play() {
   };
 
   const exploreAgain = useCallback(() => {
+    generationRunId.current += 1;
     direct.reset();
-    bulk.create.reset();
+    bulk.reset();
     generatedKeys.current.clear();
+    generationInFlight.current.clear();
     setGeneratedPlanets([]);
     setGenerationError(null);
     setFlowActive(false);
-  }, [bulk.create, direct]);
+  }, [bulk, direct]);
 
   const retryGeneration = () => {
+    generationRunId.current += 1;
     generatedKeys.current.clear();
+    generationInFlight.current.clear();
     setGenerationError(null);
     setGeneratedPlanets([]);
   };
 
-  const purchaseConfirmed = purchasedTickets.length > 0 || (isBulk && (bulk.create.isSuccess || bulk.hasActiveOrder));
+  const purchaseConfirmed = purchasedTickets.length > 0;
   const expectedCount = count;
   const ready = generatedPlanets.length >= expectedCount;
-  const progress = `${Math.min(generatedPlanets.length, expectedCount)} / ${expectedCount}`;
+  const progress = `${Math.min(generatedPlanets.length, expectedCount)} / ${expectedCount} planets generated`;
 
   let content = (
     <ExpeditionConfigurator
       quantity={count}
       total={total}
       jackpotAmount={state?.prizePool}
+      jackpotStatus={jackpotStatus}
+      onRetryJackpot={refetchJackpot}
       bounds={bounds}
       manuallyEditedTickets={staticTickets}
       automaticQuickPick={automaticQuickPick}
@@ -121,25 +157,35 @@ export function Play() {
   );
 
   if (flowActive && purchase.error) {
-    content = <ExpeditionStatusScreen step="explore" eyebrow="PURCHASE FAILED" title="The expedition can be retried" description={purchase.error.message} action={<Button variant="primary" onClick={exploreAgain}>Try again</Button>} />;
-  } else if (flowActive && generationError) {
-    content = <ExpeditionStatusScreen step="discover" eyebrow="GENERATION ERROR" title="The ticket is safe" description={generationError.message} action={<Button variant="primary" onClick={retryGeneration}>Retry generation</Button>} />;
+    content = <ExpeditionStatusScreen step="configure" eyebrow="PURCHASE FAILED" title="The ticket purchase can be retried" description={purchase.error.message} action={<Button variant="primary" onClick={exploreAgain}>Try again</Button>} />;
   } else if (flowActive && ready) {
     content = (
       <RevealCompleteScreen
         drawingId={drawingId}
         onExploreAgain={exploreAgain}
         onViewPlanets={() => window.location.assign('/my-planets')}
-        cards={<div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{generatedPlanets.map((planet) => <img key={planet.planetId} src={planet.gifUrl} alt={planet.name} className="aspect-square w-full rounded-2xl border border-[var(--border)] object-cover" />)}</div>}
+        cards={<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{generatedPlanets.map((planet) => (
+          <article key={planet.planetId} className="overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-raised)] text-left shadow-[0_22px_60px_rgba(0,0,0,0.35)]">
+            <img src={planet.gifUrl} alt={`${planet.name} planet`} style={{ imageRendering: 'pixelated' }} className="aspect-square w-full object-cover" />
+            <div className="space-y-1.5 border-t border-[var(--border)] p-4">
+              <p className="telemetry text-[var(--success)]">{planet.planetType} · {planet.rarity}</p>
+              <h2 className="font-hud text-xl font-bold tracking-[-0.03em] text-[var(--text-primary)]">{planet.name}</h2>
+              <p className="font-mono text-[11px] text-[var(--text-secondary)]">TICKET #{planet.ticketId}</p>
+            </div>
+          </article>
+        ))}</div>}
       />
     );
+  } else if (flowActive && generationError) {
+    content = <ExpeditionStatusScreen step="explore" eyebrow="GENERATION ERROR" title="The ticket is safe" description={generationError.message} action={<Button variant="primary" onClick={retryGeneration}>Retry generation</Button>} />;
   } else if (flowActive && purchaseConfirmed) {
-    content = <ExpeditionStatusScreen step="discover" eyebrow="RECEIPT CONFIRMED" title="Generating your planets" description="The backend is rendering a GIF and saving your Planet to the database. You can safely keep this page open." progress={progress} />;
+    content = <ExpeditionStatusScreen step="explore" eyebrow="EXPLORING PLANETS" title="Exploring planets…" description="Your ticket receipt is confirmed. We are waiting for finality, generating the Planet, and saving it to the Megastera backend." progress={progress} />;
+  } else if (flowActive) {
+    content = <ExpeditionStatusScreen step="configure" eyebrow="BUYING TICKETS" title="Confirming your tickets…" description="Approve the purchase in your wallet and wait for the receipt. Your Planet generation starts automatically after confirmation." />;
   }
 
   return (
     <div className="mx-auto max-w-5xl space-y-3 pb-6">
-      {!isConnected && <Notice>Connect your wallet to buy tickets.</Notice>}
       {phase !== 'open' && <Notice>Tickets are paused until the next drawing opens.</Notice>}
       {content}
       {isBulk && bulk.minimumTicketCount !== undefined && !meetsBulkMinimum && !flowActive && <Notice>Megapot requires at least {bulk.minimumTicketCount.toString()} tickets for this order.</Notice>}

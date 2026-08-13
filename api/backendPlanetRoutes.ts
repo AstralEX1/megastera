@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getPrismaClient } from './database';
 import { loadBackendPlanetConfig, type BackendPlanetConfig } from './backendConfig';
 import {
+  type BackendPlanetCollectionRecord,
   type BackendPlanetRecord,
   type BackendPlanetStore,
   PrismaBackendPlanetStore,
@@ -37,6 +38,15 @@ function serializePlanet(planet: BackendPlanetRecord) {
   return {
     ...planet,
     gifUrl: `/api/planets/${planet.planetId}/gif`,
+  };
+}
+
+function serializeCollectionRow(row: BackendPlanetCollectionRecord) {
+  return {
+    generationStatus: row.generationStatus,
+    ticket: row.ticket,
+    planet: row.planet ? serializePlanet(row.planet) : null,
+    generationError: row.generationError ?? null,
   };
 }
 
@@ -149,6 +159,17 @@ export function createBackendPlanetRoutes(
       return c.json({ planets: planets.map(serializePlanet) });
     } catch {
       return c.json({ error: 'The backend Planet API is not configured.' }, 503);
+    }
+  });
+
+  app.get('/planets/collection', async (c) => {
+    const owner = c.req.query('owner');
+    if (!owner || !isAddress(owner)) return c.json({ error: 'A valid owner address is required.' }, 400);
+    try {
+      const collection = await dependencies.getStore(dependencies.loadConfig()).listCollection(getAddress(owner));
+      return c.json({ planets: collection.map(serializeCollectionRow) });
+    } catch {
+      return c.json({ error: 'The backend Planet collection is not configured.' }, 503);
     }
   });
 

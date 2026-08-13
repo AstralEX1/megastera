@@ -50,6 +50,7 @@ import { useWalletWins, type WinsByRound } from '@/hooks/useWalletWins';
 import { formatApiError } from '@/lib/api';
 import { MAX_CLAIM_BATCH } from '@/lib/tickets';
 import { hasPartialTicketHistory } from '@/lib/ticketHistory';
+import type { TicketStatus } from '@/lib/ticketStatus';
 
 function fmtDate(iso: string | null) {
   if (!iso) return '';
@@ -168,6 +169,11 @@ function UnclaimedRoundRow({ row, onClaimed }: { row: WinsByRound; onClaimed: ()
             tierId={w.matched_normals * 2 + (w.bonusball_match ? 1 : 0)}
             claimable
             winnings={BigInt(w.amount.amount)}
+            status={{
+              kind: 'claimable',
+              amount: BigInt(w.amount.amount),
+              ticketId: BigInt(w.user_ticket_id),
+            } satisfies TicketStatus}
           />
         ))}
       </div>
@@ -195,7 +201,7 @@ function UnclaimedRoundRow({ row, onClaimed }: { row: WinsByRound; onClaimed: ()
             'Confirming on-chain…'
           ) : (
             <>
-              Claim {claimableWins.length} {claimableWins.length === 1 ? 'win' : 'wins'} ·{' '}
+              Claim winnings · {claimableWins.length} {claimableWins.length === 1 ? 'win' : 'wins'} ·{' '}
               <UsdcAmount value={claimableTotal} precision={2} />
             </>
           )}

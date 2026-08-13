@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from './generated/prisma/client';
+import type { PrismaClient } from './generated/prisma/client';
 import {
   getDistanceToNextRank,
   getLeaderboardPeriod,
@@ -16,8 +16,20 @@ export type LifetimeLeaderboardPlanet = {
   mintedAt: Date;
 };
 
+export type LiveLeaderboardPlanet = {
+  ownerAddress: string;
+  baseMineralsPerDay: bigint | null;
+  generatedAt: Date;
+};
+
+export type LiveLeaderboardSnapshot = {
+  asOf: Date;
+  rows: RankedLeaderboardRow[];
+};
+
+export const LIVE_LEADERBOARD_CACHE_TTL_MS = 60_000;
+
 type Pagination = { offset: number; limit: number };
-type LeaderboardDatabase = PrismaClient | Prisma.TransactionClient;
 
 function addToMap(target: Map<string, bigint>, address: string, amount: bigint) {
   const normalizedAddress = address.toLowerCase();
@@ -60,6 +72,68 @@ export function calculateLeaderboardRows(input: {
   );
 }
 
+/** Calculates current lifetime production from active backend Planet rows. */
+export function calculateLiveLeaderboardRows(input: {
+  asOf: Date;
+  planets: readonly LiveLeaderboardPlanet[];
+}): RankedLeaderboardRow[] {
+  const scoreByWallet = new Map<string, bigint>();
+  const rateByWallet = new Map<string, bigint>();
+
+  for (const planet of input.planets) {
+    if (
+      planet.baseMineralsPerDay === null ||
+      planet.baseMineralsPerDay <= 0n ||
+      planet.ownerAddress.toLowerCase() === ZERO_ADDRESS ||
+      planet.generatedAt.getTime() > input.asOf.getTime()
+    )
+      continue;
+    const score = calculateLifetimeMinerals({
+      baseMineralsPerDay: planet.baseMineralsPerDay,
+      mintedAt: planet.generatedAt,
+      asOf: input.asOf,
+    });
+    if (score > 0n) addToMap(scoreByWallet, planet.ownerAddress, score);
+    addToMap(rateByWallet, planet.ownerAddress, planet.baseMineralsPerDay * MINERAL_SCALE);
+  }
+
+  return rankLeaderboardRows(
+    [...scoreByWallet].map(([walletAddress, scoreMicros]) => ({
+      walletAddress,
+      scoreMicros,
+      effectiveMineralsPerDayMicros: rateByWallet.get(walletAddress) ?? 0n,
+    })),
+  );
+}
+
+type LiveCacheEntry<T> = { expiresAt: number; value: T };
+
+/** Small async-safe TTL cache used to keep live standings affordable under refresh. */
+export function createLiveLeaderboardCache<T = LiveLeaderboardSnapshot>(
+  ttlMs = LIVE_LEADERBOARD_CACHE_TTL_MS,
+) {
+  if (!Number.isFinite(ttlMs) || ttlMs <= 0) throw new RangeError('Leaderboard cache TTL must be positive.');
+  let entry: LiveCacheEntry<T> | undefined;
+  let pending: Promise<T> | undefined;
+
+  return {
+    async get(now: Date, loader: (asOf: Date) => Promise<T> | T): Promise<T> {
+      if (entry && now.getTime() < entry.expiresAt) return entry.value;
+      if (pending) return pending;
+      pending = Promise.resolve(loader(now)).then((value) => {
+        entry = { expiresAt: now.getTime() + ttlMs, value };
+        return value;
+      }).finally(() => {
+        pending = undefined;
+      });
+      return pending;
+    },
+    clear() {
+      entry = undefined;
+    },
+  };
+}
+
 export function paginateLeaderboardRows(
   rows: readonly RankedLeaderboardRow[],
   pagination: Pagination,
@@ -72,44 +146,14 @@ export function paginateLeaderboardRows(
   };
 }
 
-type StoredLeaderboardPeriod = {
-  id: string;
-  startsAt: Date;
-  endsAt: Date;
-  finalizedAt?: Date | null;
-};
-
-async function loadLatestCompletedSnapshot(database: LeaderboardDatabase, now: Date) {
-  const period = (await database.leaderboardPeriod.findFirst({
-    where: { finalizedAt: { not: null }, endsAt: { lte: now } },
-    orderBy: { endsAt: 'desc' },
-  })) as StoredLeaderboardPeriod | null;
-  if (!period) return undefined;
-  const storedRows = await database.leaderboardEntry.findMany({
-    where: { periodId: period.id },
-    orderBy: { rank: 'asc' },
-  });
-  const rows: RankedLeaderboardRow[] = storedRows.map((row) => ({
-    rank: row.rank,
-    walletAddress: row.walletAddress,
-    scoreMicros: row.scoreMicros,
-    effectiveMineralsPerDayMicros: row.effectiveMineralsPerDayMicros,
-  }));
-  return { period, asOf: period.finalizedAt ?? period.endsAt, rows };
-}
-
 export async function getCurrentLeaderboard(
   prisma: PrismaClient,
   now: Date,
   pagination: Pagination,
 ) {
-  const snapshot = await loadLatestCompletedSnapshot(prisma, now);
-  if (!snapshot) {
-    const period = getLeaderboardPeriod(now);
-    return { period, asOf: now, ...paginateLeaderboardRows([], pagination) };
-  }
+  const snapshot = await getLiveLeaderboardSnapshot(prisma, now);
   return {
-    period: snapshot.period,
+    period: getLeaderboardPeriod(now),
     asOf: snapshot.asOf,
     ...paginateLeaderboardRows(snapshot.rows, pagination),
   };
@@ -120,23 +164,42 @@ export async function getWalletLeaderboardPosition(
   walletAddress: string,
   now: Date,
 ) {
-  const snapshot = await loadLatestCompletedSnapshot(prisma, now);
+  const snapshot = await getLiveLeaderboardSnapshot(prisma, now);
   const normalizedAddress = walletAddress.toLowerCase();
-  if (!snapshot) {
-    return {
-      period: getLeaderboardPeriod(now),
-      asOf: now,
-      row: undefined,
-      distanceToNextRankMicros: null,
-    };
-  }
   const row = snapshot.rows.find((entry) => entry.walletAddress === normalizedAddress);
   return {
-    period: snapshot.period,
+    period: getLeaderboardPeriod(now),
     asOf: snapshot.asOf,
     row,
     distanceToNextRankMicros: row ? getDistanceToNextRank(snapshot.rows, normalizedAddress) : null,
   };
+}
+
+const liveLeaderboardCaches = new WeakMap<object, ReturnType<typeof createLiveLeaderboardCache<LiveLeaderboardSnapshot>>>();
+
+function getLiveLeaderboardCache(prisma: PrismaClient) {
+  const key = prisma as unknown as object;
+  const current = liveLeaderboardCaches.get(key);
+  if (current) return current;
+  const created = createLiveLeaderboardCache<LiveLeaderboardSnapshot>();
+  liveLeaderboardCaches.set(key, created);
+  return created;
+}
+
+async function getLiveLeaderboardSnapshot(
+  prisma: PrismaClient,
+  now: Date,
+): Promise<LiveLeaderboardSnapshot> {
+  return getLiveLeaderboardCache(prisma).get(now, async (asOf) => {
+    const planets = await prisma.backendPlanet.findMany({
+      where: { status: 'READY', baseMineralsPerDay: { gt: 0n } },
+      select: { ownerAddress: true, baseMineralsPerDay: true, generatedAt: true },
+    });
+    return {
+      asOf,
+      rows: calculateLiveLeaderboardRows({ asOf, planets }),
+    };
+  });
 }
 
 export async function finalizeLeaderboardPeriod(

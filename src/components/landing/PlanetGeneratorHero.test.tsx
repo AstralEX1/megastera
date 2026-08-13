@@ -20,7 +20,7 @@ describe('PlanetGeneratorHero', () => {
     const { container } = render(<PlanetGeneratorHero />);
 
     expect(screen.getByTestId('planet-gif-preview')).toHaveTextContent('Generated ticket 5001');
-    expect(screen.getByRole('article', { name: 'Generated Planet preview' })).toBeInTheDocument();
+    expect(screen.getByRole('article', { name: 'Interactive Planet preview' })).toBeInTheDocument();
     expect(container.querySelector('.landing-live-generator')).toBeInTheDocument();
     expect(container.querySelector('.landing-live-generator-topline')).not.toBeInTheDocument();
     expect(container.querySelector('.landing-live-generator-meta')).not.toBeInTheDocument();
@@ -28,7 +28,7 @@ describe('PlanetGeneratorHero', () => {
     expect(screen.queryByText('PLANET = TICKET')).not.toBeInTheDocument();
     expect(screen.queryByText('MEGAPOT · IN DRAW')).not.toBeInTheDocument();
 
-    const generatePlanetButton = screen.getByRole('button', { name: 'Generate planet' });
+    const generatePlanetButton = screen.getByRole('button', { name: 'Tap to generate' });
     expect(generatePlanetButton).not.toHaveTextContent('↗');
     expect(screen.queryByRole('button', { name: /Generate another/i })).not.toBeInTheDocument();
 

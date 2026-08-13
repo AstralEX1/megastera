@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getAddress, stringToHex, type Hex } from 'viem';
-import { BASE_SEPOLIA_CHAIN_ID, MEGAPLANETS_SOURCE } from './config';
+import { BASE_SEPOLIA_CHAIN_ID, MEGASTERA_SOURCE } from './config';
 import { BASE_SEPOLIA_JACKPOT, type MegasteraProof } from './eligibility';
 import { MemoryBackendPlanetStore, deriveBackendPlanet } from './backendPlanet';
 
@@ -17,7 +17,7 @@ const proof: MegasteraProof = {
   purchasedAt: new Date('2026-08-13T12:00:00.000Z'),
   chainId: BASE_SEPOLIA_CHAIN_ID,
   jackpotAddress: BASE_SEPOLIA_JACKPOT,
-  source: stringToHex(MEGAPLANETS_SOURCE, { size: 32 }),
+  source: stringToHex(MEGASTERA_SOURCE, { size: 32 }),
 };
 
 describe('backend Planet generation', () => {

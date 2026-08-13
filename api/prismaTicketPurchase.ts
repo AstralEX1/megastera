@@ -1,5 +1,5 @@
 import { getAddress, stringToHex } from 'viem';
-import { BASE_SEPOLIA_CHAIN_ID, MEGAPLANETS_SOURCE } from './config';
+import { BASE_SEPOLIA_CHAIN_ID, MEGASTERA_SOURCE } from './config';
 import { BASE_SEPOLIA_JACKPOT, normalizeMegasteraProof, type MegasteraProof } from './eligibility';
 import type { PrismaClient } from './generated/prisma/client';
 
@@ -36,7 +36,7 @@ function persistenceData(proof: MegasteraProof) {
     recipient: getAddress(normalized.recipient).toLowerCase(),
     normals: [...normalized.normals],
     bonusBall: normalized.bonusBall,
-    source: stringToHex(MEGAPLANETS_SOURCE, { size: 32 }),
+    source: stringToHex(MEGASTERA_SOURCE, { size: 32 }),
     originTxHash: normalized.originTxHash.toLowerCase(),
     blockNumber: normalized.blockNumber,
     blockHash: normalized.blockHash.toLowerCase(),

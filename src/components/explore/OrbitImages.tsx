@@ -1,5 +1,5 @@
 import { animate, type MotionValue, motion, useMotionValue, useTransform } from 'motion/react';
-import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import './OrbitImages.css';
 
 type OrbitShape =
@@ -30,7 +30,7 @@ type OrbitImagesProps = {
   direction?: 'normal' | 'reverse';
   fill?: boolean;
   width?: number | '100%';
-  height?: number | 'auto';
+  height?: CSSProperties['height'];
   className?: string;
   itemClassName?: string;
   centerContent?: ReactNode;

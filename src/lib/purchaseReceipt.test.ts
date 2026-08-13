@@ -4,6 +4,9 @@ import { JACKPOT_ADDRESS, TICKET_SOURCE } from '@/config/contracts';
 import {
   jackpotPurchaseAbi,
   persistPurchasedTickets,
+  clearPendingPurchase,
+  persistPendingPurchase,
+  readPendingPurchases,
   readPersistedPurchasedTickets,
   readPurchasedTickets,
 } from './purchaseReceipt';
@@ -18,6 +21,9 @@ class MemoryStorage {
   }
   setItem(key: string, value: string) {
     this.values.set(key, value);
+  }
+  removeItem(key: string) {
+    this.values.delete(key);
   }
   key(index: number) {
     return [...this.values.keys()][index] ?? null;
@@ -59,7 +65,7 @@ function purchaseLog(args: {
 }
 
 describe('readPurchasedTickets', () => {
-  it('extracts every MegaPlanets ticket in canonical log order', () => {
+  it('extracts every Megastera ticket in canonical log order', () => {
     const tickets = readPurchasedTickets(
       {
         status: 'success',
@@ -103,7 +109,7 @@ describe('readPurchasedTickets', () => {
         } as never,
         account,
       ),
-    ).toThrow(/no MegaPlanets/i);
+    ).toThrow(/no Megastera/i);
     expect(() =>
       readPurchasedTickets(
         {
@@ -119,7 +125,7 @@ describe('readPurchasedTickets', () => {
         } as never,
         account,
       ),
-    ).toThrow(/no MegaPlanets/i);
+    ).toThrow(/no Megastera/i);
   });
 
   it('rejects duplicate IDs and incomplete canonical event provenance', () => {
@@ -213,5 +219,18 @@ describe('confirmed ticket persistence', () => {
       tickets: [],
       invalidKeys: [key],
     });
+  });
+
+  it('persists pending receipt hashes for recovery and removes them after canonical parsing', () => {
+    const storage = new MemoryStorage();
+    const otherHash = `0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb` as const;
+    persistPendingPurchase(account, transactionHash, storage);
+    persistPendingPurchase(account, transactionHash, storage);
+    persistPendingPurchase(account, otherHash, storage);
+
+    expect(readPendingPurchases(account, storage)).toEqual([transactionHash, otherHash]);
+
+    clearPendingPurchase(account, transactionHash, storage);
+    expect(readPendingPurchases(account, storage)).toEqual([otherHash]);
   });
 });

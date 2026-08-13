@@ -21,7 +21,7 @@ before changing signatures, addresses, fees, or lifecycle assumptions.
 
 1. Target Base Sepolia unless the user explicitly authorizes mainnet work.
 2. Read ticket price, drawing ID, `ballMax`, `bonusballMax`, fees, and locks dynamically.
-3. Pass `MEGAPLANETS_V1` as the `bytes32` source on every ticket purchase.
+3. Pass `MEGASTERA` as the `bytes32` source on every ticket purchase.
 4. Pass the configured referrer wallet and a referral split totaling exactly `1e18`.
 5. Never deploy with the dead referrer placeholder.
 6. Approve USDC to the contract that directly pulls it, using the exact required amount.

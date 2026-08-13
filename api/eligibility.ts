@@ -1,5 +1,5 @@
 import { decodeEventLog, getAddress, isHash, stringToHex, type Address, type Hex, type Log, type TransactionReceipt } from 'viem';
-import { BASE_SEPOLIA_CHAIN_ID, MEGAPLANETS_SOURCE, MEGAPLANETS_TICKET_START_BLOCK } from './config';
+import { BASE_SEPOLIA_CHAIN_ID, MEGAPLANETS_TICKET_START_BLOCK, MEGASTERA_SOURCE } from './config';
 import { validateTicketPurchasedFields } from '../shared/ticketValidation';
 
 export const BASE_SEPOLIA_JACKPOT = getAddress('0x465dA3c859f193A3807386387bEE941B2A4c3279');
@@ -14,7 +14,7 @@ export type EligibleTicket = { recipient: Address; ticketId: bigint; drawingId: 
 
 /**
  * A server-side proof that a canonical Megapot receipt produced one eligible
- * MegaPlanets ticket. The optional deployment fields keep compatibility with
+ * Megastera ticket. The optional deployment fields keep compatibility with
  * pre-proof callers while every proof produced by MegasteraVerifier includes
  * them.
  */
@@ -30,7 +30,7 @@ export type MegasteraProofReference = {
   logIndex: bigint | number;
 };
 
-const CANONICAL_SOURCE = stringToHex(MEGAPLANETS_SOURCE, { size: 32 });
+const CANONICAL_SOURCE = stringToHex(MEGASTERA_SOURCE, { size: 32 });
 
 function asBigInt(value: unknown, label: string): bigint {
   try {
@@ -55,7 +55,7 @@ export function normalizeMegasteraProof(value: MegasteraProof | Record<string, u
   const jackpotAddress = candidate.jackpotAddress === undefined ? BASE_SEPOLIA_JACKPOT : getAddress(candidate.jackpotAddress);
   if (jackpotAddress !== BASE_SEPOLIA_JACKPOT) throw new Error('Megastera proof jackpot is not canonical.');
   const source = candidate.source ?? CANONICAL_SOURCE;
-  if (typeof source !== 'string' || source.toLowerCase() !== CANONICAL_SOURCE.toLowerCase()) throw new Error('Ticket was not purchased through MEGAPLANETS_V1.');
+  if (typeof source !== 'string' || source.toLowerCase() !== CANONICAL_SOURCE.toLowerCase()) throw new Error('Ticket was not purchased through MEGASTERA.');
   const validated = validateTicketPurchasedFields({
     ticketId: asBigInt(candidate.ticketId, 'ticket ID'),
     drawingId: asBigInt(candidate.drawingId, 'drawing ID'),
@@ -78,11 +78,11 @@ export function normalizeMegasteraProof(value: MegasteraProof | Record<string, u
   };
 }
 
-/** Decodes only a canonical MegaPlanets purchase log; all other logs fail closed. */
+/** Decodes only a canonical Megastera purchase log; all other logs fail closed. */
 export function decodeEligibleTicket(log: Log): EligibleTicket {
-  if (getAddress(log.address) !== BASE_SEPOLIA_JACKPOT || !log.blockNumber || log.blockNumber < MEGAPLANETS_TICKET_START_BLOCK || !log.transactionHash) throw new Error('Ticket log is outside the eligible MegaPlanets range.');
+  if (getAddress(log.address) !== BASE_SEPOLIA_JACKPOT || !log.blockNumber || log.blockNumber < MEGAPLANETS_TICKET_START_BLOCK || !log.transactionHash) throw new Error('Ticket log is outside the eligible Megastera range.');
   const event = decodeEventLog({ abi: TICKET_PURCHASED_ABI, data: log.data, topics: log.topics });
-  if (event.eventName !== 'TicketPurchased' || event.args.source !== stringToHex(MEGAPLANETS_SOURCE, { size: 32 })) throw new Error('Ticket was not purchased through MEGAPLANETS_V1.');
+  if (event.eventName !== 'TicketPurchased' || event.args.source !== stringToHex(MEGASTERA_SOURCE, { size: 32 })) throw new Error('Ticket was not purchased through MEGASTERA.');
   const { recipient } = event.args;
   if (!recipient) throw new Error('Malformed TicketPurchased event.');
   const validated = validateTicketPurchasedFields({
@@ -119,7 +119,7 @@ export class MegasteraVerifier {
     this.jackpotAddress = options.jackpotAddress ? getAddress(options.jackpotAddress) : BASE_SEPOLIA_JACKPOT;
     this.minimumBlock = options.minimumBlock ?? MEGAPLANETS_TICKET_START_BLOCK;
     if (this.chainId !== BASE_SEPOLIA_CHAIN_ID || this.jackpotAddress !== BASE_SEPOLIA_JACKPOT) {
-      throw new Error('Megastera verifier is configured for Base Sepolia MegaPlanets only.');
+      throw new Error('Megastera verifier is configured for Base Sepolia Megastera only.');
     }
   }
 

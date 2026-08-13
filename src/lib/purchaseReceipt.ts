@@ -35,8 +35,13 @@ export type PersistedPurchasedTicket = Omit<PurchasedTicket, 'originTxHash' | 'l
 };
 
 export type PurchasedTicketStorage = Pick<Storage, 'getItem' | 'setItem' | 'key' | 'length'>;
+export type PendingPurchaseStorage = Pick<
+  Storage,
+  'getItem' | 'setItem' | 'removeItem' | 'key' | 'length'
+>;
 
 const PURCHASED_TICKET_PREFIX = 'megaplanets:purchased-ticket:';
+const PENDING_PURCHASE_PREFIX = 'megaplanets:pending-purchase:';
 const bytes32Pattern = /^0x[\da-fA-F]{64}$/;
 
 export const PURCHASED_TICKETS_UPDATED_EVENT = 'megaplanets:purchased-tickets-updated';
@@ -64,7 +69,7 @@ function validateEventTicket(
 }
 
 /**
- * Decodes every ticket attributable to MegaPlanets in a confirmed receipt.
+ * Decodes every ticket attributable to Megastera in a confirmed receipt.
  * `originTxHash` intentionally belongs to the ticket-minting transaction: for
  * a bulk order this is a keeper execution receipt, not the order-creation receipt.
  */
@@ -92,14 +97,14 @@ export function readPurchasedTickets(
       event.args.recipient?.toLowerCase() === recipient,
   );
   if (matching.length === 0) {
-    throw new RangeError('Receipt contains no MegaPlanets TicketPurchased events for this wallet.');
+    throw new RangeError('Receipt contains no Megastera TicketPurchased events for this wallet.');
   }
 
   const tickets = matching.map((event) => validateEventTicket(event, receipt.transactionHash));
   const ids = new Set<string>();
   for (const ticket of tickets) {
     const id = ticket.ticketId.toString();
-    if (ids.has(id)) throw new RangeError('Receipt contains duplicate MegaPlanets ticket IDs.');
+    if (ids.has(id)) throw new RangeError('Receipt contains duplicate Megastera ticket IDs.');
     ids.add(id);
   }
   return tickets.sort((left, right) => (left.logIndex < right.logIndex ? -1 : 1));
@@ -107,6 +112,44 @@ export function readPurchasedTickets(
 
 function storageKey(account: Address, ticketId: bigint) {
   return `${PURCHASED_TICKET_PREFIX}${account.toLowerCase()}:${ticketId.toString()}`;
+}
+
+function pendingStorageKey(account: Address, transactionHash: Hex) {
+  return `${PENDING_PURCHASE_PREFIX}${account.toLowerCase()}:${transactionHash.toLowerCase()}`;
+}
+
+/** Stores a submitted purchase hash until a later receipt/catch-up pass observes its events. */
+export function persistPendingPurchase(
+  account: Address,
+  transactionHash: Hex,
+  storage: PendingPurchaseStorage = window.localStorage,
+): void {
+  if (!bytes32Pattern.test(transactionHash)) throw new RangeError('Pending purchase hash is invalid.');
+  storage.setItem(pendingStorageKey(account, transactionHash), '1');
+}
+
+export function readPendingPurchases(
+  account: Address,
+  storage: PendingPurchaseStorage = window.localStorage,
+): readonly Hex[] {
+  const prefix = `${PENDING_PURCHASE_PREFIX}${account.toLowerCase()}:`;
+  const hashes: Hex[] = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (!key?.startsWith(prefix)) continue;
+    const hash = key.slice(prefix.length);
+    if (bytes32Pattern.test(hash)) hashes.push(hash.toLowerCase() as Hex);
+  }
+  return hashes;
+}
+
+export function clearPendingPurchase(
+  account: Address,
+  transactionHash: Hex,
+  storage: PendingPurchaseStorage = window.localStorage,
+): void {
+  if (!bytes32Pattern.test(transactionHash)) return;
+  storage.removeItem(pendingStorageKey(account, transactionHash));
 }
 
 export function persistPurchasedTickets(
@@ -199,7 +242,7 @@ function parsePersistedTicket(raw: string): PersistedPurchasedTicket {
   };
 }
 
-/** Reads confirmed MegaPlanets receipts persisted for one wallet in this browser. */
+/** Reads confirmed Megastera receipts persisted for one wallet in this browser. */
 export function readPersistedPurchasedTickets(
   account: Address,
   storage: PurchasedTicketStorage = window.localStorage,

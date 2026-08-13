@@ -31,12 +31,7 @@ export type WalletLeaderboardPosition = {
   distanceToNextRankMicros: string | null;
 };
 
-export type LeaderboardHistory = {
-  total: number;
-  offset: number;
-  limit: number;
-  periods: LeaderboardPeriod[];
-};
+export const LIVE_LEADERBOARD_REFRESH_INTERVAL_MS = 60_000;
 
 async function readJson<T>(url: string, label: string): Promise<T> {
   const response = await backendApiFetch(url);
@@ -52,20 +47,16 @@ export function fetchWalletLeaderboardPosition(address: `0x${string}`): Promise<
   return readJson(`/api/leaderboard/current/${address}`, 'Wallet leaderboard position');
 }
 
-export function fetchLeaderboardHistory(offset = 0, limit = 20): Promise<LeaderboardHistory> {
-  return readJson(`/api/leaderboard/history?offset=${offset}&limit=${limit}`, 'Leaderboard history');
-}
-
-export function fetchArchivedLeaderboard(periodId: string, offset = 0, limit = 50): Promise<LeaderboardPage> {
-  return readJson(`/api/leaderboard/days/${encodeURIComponent(periodId)}?offset=${offset}&limit=${limit}`, 'Archived leaderboard');
-}
-
-export function useCurrentLeaderboard(offset = 0, limit = 50) {
-  return useQuery({
+export function currentLeaderboardQueryOptions(offset = 0, limit = 50) {
+  return {
     queryKey: ['megastera-backend', BACKEND_API_BASE_URL, 'leaderboard', 'current', offset, limit],
     queryFn: () => fetchCurrentLeaderboard(offset, limit),
-    staleTime: 15 * 60_000,
-  });
+    staleTime: LIVE_LEADERBOARD_REFRESH_INTERVAL_MS,
+    refetchInterval: LIVE_LEADERBOARD_REFRESH_INTERVAL_MS,
+  };
+}
+export function useCurrentLeaderboard(offset = 0, limit = 50) {
+  return useQuery(currentLeaderboardQueryOptions(offset, limit));
 }
 
 export function useWalletLeaderboardPosition(address: `0x${string}` | undefined) {
@@ -76,26 +67,7 @@ export function useWalletLeaderboardPosition(address: `0x${string}` | undefined)
       return fetchWalletLeaderboardPosition(address);
     },
     enabled: !!address,
-    staleTime: 15 * 60_000,
-  });
-}
-
-export function useLeaderboardHistory() {
-  return useQuery({
-    queryKey: ['megastera-backend', BACKEND_API_BASE_URL, 'leaderboard', 'history'],
-    queryFn: () => fetchLeaderboardHistory(),
-    staleTime: 60 * 60_000,
-  });
-}
-
-export function useArchivedLeaderboard(periodId: string | undefined) {
-  return useQuery({
-    queryKey: ['megastera-backend', BACKEND_API_BASE_URL, 'leaderboard', 'day', periodId],
-    queryFn: () => {
-      if (!periodId) throw new Error('A leaderboard period is required.');
-      return fetchArchivedLeaderboard(periodId);
-    },
-    enabled: !!periodId,
-    staleTime: Number.POSITIVE_INFINITY,
+    staleTime: LIVE_LEADERBOARD_REFRESH_INTERVAL_MS,
+    refetchInterval: LIVE_LEADERBOARD_REFRESH_INTERVAL_MS,
   });
 }

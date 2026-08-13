@@ -32,4 +32,14 @@ describe('PlanetMiningOverlay', () => {
     expect(screen.getByText('Mining unavailable')).toBeInTheDocument();
     expect(screen.queryByText('+0%')).not.toBeInTheDocument();
   });
+
+  it('supports a compact card treatment for mining metrics', () => {
+    render(<PlanetMiningOverlay mining={mining} miningAsOf="2026-08-10T00:00:01.000Z" variant="compact" />);
+    const overlay = screen.getByTestId('planet-mining-overlay');
+    expect(overlay).toHaveClass('inset-x-2', 'bottom-2');
+    expect(overlay.querySelector(':scope > div')).toHaveClass('p-2');
+    expect(screen.getByRole('img', { name: 'Minerals' })).toHaveClass('h-4', 'w-4');
+    expect(screen.getByRole('img', { name: 'Mined' })).toHaveClass('h-4', 'w-4');
+    expect(screen.getByText('24')).toHaveClass('text-sm');
+  });
 });

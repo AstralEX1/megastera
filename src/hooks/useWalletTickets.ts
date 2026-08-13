@@ -26,7 +26,7 @@
  */
 
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { API_BASE_URL, api, apiQueryRetry, QK, type Ticket } from '@/lib/api';
 import {
   DEFAULT_TICKET_HISTORY_ROUNDS,
@@ -60,12 +60,16 @@ export function useWalletTickets(
     pageSize?: number;
     excludeRoundId?: string;
     initialRoundCount?: number;
+    /** Automatically follow every opaque Data API cursor for inventory/status views. */
+    loadAll?: boolean;
   } = {},
 ) {
   const pageSize = opts.pageSize ?? 50;
   const excludeRoundId = opts.excludeRoundId;
   const initialRoundCount = opts.initialRoundCount ?? DEFAULT_TICKET_HISTORY_ROUNDS;
+  const loadAll = opts.loadAll ?? false;
   const resetKey = `${address ?? ''}:${pageSize}`;
+  const autoPaging = useRef(false);
   const [visibleRoundCount, setVisibleRoundCount] = useState(initialRoundCount);
   const query = useInfiniteQuery({
     queryKey: [QK.NS, API_BASE_URL, QK.walletTickets, address, pageSize],
@@ -77,7 +81,10 @@ export function useWalletTickets(
         signal,
       }),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) => (last.has_more ? (last.next_cursor ?? undefined) : undefined),
+    getNextPageParam: (last, _allPages, _lastPageParam, allPageParams) => {
+      if (!last.has_more || !last.next_cursor || allPageParams.includes(last.next_cursor)) return undefined;
+      return last.next_cursor;
+    },
     enabled: !!address,
     staleTime: ONE_MINUTE,
     ...apiQueryRetry,
@@ -88,6 +95,14 @@ export function useWalletTickets(
     () => query.data?.pages.flatMap((p) => p.data) ?? [],
     [query.data],
   );
+
+  useEffect(() => {
+    if (!loadAll || !address || !query.hasNextPage || query.isFetchingNextPage || query.isError || autoPaging.current) return;
+    autoPaging.current = true;
+    void query.fetchNextPage().finally(() => {
+      autoPaging.current = false;
+    });
+  }, [address, loadAll, query.fetchNextPage, query.hasNextPage, query.isError, query.isFetchingNextPage]);
 
   const groupedByRound: WalletTicketsByRound[] = useMemo(() => {
     const byRound = new Map<string, Ticket[]>();

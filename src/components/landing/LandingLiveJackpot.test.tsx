@@ -23,6 +23,7 @@ describe('LandingLiveJackpot', () => {
         drawingTime: 2_000_003_661n,
       } as never,
       isLoading: false,
+      error: null,
       refetch: vi.fn(),
     } as ReturnType<typeof useJackpotState>);
   });

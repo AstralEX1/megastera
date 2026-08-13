@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import { getAddress, stringToHex, type Hex } from 'viem';
-import { BASE_SEPOLIA_CHAIN_ID, MEGAPLANETS_SOURCE } from './config';
+import { BASE_SEPOLIA_CHAIN_ID, MEGASTERA_SOURCE } from './config';
 import { BASE_SEPOLIA_JACKPOT, type MegasteraProof } from './eligibility';
 import { MemoryBackendPlanetStore } from './backendPlanet';
 import { createBackendPlanetRoutes } from './backendPlanetRoutes';
@@ -19,7 +19,7 @@ const proof: MegasteraProof = {
   purchasedAt: new Date('2026-08-13T12:00:00.000Z'),
   chainId: BASE_SEPOLIA_CHAIN_ID,
   jackpotAddress: BASE_SEPOLIA_JACKPOT,
-  source: stringToHex(MEGAPLANETS_SOURCE, { size: 32 }),
+  source: stringToHex(MEGASTERA_SOURCE, { size: 32 }),
 };
 
 function makeApp() {
@@ -29,7 +29,7 @@ function makeApp() {
   app.route('/api', createBackendPlanetRoutes({
     loadConfig: () => config,
     findTicket: vi.fn(async () => proof),
-    saveProof: vi.fn(async () => undefined),
+    saveProof: vi.fn(async () => store.saveProof(proof)),
     getStore: () => store,
     allows: () => true,
   }));

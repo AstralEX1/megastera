@@ -52,11 +52,11 @@ export function RevealCompleteScreen({
   onViewPlanets: () => void;
 }) {
   return (
-    <section className="mx-auto flex min-h-[590px] max-w-5xl flex-col items-center px-4 py-14 text-center sm:px-6 sm:py-16">
+    <section className="mx-auto flex min-h-[calc(100vh-8rem)] max-w-6xl flex-col items-center px-4 py-10 text-center sm:px-6 sm:py-14">
       <ExpeditionSteps active="reveal" />
       <p className="mt-10 telemetry font-bold text-[var(--success)]">PLANETS READY</p>
       <h1 className="mt-3 text-balance font-hud text-4xl font-bold tracking-[-0.05em] text-[var(--text-primary)]">
-        Your new planets are ready.
+        Your planets are ready.
       </h1>
       <p className="mt-2 text-sm text-[var(--text-secondary)]">
         Drawing #{drawingId?.toString() ?? '—'}
@@ -67,7 +67,7 @@ export function RevealCompleteScreen({
           Explore again
         </Button>
         <Button variant="secondary" size="lg" onClick={onViewPlanets} className="flex-1">
-          View in My Planets
+          My planets
         </Button>
       </div>
     </section>

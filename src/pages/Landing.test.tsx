@@ -56,7 +56,7 @@ describe('Landing', () => {
     expect(container.querySelector('.landing-mechanics-connection')).not.toBeInTheDocument();
     expect(landing.queryByText('PLANET = TICKET')).not.toBeInTheDocument();
     expect(landing.queryByText('MEGAPOT · IN DRAW')).not.toBeInTheDocument();
-    const generatePlanetButton = landing.getByRole('button', { name: 'Generate planet' });
+    const generatePlanetButton = landing.getByRole('button', { name: 'Tap to generate' });
     expect(generatePlanetButton).toBeInTheDocument();
     expect(generatePlanetButton).not.toHaveTextContent('↗');
     expect(container.querySelector('.landing-megapot-ticket')).toBeInTheDocument();
@@ -76,7 +76,7 @@ describe('Landing', () => {
     expect(landing.queryByText('No two discoveries')).not.toBeInTheDocument();
     expect(landing.queryByText('feel the same.')).not.toBeInTheDocument();
     expect(landing.queryByRole('region', { name: /Circular Planet gallery/ })).not.toBeInTheDocument();
-    expect(container.querySelector('.landing-hero-lightfall')).toBeInTheDocument();
+    expect(container.querySelector('.landing-hero-lightfall')).not.toBeInTheDocument();
     expect(container.querySelector('.landing-live-jackpot')).toBeInTheDocument();
     expect(landing.getByText('LIVE JACKPOT')).toBeInTheDocument();
     expect(landing.getByText('DRAWING IN')).toBeInTheDocument();

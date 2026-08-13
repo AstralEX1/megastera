@@ -16,6 +16,8 @@ import { CopyButton } from '@/components/common/CopyButton';
 import { UsdcAmount } from '@/components/common/UsdcAmount';
 import { Ball } from '@/components/lottery/Ball';
 import { matchOverlap } from '@/lib/tickets';
+import { TicketStatusBadge } from './TicketStatusBadge';
+import type { TicketStatus } from '@/lib/ticketStatus';
 
 export function TicketCard({
   ticketId,
@@ -27,6 +29,7 @@ export function TicketCard({
   claimable,
   winnings,
   claimed,
+  status,
 }: {
   ticketId: bigint;
   normals: readonly number[];
@@ -39,6 +42,8 @@ export function TicketCard({
   winnings?: bigint;
   /** Marks a winning ticket as already claimed — appends a faint "claimed" tag. */
   claimed?: boolean;
+  /** Live drawing or settled Data API status shown beside the ticket id. */
+  status?: TicketStatus;
 }) {
   const matches = winningNormals ? matchOverlap(normals, winningNormals) : null;
   const bonusMatched = winningBonusball !== undefined && bonusball === winningBonusball;
@@ -72,6 +77,7 @@ export function TicketCard({
         </span>
         <CopyButton value={ticketId.toString()} label="Copy ticket ID" className="h-4 w-4" />
         <div className="ml-auto flex items-center gap-2 whitespace-nowrap sm:ml-0">
+          {status && <TicketStatusBadge status={status} />}
           {tierId !== undefined && winningNormals && (
             <span>
               {matches}+{bonusMatched ? '★' : '·'} · tier {tierId}

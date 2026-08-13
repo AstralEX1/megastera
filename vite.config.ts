@@ -59,15 +59,16 @@ export default defineConfig({
   test: {
     exclude: ['**/node_modules/**', 'lib/**'],
   },
-  // Dev-server proxy so `/api/megapot/*` forwards to api.megapot.io while you
-  // work locally — no separate Hono process needed for development. In
+  // Dev-server proxy so `/api/megapot/*` forwards to the active Base Sepolia
+  // Data API while you work locally — no separate Hono process needed for
+  // development. Mainnet is an explicitly separate stage. In
   // production, mount `server/proxy.ts` on your backend of choice (see
   // `examples/`) or skip the proxy entirely (use the anonymous or browser-key
   // tiers documented in `.env.example`).
   server: {
     proxy: {
       '/api/megapot': {
-        target: 'https://api.megapot.io',
+        target: 'https://api-testnet.megapot.io',
         changeOrigin: true,
         rewrite: (incomingPath) => incomingPath.replace(/^\/api\/megapot/, '/v1'),
       },

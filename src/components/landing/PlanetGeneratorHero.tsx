@@ -32,12 +32,12 @@ export function PlanetGeneratorHero() {
   const generatePlanet = useCallback(() => setTicketNumber((current) => current + 1), []);
 
   return (
-    <article className="landing-live-generator" aria-label="Generated Planet preview">
+    <article className="landing-live-generator" aria-label="Interactive Planet preview">
       <div className="landing-live-generator-art">
         <PlanetGif preview={preview} deferGeneration />
       </div>
       <button className="landing-live-generator-button" type="button" onClick={generatePlanet}>
-        <LandingSplitText text="Generate planet" className="landing-button-label" />
+        <LandingSplitText text="Tap to generate" className="landing-button-label" />
       </button>
     </article>
   );

@@ -1,6 +1,5 @@
 import './Landing.css';
 import { useEffect } from 'react';
-import Lightfall from '@/components/landing/Lightfall';
 import { LandingLiveJackpot } from '@/components/landing/LandingLiveJackpot';
 import { LandingHowItWorks } from '@/components/landing/LandingHowItWorks';
 import { LandingPlanetCard } from '@/components/landing/LandingPlanetCard';
@@ -37,28 +36,6 @@ export function Landing() {
 
       <main id="landing-main">
         <section className="landing-hero landing-container" aria-labelledby="hero-title">
-          <div className="landing-hero-lightfall" aria-hidden="true">
-            <Lightfall
-              colors={['#aeb9ff', '#b28cff', '#50d2a0']}
-              backgroundColor="#030307"
-              speed={0.18}
-              streakCount={3}
-              streakWidth={1.2}
-              streakLength={0.8}
-              glow={0.8}
-              density={0.45}
-              twinkle={0.35}
-              zoom={2.6}
-              backgroundGlow={0.22}
-              opacity={0.62}
-              mouseInteraction
-              mouseStrength={0.6}
-              mouseRadius={0.7}
-              mouseDampening={0.18}
-              mixBlendMode="screen"
-              dpr={0.85}
-            />
-          </div>
           <div className="landing-hero-copy">
             <h1 id="hero-title" className="landing-hero-title">
               <LandingSplitText

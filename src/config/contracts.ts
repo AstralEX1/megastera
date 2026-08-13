@@ -59,7 +59,7 @@ export const BONUSBALL_MIN = 1;
  *
  * Computed from a UTF-8 string padded to 32 bytes via `viem.stringToHex`.
  */
-export const TICKET_SOURCE = stringToHex('MEGAPLANETS_V1', { size: 32 });
+export const TICKET_SOURCE = stringToHex('MEGASTERA', { size: 32 });
 
 /**
  * Referral split weights — must sum to 1e18 (= 100%). Single referrer = `[1e18]`.

@@ -22,7 +22,7 @@ import { useJackpotState } from '@/hooks/useJackpotState';
 
 export function Tickets({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
   const { address, isConnected } = useAccount();
-  const { drawingId } = useJackpotState();
+  const { drawingId, phase, state } = useJackpotState();
 
   if (!isConnected || !address) {
     return (
@@ -35,7 +35,12 @@ export function Tickets({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
   return (
     <div className="space-y-4">
       <WalletStatsCard address={address} />
-      <CurrentDrawingTickets drawingId={drawingId} onNavigate={onNavigate} />
+      <CurrentDrawingTickets
+        drawingId={drawingId}
+        phase={phase}
+        drawingTime={state?.drawingTime}
+        onNavigate={onNavigate}
+      />
       <UnclaimedWins />
       <PastRoundTickets />
     </div>

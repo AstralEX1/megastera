@@ -23,7 +23,7 @@
 - Treat `https://llms.megapot.io/` as the protocol source of truth.
 - Target Base Sepolia until a later stage explicitly authorizes mainnet work.
 - Read ticket price, drawing ID, ball limits, fees, and lifecycle state dynamically.
-- Keep `TICKET_SOURCE` equal to `MEGAPLANETS_V1`.
+- Keep `TICKET_SOURCE` equal to `MEGASTERA`.
 - Never deploy with the dead referrer address.
 - Compare allowance with the exact required amount before every purchase. When
   insufficient, approve the route-specific spender with `maxUint256`, then refetch

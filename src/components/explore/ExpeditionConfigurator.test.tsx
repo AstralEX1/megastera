@@ -77,6 +77,25 @@ describe('ExpeditionConfigurator', () => {
     expect(screen.queryByRole('button', { name: /^Explore 3/ })).not.toBeInTheDocument();
   });
 
+  it('shows an explicit loading state instead of a zero jackpot', () => {
+    render(<ExpeditionConfigurator {...props} jackpotStatus="loading" />);
+
+    expect(screen.getByRole('heading', { name: 'Loading jackpot…' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Loading drawing data…' })).toBeDisabled();
+    expect(screen.queryByRole('heading', { name: 'Win up to $0' })).not.toBeInTheDocument();
+  });
+
+  it('offers a retry when drawing data is unavailable', async () => {
+    const user = userEvent.setup();
+    const onRetryJackpot = vi.fn();
+    render(<ExpeditionConfigurator {...props} jackpotStatus="error" onRetryJackpot={onRetryJackpot} />);
+
+    expect(screen.getByRole('heading', { name: 'Jackpot unavailable' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Drawing data unavailable.');
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(onRetryJackpot).toHaveBeenCalledOnce();
+  });
+
   it('opens and closes coordinates from the desktop arrow', async () => {
     const user = userEvent.setup();
     render(
@@ -99,14 +118,23 @@ describe('ExpeditionConfigurator', () => {
     expect(screen.getByTestId('expedition-core')).toHaveAttribute('data-layout-anchor', 'fixed');
     expect(screen.getByTestId('expedition-core')).toHaveClass('max-w-[840px]');
     expect(screen.getByTestId('coordinates-disclosure')).toHaveAttribute('data-side', 'right');
+    expect(screen.getByTestId('coordinates-disclosure')).toHaveAttribute('data-state', 'closed');
+    expect(screen.getByTestId('coordinates-disclosure')).toHaveClass('w-0');
 
     const [toggle] = screen.getAllByRole('button', { name: 'Open coordinates' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveClass('transition-[left,background-color]');
+    expect(toggle).toHaveStyle({ left: 'calc(50% + 420px)' });
 
     await user.click(toggle);
     expect(screen.getAllByRole('region', { name: 'Coordinates' })).toHaveLength(2);
+    expect(screen.getByTestId('coordinates-disclosure')).toHaveAttribute('data-state', 'open');
+    expect(screen.getByTestId('coordinates-disclosure')).toHaveClass('w-[380px]');
 
     const [closeToggle] = screen.getAllByRole('button', { name: 'Close coordinates' });
+    expect(closeToggle).toHaveStyle({
+      left: 'min(calc(50% + 420px), calc(50% + 50vw - 448px))',
+    });
     await user.click(closeToggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });

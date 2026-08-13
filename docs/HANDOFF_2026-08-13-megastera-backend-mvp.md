@@ -6,21 +6,51 @@ Branch: `codex/megastera-backend-planets-mvp`
 
 ## Current checkpoint
 
-The new repository is a copy of the existing application with the Planet NFT
-mechanics removed from the active runtime. The old `megaplanets` repository is
-not used as a destination and was not changed in this stage.
+Megastera is the only active destination. The application uses Megapot on Base Sepolia
+with the `MEGASTERA` source tag. Planet NFT, voucher, Pinata, direct holdings, and
+continuous Ticket indexer paths are not part of the runtime.
 
-After a confirmed Megapot purchase, the browser sends canonical receipt data to
-the backend. The backend verifies the Base Sepolia receipt, persists the ticket
-purchase, deterministically generates the planet and GIF, stores the GIF in the
-database, and returns a backend Planet record. My Planets and mining read these
-records. Ticket purchase, approval, drawing, claim, and leaderboard behavior
-remain in place.
+The receipt flow is:
 
-## API surface
+1. Direct purchase or keeper-executed bulk purchase completes on-chain.
+2. The browser recovers canonical `TicketPurchased` events from the successful receipt.
+3. Play shows `Exploring planets…` and retries the receipt reference while the backend
+   waits for configured finality.
+4. The backend verifies chain, jackpot, source, recipient, event fields, canonical block,
+   timestamp, and confirmation depth.
+5. Immutable `TicketPurchase` provenance is stored before deterministic Planet generation.
+6. The generated traits, mining rate, GIF bytes, and GIF hash are stored in PostgreSQL.
+
+Repeated generation is idempotent on `originTxHash:logIndex` and conflicts fail closed.
+
+## My Planets behavior
+
+`GET /api/planets/collection?owner=...` is the primary inventory read. It filters to
+Base Sepolia, the active jackpot, and `MEGASTERA`; old `MEGAPLANETS_V1` rows are not
+eligible.
+
+The frontend combines three sources:
+
+- durable server rows: generated Planet or pending generation;
+- locally confirmed Megastera receipts: pending until the backend catches up; and
+- the complete paginated Base Sepolia Data API wallet ticket feed: unmatched tickets are
+  shown as plain ticket cards when available.
+
+This guarantees a failed or not-yet-final generation remains findable. Pending cards offer
+retry and refresh behavior. A separate catch-up pass reads wallet ticket transaction
+hashes, local pending receipts, canonical RPC receipts, and requests idempotent generation;
+it is not a continuous blockchain scanner.
+
+Ticket status, winnings, and claimed state use the Megapot testnet Data API. Live drawing
+phase/countdown and write operations use RPC/on-chain contract calls. Mining remains lazy
+from immutable backend generation time and base rate. Leaderboard remains a backend live
+read with the existing cache behavior.
+
+## Active API surface
 
 - `POST /api/planets/generate`
 - `POST /api/planets/generate/batch`
+- `GET /api/planets/collection?owner=...`
 - `GET /api/planets?owner=...`
 - `GET /api/planets/:planetId`
 - `GET /api/planets/:planetId/gif`
@@ -30,39 +60,28 @@ remain in place.
 - `GET /api/planets/health`
 - `GET /api/planets/metrics`
 
-Old voucher, readiness, signer, Pinata, direct NFT-holdings, and indexer routes
-are retired and return 404 where their paths are still reserved.
+## Runtime configuration
 
-## Database
+Server-side generation needs `DATABASE_URL` and `BASE_SEPOLIA_RPC_URL`; optional RPC
+fallbacks and the configured confirmation depth are documented in `.env.example` and
+`docs/OPERATIONS.md`. The frontend Data API default for Base Sepolia is
+`https://api-testnet.megapot.io/v1`; a configured mainnet host is rejected and replaced
+with the chain-compatible testnet host.
 
-Apply `prisma/migrations/20260813120000_backend_planets/migration.sql` to the
-target PostgreSQL database. It adds `BackendPlanet` and its one-to-one relation
-to `TicketPurchase`. Existing legacy tables/migrations are intentionally kept
-for compatibility but are not part of the active runtime.
+## Verification
 
-Required server variables are documented in `.env.example`, especially
-`DATABASE_URL` and `BASE_SEPOLIA_RPC_URL`. Never put server secrets in `VITE_*`
-variables or commit `.env.local`.
+Focused Play/My Planets/collection/Data API tests and `pnpm typecheck` pass at this
+checkpoint. Run the complete gate from the repository root before handoff:
 
-## Verification completed locally
+```text
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm db:generate
+pnpm db:validate
+pnpm --filter @megaplanets/planet-generator golden
+```
 
-- `pnpm lint`
-- `pnpm typecheck`
-- `pnpm test` — 57 files, 184 tests
-- `pnpm build`
-- `pnpm db:generate`
-- `pnpm db:validate`
-- `pnpm --filter @megaplanets/planet-generator golden` — 26 tests
-- `git diff --check`
-
-The local gates do not prove production database connectivity, receipt verification
-against live RPC, browser rendering against a deployed site, or a funded wallet
-purchase. Those remain deployment/hackathon verification steps.
-
-## Next operator steps
-
-1. Configure the target PostgreSQL `DATABASE_URL` and Base Sepolia RPC variables.
-2. Apply the Prisma migration.
-3. Start the API and Vite frontend, then run one funded Base Sepolia purchase.
-4. Confirm the receipt generates one planet, refreshes idempotently, appears in My
-   Planets, serves a GIF, and accrues mining.
+Live funded purchases and backend generation require the configured database/RPC
+environment and should be verified separately from local unit/build results.

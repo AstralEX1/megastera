@@ -19,6 +19,8 @@ export type WalletMiningSnapshot = {
   planets: PlanetMiningSnapshot[];
 };
 
+export const MINING_REFRESH_INTERVAL_MS = 60_000;
+
 export async function fetchWalletMining(address: `0x${string}`): Promise<WalletMiningSnapshot> {
   const response = await backendApiFetch(`/api/wallets/${address}/mining`);
   if (!response.ok) throw new Error(`Wallet mining returned HTTP ${response.status}.`);
@@ -32,15 +34,19 @@ export async function fetchWalletMining(address: `0x${string}`): Promise<WalletM
   };
 }
 
-export function useWalletMining(address: `0x${string}` | undefined) {
-  return useQuery({
-    queryKey: ['megastera-backend', BACKEND_API_BASE_URL, 'wallet-mining', address],
+export function walletMiningQueryOptions(address: `0x${string}` | undefined) {
+  return {
+    queryKey: ['megastera-backend', BACKEND_API_BASE_URL, 'wallet-mining', address] as const,
     queryFn: () => {
       if (!address) throw new Error('A connected wallet is required.');
       return fetchWalletMining(address);
     },
     enabled: !!address,
-    staleTime: 15_000,
-    refetchInterval: 30_000,
-  });
+    staleTime: MINING_REFRESH_INTERVAL_MS,
+    refetchInterval: MINING_REFRESH_INTERVAL_MS,
+  };
+}
+
+export function useWalletMining(address: `0x${string}` | undefined) {
+  return useQuery(walletMiningQueryOptions(address));
 }

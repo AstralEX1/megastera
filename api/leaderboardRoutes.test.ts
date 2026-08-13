@@ -57,15 +57,11 @@ describe('leaderboard routes', () => {
     });
   });
 
-  it('moves overdue finalization to an explicitly authenticated worker route', async () => {
-    let calls = 0;
-    const app = createLeaderboardRoutes({
-      getPrisma: () => ({}) as never,
-      finalizationToken: 'worker-secret',
-      finalize: async () => { calls += 1; },
-    });
-    expect((await app.request('/finalize', { method: 'POST' })).status).toBe(401);
-    expect((await app.request('/finalize', { method: 'POST', headers: { authorization: 'Bearer worker-secret' } })).status).toBe(200);
-    expect(calls).toBe(1);
+  it('does not expose legacy daily snapshot or finalization routes', async () => {
+    const app = createLeaderboardRoutes({ getPrisma: () => ({}) as never });
+
+    expect((await app.request('/history')).status).toBe(404);
+    expect((await app.request('/days/2026-08-12')).status).toBe(404);
+    expect((await app.request('/finalize', { method: 'POST' })).status).toBe(404);
   });
 });

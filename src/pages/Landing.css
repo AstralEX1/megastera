@@ -202,15 +202,6 @@
   padding-block: 66px 92px;
 }
 
-.landing-hero-lightfall {
-  position: absolute;
-  z-index: 0;
-  inset: -76px -4vw 0;
-  pointer-events: none;
-  opacity: 0.82;
-  mask-image: linear-gradient(to bottom, black 0%, black 72%, transparent 100%);
-}
-
 .landing-hero-copy,
 .landing-hero-visual {
   position: relative;

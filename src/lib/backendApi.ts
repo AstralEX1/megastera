@@ -1,4 +1,5 @@
 import { type Address, getAddress, type Hex, isAddress, isHash } from 'viem';
+import type { PurchasedTicket } from './purchaseReceipt';
 
 /** One base URL for backend Planet, mining, and leaderboard services. */
 const configuredBase = (
@@ -48,6 +49,13 @@ export type BackendPlanet = {
   };
 };
 
+export type BackendPlanetCollectionRow = {
+  generationStatus: 'pending' | 'generated';
+  ticket: BackendPlanet['ticket'];
+  planet: BackendPlanet | null;
+  generationError?: string | null;
+};
+
 function parseBackendPlanet(value: unknown): BackendPlanet {
   if (!value || typeof value !== 'object') throw new Error('Backend Planet response is malformed.');
   const candidate = value as Partial<BackendPlanet>;
@@ -65,12 +73,63 @@ function parseBackendPlanet(value: unknown): BackendPlanet {
   ) {
     throw new Error('Backend Planet response is malformed.');
   }
-  const ticket = candidate.ticket;
-  if (!isHash(ticket.originTxHash ?? '')) throw new Error('Backend Planet response is malformed.');
+  const ticket = parseBackendPlanetTicket(candidate.ticket);
   return {
     ...candidate,
     ownerAddress: getAddress(ownerAddress as Address),
+    ticket,
   } as BackendPlanet;
+}
+
+function parseBackendPlanetTicket(value: unknown): BackendPlanet['ticket'] {
+  if (!value || typeof value !== 'object') throw new Error('Backend Planet response is malformed.');
+  const candidate = value as Partial<BackendPlanet['ticket']>;
+  if (
+    typeof candidate.ticketId !== 'string' ||
+    typeof candidate.drawingId !== 'string' ||
+    !Array.isArray(candidate.normals) ||
+    candidate.normals.length !== 5 ||
+    candidate.normals.some((normal) => !Number.isInteger(normal)) ||
+    typeof candidate.bonusBall !== 'number' ||
+    !Number.isInteger(candidate.bonusBall) ||
+    !isHash(candidate.originTxHash ?? '') ||
+    typeof candidate.logIndex !== 'string' ||
+    !/^\d+$/.test(candidate.logIndex)
+  ) {
+    throw new Error('Backend Planet response is malformed.');
+  }
+  return {
+    ticketId: candidate.ticketId,
+    drawingId: candidate.drawingId,
+    normals: [...candidate.normals],
+    bonusBall: candidate.bonusBall,
+    originTxHash: candidate.originTxHash as Hex,
+    logIndex: candidate.logIndex,
+    purchasedAt: typeof candidate.purchasedAt === 'string' ? candidate.purchasedAt : undefined,
+  };
+}
+
+function parseBackendPlanetCollectionRow(value: unknown): BackendPlanetCollectionRow {
+  if (!value || typeof value !== 'object') throw new Error('Backend Planet collection response is malformed.');
+  const candidate = value as Partial<BackendPlanetCollectionRow>;
+  if (
+    (candidate.generationStatus !== 'pending' && candidate.generationStatus !== 'generated') ||
+    !candidate.ticket ||
+    typeof candidate.ticket !== 'object' ||
+    (candidate.planet !== null && candidate.planet !== undefined && typeof candidate.planet !== 'object')
+  ) {
+    throw new Error('Backend Planet collection response is malformed.');
+  }
+  if (candidate.generationStatus === 'generated' && !candidate.planet) {
+    throw new Error('Backend Planet collection response is malformed.');
+  }
+  const planet = candidate.planet ? parseBackendPlanet(candidate.planet) : null;
+  return {
+    generationStatus: candidate.generationStatus,
+    ticket: parseBackendPlanetTicket(candidate.ticket),
+    planet,
+    generationError: typeof candidate.generationError === 'string' ? candidate.generationError : null,
+  };
 }
 
 export async function fetchBackendPlanets(
@@ -86,6 +145,21 @@ export async function fetchBackendPlanets(
     throw new Error('Backend Planet response is malformed.');
   }
   return (payload as { planets: unknown[] }).planets.map(parseBackendPlanet);
+}
+
+export async function fetchBackendPlanetCollection(
+  owner: Address,
+  options: { signal?: AbortSignal } = {},
+): Promise<BackendPlanetCollectionRow[]> {
+  const response = await backendApiFetch(`/api/planets/collection?owner=${encodeURIComponent(getAddress(owner))}`, {
+    signal: options.signal,
+  });
+  const payload = await response.json().catch(() => undefined);
+  if (!response.ok) throw new Error(`Backend Planet collection returned HTTP ${response.status}.`);
+  if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { planets?: unknown }).planets)) {
+    throw new Error('Backend Planet collection response is malformed.');
+  }
+  return (payload as { planets: unknown[] }).planets.map(parseBackendPlanetCollectionRow);
 }
 
 export async function requestBackendPlanetGeneration(args: {
@@ -113,6 +187,30 @@ export async function requestBackendPlanetGeneration(args: {
     throw new Error('Backend Planet generation response is malformed.');
   }
   return parseBackendPlanet((payload as { planet: unknown }).planet);
+}
+
+export async function requestBackendPlanetGenerationBatch(args: {
+  recipient: Address;
+  tickets: readonly PurchasedTicket[];
+}): Promise<BackendPlanet[]> {
+  if (args.tickets.length === 0) return [];
+  const response = await backendApiFetch('/api/planets/generate/batch', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      references: args.tickets.map((ticket) => ({
+        transactionHash: ticket.originTxHash,
+        logIndex: Number(ticket.logIndex),
+        recipient: getAddress(args.recipient),
+      })),
+    }),
+  });
+  const payload = await response.json().catch(() => undefined);
+  if (!response.ok) throw new Error(`Backend Planet batch generation returned HTTP ${response.status}.`);
+  if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { planets?: unknown }).planets)) {
+    throw new Error('Backend Planet batch response is malformed.');
+  }
+  return (payload as { planets: unknown[] }).planets.map(parseBackendPlanet);
 }
 
 export function backendPlanetGifUrl(planetId: string): string {

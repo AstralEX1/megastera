@@ -15,9 +15,10 @@
  *             rather than vanishing the section if the fetch fails.
  * ---
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAccount } from 'wagmi';
 import type { NavKey } from '@/components/layout/Nav';
+import type { LifecyclePhase } from '@/hooks/useJackpotState';
 import { useUserTickets } from '@/hooks/useUserTickets';
 import { formatApiError } from '@/lib/api';
 import {
@@ -25,18 +26,24 @@ import {
   PURCHASED_TICKETS_UPDATED_EVENT,
   readPersistedPurchasedTickets,
 } from '@/lib/purchaseReceipt';
+import { deriveTicketStatus } from '@/lib/ticketStatus';
 import { TicketCard } from './TicketCard';
 
 export function CurrentDrawingTickets({
   drawingId,
+  phase,
+  drawingTime,
   onNavigate,
 }: {
   drawingId: bigint | undefined;
+  phase?: LifecyclePhase;
+  drawingTime?: bigint;
   onNavigate?: (k: NavKey) => void;
 }) {
   const { address } = useAccount();
   const { tickets, isLoading, error } = useUserTickets(address, drawingId);
   const [localTickets, setLocalTickets] = useState<readonly PersistedPurchasedTicket[]>([]);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
     if (!address || drawingId === undefined) {
@@ -54,10 +61,27 @@ export function CurrentDrawingTickets({
     return () => window.removeEventListener(PURCHASED_TICKETS_UPDATED_EVENT, sync);
   }, [address, drawingId]);
 
-  if (!address) return null;
+  const shouldTick = drawingId !== undefined && phase === 'open' && drawingTime !== undefined;
+  useEffect(() => {
+    if (!shouldTick) return;
+    const interval = window.setInterval(() => setNowMs(Date.now()), 1_000);
+    return () => window.clearInterval(interval);
+  }, [shouldTick]);
 
-  const localIds = new Set(localTickets.map((ticket) => ticket.ticketId.toString()));
-  const apiTickets = tickets.filter((ticket) => !localIds.has(ticket.user_ticket_id));
+  const localIds = useMemo(
+    () => new Set(localTickets.map((ticket) => ticket.ticketId.toString())),
+    [localTickets],
+  );
+  const apiTickets = useMemo(
+    () => tickets.filter((ticket) => !localIds.has(ticket.user_ticket_id)),
+    [localIds, tickets],
+  );
+  const apiTicketsById = useMemo(
+    () => new Map(apiTickets.map((ticket) => [ticket.user_ticket_id, ticket] as const)),
+    [apiTickets],
+  );
+
+  if (!address) return null;
   const hasTickets = localTickets.length > 0 || apiTickets.length > 0;
 
   return (
@@ -98,6 +122,14 @@ export function CurrentDrawingTickets({
               ticketId={ticket.ticketId}
               normals={ticket.normals}
               bonusball={ticket.bonusBall}
+              status={deriveTicketStatus({
+                ticketId: ticket.ticketId,
+                drawingId: ticket.drawingId,
+                currentDrawingId: drawingId,
+                phase,
+                drawingTime,
+                nowMs,
+              })}
             />
           ))}
           {apiTickets.map((t) => (
@@ -106,6 +138,15 @@ export function CurrentDrawingTickets({
               ticketId={BigInt(t.user_ticket_id)}
               normals={t.normals}
               bonusball={t.bonusball}
+              status={deriveTicketStatus({
+                ticketId: t.user_ticket_id,
+                drawingId: t.round_id,
+                currentDrawingId: drawingId,
+                phase,
+                drawingTime,
+                nowMs,
+                apiTicket: apiTicketsById.get(t.user_ticket_id),
+              })}
             />
           ))}
           {Boolean(error) && (

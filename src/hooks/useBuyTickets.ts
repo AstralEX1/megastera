@@ -9,7 +9,9 @@ import {
 } from '@/config/contracts';
 import {
   jackpotPurchaseAbi,
+  clearPendingPurchase,
   type PurchasedTicket,
+  persistPendingPurchase,
   persistPurchasedTickets,
   readPurchasedTickets,
 } from '@/lib/purchaseReceipt';
@@ -31,7 +33,13 @@ export function useBuyTickets() {
   const [isPreparing, setIsPreparing] = useState(false);
 
   useEffect(() => {
-    if (!receipt.data || !address || !receiptSucceeded) return;
+    if (write.data && address) persistPendingPurchase(address, write.data);
+  }, [address, write.data]);
+
+  useEffect(() => {
+    if (!receipt.data || !address) return;
+    clearPendingPurchase(address, receipt.data.transactionHash);
+    if (!receiptSucceeded) return;
     void invalidatePostWriteQueries(queryClient);
     try {
       const parsed = readPurchasedTickets(receipt.data, address);

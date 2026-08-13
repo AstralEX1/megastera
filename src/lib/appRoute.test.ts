@@ -15,6 +15,8 @@ describe('app routes', () => {
 
   it('maps the visible primary navigation to stable paths', () => {
     expect(navPath('play')).toBe('/play');
+    expect(parseAppRoute('/tickets')).toEqual({ active: 'tickets' });
+    expect(navPath('tickets')).toBe('/tickets');
     expect(navPath('history')).toBe('/leaderboard');
     expect(navPath('home')).toBe('/');
   });

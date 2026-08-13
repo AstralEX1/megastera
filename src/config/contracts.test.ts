@@ -8,7 +8,7 @@ describe('Megapot contract invariants', () => {
   });
 
   it('keeps the canonical source tag and referral split', () => {
-    expect(TICKET_SOURCE).toBe(stringToHex('MEGAPLANETS_V1', { size: 32 }));
+    expect(TICKET_SOURCE).toBe(stringToHex('MEGASTERA', { size: 32 }));
     expect(REFERRAL_SPLIT_FULL).toEqual([1_000_000_000_000_000_000n]);
     expect(REFERRER_ADDRESS).toBe(DEFAULT_REFERRER_ADDRESS);
   });

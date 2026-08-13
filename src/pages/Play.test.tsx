@@ -22,6 +22,8 @@ vi.mock('@/hooks/useJackpotState', () => ({
     state: { ballMax: 50, bonusballMax: 10, ticketPrice: 1_000_000n, prizePool: 0n },
     drawingId: 218n,
     phase: 'open',
+    isLoading: false,
+    error: null,
     refetch: vi.fn(),
   }),
 }));
@@ -42,6 +44,7 @@ vi.mock('@/hooks/useBulkPurchase', () => ({
     hasActiveOrder: false,
     createOrder: vi.fn(),
     cancelOrder: vi.fn(),
+    reset: vi.fn(),
     create: { isReady: false, isPending: false, isWaitingSignature: false, isPreparing: false, isMining: false, isSuccess: false, error: null, reset: vi.fn() },
     cancel: { isPending: false },
     confirmedTickets: [],
@@ -92,6 +95,15 @@ describe('Play backend generation flow', () => {
     mocks.buy.mockReset();
     mocks.generate.mockReset();
     mocks.directTickets = [];
+    mocks.account.isConnected = true;
+  });
+
+  it('does not render a duplicate wallet notice inside checkout', () => {
+    mocks.account.isConnected = false;
+
+    render(<Play />);
+
+    expect(screen.queryByText('Connect your wallet to buy tickets.')).not.toBeInTheDocument();
   });
 
   it('starts Megapot purchase from Explore', async () => {
@@ -101,14 +113,35 @@ describe('Play backend generation flow', () => {
     expect(mocks.buy).toHaveBeenCalledWith({ count: 3, bounds: { ballMax: 50, bonusballMax: 10 }, customTickets: [] });
   });
 
-  it('sends each canonical receipt ticket to backend generation and shows ready media', async () => {
+  it('shows the exploring state and then full Planet cards with exactly two next actions', async () => {
     mocks.directTickets = [ticket(34n), ticket(35n, 1n), ticket(36n, 2n)];
     mocks.generate.mockImplementation(async ({ transactionHash }: { transactionHash: string }) => planet(String(BigInt(transactionHash))));
     const user = userEvent.setup();
     render(<Play />);
     await user.click(screen.getByRole('button', { name: /^Explore 3/ }));
-    expect(await screen.findByText('Your new planets are ready.')).toBeInTheDocument();
+    expect(await screen.findByText('Your planets are ready.')).toBeInTheDocument();
     expect(mocks.generate).toHaveBeenCalledTimes(3);
     expect(screen.getAllByRole('img')).toHaveLength(3);
+    expect(screen.getByRole('button', { name: 'Explore again' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'My planets' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Claim|Reveal|Mint/i })).not.toBeInTheDocument();
+  });
+
+  it('retries backend generation after an early finality failure without repurchasing', async () => {
+    mocks.directTickets = [ticket(34n), ticket(35n, 1n), ticket(36n, 2n)];
+    let attempts = 0;
+    mocks.generate.mockImplementation(async ({ transactionHash }: { transactionHash: string }) => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('Receipt requires 6 confirmations.');
+      return planet(String(BigInt(transactionHash)));
+    });
+    const user = userEvent.setup();
+    render(<Play />);
+    await user.click(screen.getByRole('button', { name: /^Explore 3/ }));
+
+    expect(await screen.findByText('Exploring planets…')).toBeInTheDocument();
+    expect(await screen.findByText('Your planets are ready.', undefined, { timeout: 4_000 })).toBeInTheDocument();
+    expect(mocks.buy).toHaveBeenCalledTimes(1);
+    expect(mocks.generate).toHaveBeenCalledTimes(4);
   });
 });

@@ -150,12 +150,14 @@ export function useJackpotState() {
 
   const state = stateQuery.data as DrawingState | undefined;
   const phase: LifecyclePhase = unlockedFlash ? 'unlocked' : derivePhase(state);
+  const error = drawingIdQuery.error ?? stateQuery.error ?? null;
 
   return {
     phase,
     state,
     drawingId,
     isLoading: stateQuery.isLoading || drawingIdQuery.isLoading,
+    error,
     refetch: refetchAll,
   };
 }

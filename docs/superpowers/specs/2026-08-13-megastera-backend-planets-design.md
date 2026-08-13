@@ -6,7 +6,7 @@ Move Planet ownership and media generation off-chain for the hackathon MVP while
 
 ## Decisions
 
-- A confirmed Base Sepolia `TicketPurchased` receipt with source `MEGAPLANETS_V1` is the only creation authority.
+- A confirmed Base Sepolia `TicketPurchased` receipt with source `MEGASTERA` is the only creation authority.
 - The backend creates one Planet per receipt event, keyed idempotently by `originTxHash:logIndex` and assigned to the event recipient.
 - Planet traits remain deterministic and are derived by the existing shared generator from the canonical ticket proof.
 - The backend renders the existing 128x128 GIF renderer and stores the GIF bytes in PostgreSQL; the API serves the bytes to My Planets.
@@ -30,7 +30,7 @@ Generation is synchronous for the MVP so no worker or queue is required. Request
 - Add a backend Planet persistence model with ticket relation, recipient, deterministic traits, base rate, generation timestamps/status, and GIF bytes/hash.
 - Add `POST /api/planets/generate` accepting only `{ transactionHash, logIndex, recipient? }`; the server re-fetches and validates the receipt.
 - Add `GET /api/planets?owner=<address>` and `GET /api/planets/:planetId/gif` for the inventory.
-- Keep wallet/planet mining and daily leaderboard routes, switching their source to backend Planet rows.
+- Keep wallet/planet mining and live leaderboard routes, switching their source to backend Planet rows and a short backend cache.
 - Remove Planet voucher routes and their signer/Pinata/NFT readiness requirements.
 
 ## Frontend

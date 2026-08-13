@@ -1,6 +1,6 @@
 import { encodeAbiParameters, encodeEventTopics, getAddress, stringToHex, type Log, type TransactionReceipt } from 'viem';
 import { describe, expect, it } from 'vitest';
-import { MEGAPLANETS_LAUNCH_BLOCK, MEGAPLANETS_SOURCE, MEGAPLANETS_TICKET_START_BLOCK } from './config';
+import { MEGAPLANETS_LAUNCH_BLOCK, MEGAPLANETS_TICKET_START_BLOCK, MEGASTERA_SOURCE } from './config';
 import {
   BASE_SEPOLIA_JACKPOT,
   decodeEligibleTicket,
@@ -14,7 +14,7 @@ const recipient = '0x1111111111111111111111111111111111111111' as const;
 const transactionHash = `0x${'ab'.repeat(32)}` as const;
 
 function ticketLog(overrides: Partial<Log> = {}): Log {
-  const source = stringToHex(MEGAPLANETS_SOURCE, { size: 32 });
+  const source = stringToHex(MEGASTERA_SOURCE, { size: 32 });
   return {
     address: BASE_SEPOLIA_JACKPOT,
     blockNumber: MEGAPLANETS_LAUNCH_BLOCK,
@@ -38,8 +38,8 @@ function ticketLog(overrides: Partial<Log> = {}): Log {
   } as Log;
 }
 
-describe('MegaPlanets eligibility', () => {
-  it('decodes only a confirmed MegaPlanets purchase log', () => {
+describe('Megastera eligibility', () => {
+  it('decodes only a confirmed Megastera purchase log', () => {
     expect(decodeEligibleTicket(ticketLog())).toEqual({
       recipient,
       ticketId: 456n,
@@ -54,7 +54,7 @@ describe('MegaPlanets eligibility', () => {
 
   it('rejects purchases before the canonical activation boundary', () => {
     expect(() => decodeEligibleTicket(ticketLog({ blockNumber: MEGAPLANETS_TICKET_START_BLOCK - 1n }))).toThrow(
-      'outside the eligible MegaPlanets range',
+      'outside the eligible Megastera range',
     );
   });
 
@@ -70,7 +70,7 @@ describe('MegaPlanets eligibility', () => {
   });
 
   it('normalizes a receipt-backed Megastera proof without changing the Ethereum receipt type', () => {
-    const source = stringToHex(MEGAPLANETS_SOURCE, { size: 32 });
+    const source = stringToHex(MEGASTERA_SOURCE, { size: 32 });
     const proof = normalizeMegasteraProof({
       ...decodeEligibleTicket(ticketLog()),
       chainId: 84_532,
@@ -105,7 +105,7 @@ describe('MegaPlanets eligibility', () => {
     expect(() => verifier.verifyReceipt(receipt, { logIndex: 99, recipient })).toThrow(/was not found/i);
   });
 
-  it('rejects a source mismatch even when the receipt succeeded', () => {
+  it('rejects the legacy source tag even when the receipt succeeded', () => {
     const blockHash = `0x${'cd'.repeat(32)}` as `0x${string}`;
     const log = ticketLog({
       blockHash,
@@ -115,7 +115,7 @@ describe('MegaPlanets eligibility', () => {
         args: {
           recipient,
           currentDrawingId: 123n,
-          source: stringToHex('OTHER_SOURCE', { size: 32 }),
+          source: stringToHex('MEGAPLANETS_V1', { size: 32 }),
         },
       }) as Log['topics'],
     });
@@ -127,6 +127,6 @@ describe('MegaPlanets eligibility', () => {
       logs: [log],
     } as unknown as TransactionReceipt;
 
-    expect(() => new MegasteraVerifier().verifyReceipt(receipt, { logIndex: 4, recipient })).toThrow(/MEGAPLANETS_V1/i);
+    expect(() => new MegasteraVerifier().verifyReceipt(receipt, { logIndex: 4, recipient })).toThrow(/MEGASTERA/i);
   });
 });

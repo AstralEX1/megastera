@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { PrismaClient } from './generated/prisma/client';
 import {
+  calculateLiveLeaderboardRows,
   calculateLeaderboardRows,
+  createLiveLeaderboardCache,
   finalizeLeaderboardPeriod,
   paginateLeaderboardRows,
 } from './leaderboardStore';
@@ -63,6 +65,48 @@ describe('calculateLeaderboardRows', () => {
     });
 
     expect(rows).toEqual([]);
+  });
+});
+describe('live leaderboard', () => {
+  it('scores every ready Backend Planet from generatedAt without a UTC-day cutoff', () => {
+    const rows = calculateLiveLeaderboardRows({
+      asOf: new Date('2026-08-20T00:00:00.000Z'),
+      planets: [
+        {
+          ownerAddress: ADDRESS_A,
+          baseMineralsPerDay: 24n,
+          generatedAt: new Date('2026-08-19T00:00:00.000Z'),
+        },
+      ],
+    });
+
+    expect(rows).toEqual([
+      {
+        rank: 1,
+        walletAddress: ADDRESS_A,
+        scoreMicros: 24_000_000n,
+        effectiveMineralsPerDayMicros: 24_000_000n,
+      },
+    ]);
+  });
+
+  it('refreshes a cached live snapshot only after its TTL expires', async () => {
+    const cache = createLiveLeaderboardCache(60_000);
+    let loads = 0;
+    const load = async (asOf: Date) => {
+      loads += 1;
+      return { asOf, rows: [] };
+    };
+    const firstNow = new Date('2026-08-20T00:00:00.000Z');
+
+    const first = await cache.get(firstNow, load);
+    const withinTtl = await cache.get(new Date(firstNow.getTime() + 59_999), load);
+    const afterTtl = await cache.get(new Date(firstNow.getTime() + 60_000), load);
+
+    expect(loads).toBe(2);
+    expect(withinTtl).toBe(first);
+    expect(afterTtl).not.toBe(first);
+    expect(afterTtl.asOf).toEqual(new Date('2026-08-20T00:01:00.000Z'));
   });
 });
 
@@ -144,67 +188,5 @@ describe('finalizeLeaderboardPeriod', () => {
 
     expect(periodWrites).toBe(1);
     expect(lockCalls).toBe(2);
-  });
-});
-
-describe('daily leaderboard finalization', () => {
-  it('persists one deterministic daily snapshot and serves it as the latest completed result', async () => {
-    const period = {
-      id: '2026-08-10',
-      startsAt: new Date('2026-08-10T00:00:00.000Z'),
-      endsAt: new Date('2026-08-11T00:00:00.000Z'),
-    };
-    let periodRecord: { id: string; startsAt: Date; endsAt: Date; finalizedAt: Date } | undefined;
-    const entries = [
-      {
-        rank: 1,
-        walletAddress: ADDRESS_A,
-        scoreMicros: 48_000_000n,
-        effectiveMineralsPerDayMicros: 24_000_000n,
-      },
-    ];
-    const transaction = {
-      $queryRaw: async () => undefined,
-      leaderboardPeriod: {
-        findUnique: async () => periodRecord,
-        upsert: async ({ create }: { create: typeof period }) => {
-          periodRecord = { ...create, finalizedAt: new Date('2026-08-11T00:00:01.000Z') };
-          return periodRecord;
-        },
-      },
-      leaderboardEntry: {
-        createMany: async () => ({ count: entries.length }),
-        findMany: async () => entries,
-      },
-      planet: {
-        findMany: async () => [
-          {
-            ownerAddress: ADDRESS_A,
-            baseMineralsPerDay: 24n,
-            mintedAt: new Date('2026-08-09T00:00:00.000Z'),
-          },
-        ],
-      },
-    };
-    const prisma = {
-      $transaction: async (operation: (client: typeof transaction) => Promise<unknown>) =>
-        operation(transaction),
-      leaderboardPeriod: {
-        findFirst: async () => periodRecord,
-      },
-      leaderboardEntry: {
-        findMany: async () => entries,
-      },
-    } as unknown as PrismaClient;
-
-    await finalizeLeaderboardPeriod(prisma, period, new Date('2026-08-11T00:00:01.000Z'));
-    const current = await (await import('./leaderboardStore')).getCurrentLeaderboard(
-      prisma,
-      new Date('2026-08-11T00:01:00.000Z'),
-      { offset: 0, limit: 50 },
-    );
-
-    expect(current.asOf).toEqual(new Date('2026-08-11T00:00:01.000Z'));
-    expect(current.rows).toEqual(entries);
   });
 });

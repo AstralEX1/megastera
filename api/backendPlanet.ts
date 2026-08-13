@@ -1,4 +1,4 @@
-import { getAddress, keccak256, type Address, type Hex } from 'viem';
+import { getAddress, keccak256, stringToHex, type Address, type Hex } from 'viem';
 import {
   createPlanetConfig,
   derivePlanet,
@@ -7,8 +7,8 @@ import {
   renderPlanetGif,
 } from '@megaplanets/planet-generator';
 import type { PrismaClient } from './generated/prisma/client';
-import { normalizeMegasteraProof, type MegasteraProof } from './eligibility';
-import { BASE_SEPOLIA_CHAIN_ID as CONFIGURED_CHAIN_ID } from './config';
+import { BASE_SEPOLIA_JACKPOT, normalizeMegasteraProof, type MegasteraProof } from './eligibility';
+import { BASE_SEPOLIA_CHAIN_ID as CONFIGURED_CHAIN_ID, MEGASTERA_SOURCE } from './config';
 
 export type BackendPlanetStatus = 'READY' | 'FAILED';
 
@@ -44,6 +44,13 @@ export type BackendPlanetRecord = {
   ticket: BackendPlanetTicket;
 };
 
+export type BackendPlanetCollectionRecord = {
+  generationStatus: 'pending' | 'generated';
+  ticket: BackendPlanetTicket;
+  planet: BackendPlanetRecord | null;
+  generationError?: string | null;
+};
+
 type BackendPlanetDraft = Omit<BackendPlanetRecord, 'planetId' | 'gifUrl' | 'ticket' | 'gifHash'> & {
   gifHash: Hex;
   gifData: Uint8Array;
@@ -58,6 +65,7 @@ export type BackendPlanetGif = {
 export type BackendPlanetStore = {
   generatePlanet(proof: MegasteraProof): Promise<BackendPlanetRecord>;
   listPlanets(ownerAddress: Address): Promise<BackendPlanetRecord[]>;
+  listCollection(ownerAddress: Address): Promise<BackendPlanetCollectionRecord[]>;
   getPlanet(planetId: string): Promise<BackendPlanetRecord | undefined>;
   getGif(planetId: string): Promise<BackendPlanetGif | undefined>;
 };
@@ -80,6 +88,32 @@ function ticketFromProof(proof: MegasteraProof): BackendPlanetTicket {
 
 function assertNow(now: Date): void {
   if (!Number.isFinite(now.getTime())) throw new Error('Backend Planet generation time is invalid.');
+}
+
+type PersistedTicketRow = {
+  ticketId: { toFixed: (digits?: number) => string };
+  drawingId: { toFixed: (digits?: number) => string };
+  normals: number[];
+  bonusBall: number;
+  originTxHash: string;
+  logIndex: number;
+  purchasedAt: Date;
+};
+
+function ticketFromPersistedRow(row: PersistedTicketRow): BackendPlanetTicket {
+  return {
+    ticketId: row.ticketId.toFixed(0),
+    drawingId: row.drawingId.toFixed(0),
+    normals: [...row.normals],
+    bonusBall: row.bonusBall,
+    originTxHash: row.originTxHash as Hex,
+    logIndex: row.logIndex.toString(),
+    purchasedAt: row.purchasedAt.toISOString(),
+  };
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && (error as { code?: unknown }).code === 'P2002');
 }
 
 /** Derives deterministic traits and GIF bytes without accessing browser globals. */
@@ -141,16 +175,10 @@ function serializeRecord(
     baseMineralsPerDay: bigint;
     generatedAt: Date;
     status: BackendPlanetStatus;
+    gifData?: Uint8Array | null;
     gifHash: string | null;
-    ticketPurchase?: {
-      ticketId: { toFixed: (digits?: number) => string };
-      drawingId: { toFixed: (digits?: number) => string };
-      normals: number[];
-      bonusBall: number;
-      originTxHash: string;
-      logIndex: number;
-      purchasedAt: Date;
-    } | null;
+    generationError?: string | null;
+    ticketPurchase?: PersistedTicketRow | null;
   },
 ): BackendPlanetRecord {
   if (!row.ticketPurchase) throw new Error('Backend Planet ticket provenance is missing.');
@@ -172,19 +200,31 @@ function serializeRecord(
     generatedAt: row.generatedAt.toISOString(),
     status: row.status,
     gifHash: row.gifHash as Hex | null,
-    ticket: {
-      ticketId: row.ticketPurchase.ticketId.toFixed(0),
-      drawingId: row.ticketPurchase.drawingId.toFixed(0),
-      normals: row.ticketPurchase.normals,
-      bonusBall: row.ticketPurchase.bonusBall,
-      originTxHash: row.ticketPurchase.originTxHash as Hex,
-      logIndex: row.ticketPurchase.logIndex.toString(),
-      purchasedAt: row.ticketPurchase.purchasedAt.toISOString(),
-    },
+    ticket: ticketFromPersistedRow(row.ticketPurchase),
   };
 }
 
 type PrismaBackendPlanetRow = Parameters<typeof serializeRecord>[0];
+type PrismaCollectionRow = PersistedTicketRow & {
+  recipient: string;
+  backendPlanet: PrismaBackendPlanetRow | null;
+};
+
+function serializeCollectionRow(row: PrismaCollectionRow): BackendPlanetCollectionRecord {
+  if (row.backendPlanet?.status === 'READY' && row.backendPlanet.gifData) {
+    const planet = serializeRecord({
+      ...row.backendPlanet,
+      ticketPurchase: row,
+    });
+    return { generationStatus: 'generated', ticket: planet.ticket, planet };
+  }
+  return {
+    generationStatus: 'pending',
+    ticket: ticketFromPersistedRow(row),
+    planet: null,
+    generationError: row.backendPlanet?.generationError ?? null,
+  };
+}
 
 export class PrismaBackendPlanetStore implements BackendPlanetStore {
   public constructor(
@@ -223,9 +263,7 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
     });
     if (existing?.status === 'READY' && existing.gifData) return serializeRecord(existing as PrismaBackendPlanetRow);
     const draft = deriveBackendPlanet(normalized, this.now());
-    const row = await this.prisma.backendPlanet.upsert({
-      where: { ticketPurchaseId: ticket.id },
-      create: {
+    const data = {
         ticketPurchaseId: ticket.id,
         chainId,
         ticketId: draft.ticketId,
@@ -241,34 +279,35 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
         hasRing: draft.hasRing,
         baseMineralsPerDay: BigInt(draft.baseMineralsPerDay),
         generatedAt: new Date(draft.generatedAt),
-        status: 'READY',
+        status: 'READY' as const,
         gifData: Buffer.from(draft.gifData),
         gifHash: draft.gifHash.toLowerCase(),
         generationError: null,
-      },
-      update: {
-        chainId,
-        ticketId: draft.ticketId,
-        ownerAddress: draft.ownerAddress.toLowerCase(),
-        seed: draft.seed.toLowerCase(),
-        traitsHash: draft.traitsHash.toLowerCase(),
-        generatorVersion: draft.generatorVersion,
-        planetName: draft.name,
-        planetType: draft.planetType,
-        terrain: draft.terrain,
-        rarity: draft.rarity,
-        satelliteCount: draft.satelliteCount,
-        hasRing: draft.hasRing,
-        baseMineralsPerDay: BigInt(draft.baseMineralsPerDay),
-        generatedAt: new Date(draft.generatedAt),
-        status: 'READY',
-        gifData: Buffer.from(draft.gifData),
-        gifHash: draft.gifHash.toLowerCase(),
-        generationError: null,
-      },
-      include: { ticketPurchase: true },
-    });
-    return serializeRecord(row as PrismaBackendPlanetRow);
+      };
+    try {
+      const row = existing
+        ? await this.prisma.backendPlanet.update({
+            where: { id: existing.id },
+            data,
+            include: { ticketPurchase: true },
+          })
+        : await this.prisma.backendPlanet.create({
+            data,
+            include: { ticketPurchase: true },
+          });
+      return serializeRecord(row as PrismaBackendPlanetRow);
+    } catch (error) {
+      if (!existing && isUniqueConstraintError(error)) {
+        const concurrent = await this.prisma.backendPlanet.findUnique({
+          where: { ticketPurchaseId: ticket.id },
+          include: { ticketPurchase: true },
+        });
+        if (concurrent?.status === 'READY' && concurrent.gifData) {
+          return serializeRecord(concurrent as PrismaBackendPlanetRow);
+        }
+      }
+      throw error;
+    }
   }
 
   async listPlanets(ownerAddress: Address): Promise<BackendPlanetRecord[]> {
@@ -278,6 +317,20 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
       include: { ticketPurchase: true },
     });
     return rows.map((row) => serializeRecord(row as PrismaBackendPlanetRow));
+  }
+
+  async listCollection(ownerAddress: Address): Promise<BackendPlanetCollectionRecord[]> {
+    const rows = await this.prisma.ticketPurchase.findMany({
+      where: {
+        chainId: CONFIGURED_CHAIN_ID,
+        jackpotAddress: BASE_SEPOLIA_JACKPOT.toLowerCase(),
+        source: stringToHex(MEGASTERA_SOURCE, { size: 32 }),
+        recipient: getAddress(ownerAddress).toLowerCase(),
+      },
+      orderBy: [{ purchasedAt: 'desc' }, { ticketId: 'asc' }],
+      include: { backendPlanet: true },
+    });
+    return rows.map((row) => serializeCollectionRow(row as PrismaCollectionRow));
   }
 
   async getPlanet(planetId: string): Promise<BackendPlanetRecord | undefined> {
@@ -346,6 +399,24 @@ export class MemoryBackendPlanetStore implements BackendPlanetStore {
       .filter((row) => row.status === 'READY' && row.ownerAddress.toLowerCase() === getAddress(ownerAddress).toLowerCase())
       .sort((left, right) => right.generatedAt.localeCompare(left.generatedAt))
       .map(withoutGifData);
+  }
+
+  async listCollection(ownerAddress: Address): Promise<BackendPlanetCollectionRecord[]> {
+    const normalized = getAddress(ownerAddress).toLowerCase();
+    const generated = new Map(
+      [...this.rows.values()]
+        .filter((row) => row.ownerAddress.toLowerCase() === normalized)
+        .map((row) => [proofKey({ originTxHash: row.ticket.originTxHash, logIndex: BigInt(row.ticket.logIndex) } as MegasteraProof), row] as const),
+    );
+    return [...this.proofRows.values()]
+      .filter((proof) => proof.recipient.toLowerCase() === normalized)
+      .sort((left, right) => (right.ticketId > left.ticketId ? 1 : right.ticketId < left.ticketId ? -1 : 0))
+      .map((proof) => {
+        const generatedRow = generated.get(proofKey(proof));
+        return generatedRow
+          ? { generationStatus: 'generated', ticket: generatedRow.ticket, planet: withoutGifData(generatedRow) }
+          : { generationStatus: 'pending', ticket: ticketFromProof(proof), planet: null, generationError: null };
+      });
   }
 
   async getPlanet(planetId: string): Promise<BackendPlanetRecord | undefined> {

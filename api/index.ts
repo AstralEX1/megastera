@@ -5,7 +5,6 @@ import {
   type BackendPlanetRouteDependencies,
 } from './backendPlanetRoutes';
 import { createLeaderboardRoutes } from './leaderboardRoutes';
-import { ensureOverdueLeaderboardPeriodsFinalized } from './leaderboardStore';
 import { createOperationalState } from './operations';
 
 /**
@@ -32,7 +31,7 @@ export function createApp(
     c.json({ ok: true, service: 'api', operations: operations.snapshot() }),
   );
   app.route('/api', createBackendPlanetRoutes(backendPlanetOverrides));
-  app.route('/api/leaderboard', createLeaderboardRoutes({ finalize: ensureOverdueLeaderboardPeriodsFinalized }));
+  app.route('/api/leaderboard', createLeaderboardRoutes());
 
   return app;
 }

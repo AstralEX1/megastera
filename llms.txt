@@ -21,7 +21,7 @@ docs/archive/README.md explains the policy.
 ## Non-negotiable runtime invariants
 
 - Target Base Sepolia (84532) until a later stage explicitly approves mainnet.
-- TICKET_SOURCE remains MEGAPLANETS_V1.
+- TICKET_SOURCE remains MEGASTERA.
 - Eligibility is a receipt-verified, server-side Megastera Proof.
 - Current Planet holdings are direct ERC721A reads by default; the finalized
   PlanetMinted/Transfer projector is an operational read model and compatibility fallback.

@@ -30,8 +30,8 @@ event TicketPurchased(
 );
 ```
 
-MegaPlanets eligibility later requires the canonical event source to equal the
-32-byte padded `MEGAPLANETS_V1` value and the event block to be no earlier than
+Megastera eligibility requires the canonical event source to equal the
+32-byte padded `MEGASTERA` value and the event block to be no earlier than
 the configured launch block.
 
 ## Ticket ownership and data

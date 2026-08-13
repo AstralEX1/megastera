@@ -45,4 +45,63 @@ describe('PrismaBackendPlanetStore', () => {
 
     await expect(store.generatePlanet(proof)).rejects.toThrow('conflicts with persisted ticket');
   });
+
+  it('returns the row won by a concurrent create instead of overwriting its generation time', async () => {
+    const persistedTicket = {
+      id: 'ticket-row',
+      ticketId: { toFixed: () => '1' },
+      drawingId: { toFixed: () => '1' },
+      recipient: proof.recipient,
+      bonusBall: proof.bonusBall,
+      normals: proof.normals,
+    };
+    const existingPlanet = {
+      id: 'planet-row',
+      chainId: 84532,
+      ticketId: { toFixed: () => '1' },
+      ownerAddress: proof.recipient,
+      planetName: 'Existing Planet',
+      seed: `0x${'11'.repeat(32)}`,
+      traitsHash: `0x${'22'.repeat(32)}`,
+      generatorVersion: 1,
+      planetType: 'Gaia',
+      terrain: 'Plains',
+      rarity: 'Common',
+      satelliteCount: 0,
+      hasRing: false,
+      baseMineralsPerDay: 1n,
+      generatedAt: new Date('2026-08-13T12:00:00.000Z'),
+      status: 'READY',
+      gifData: Buffer.from('gif'),
+      gifHash: `0x${'33'.repeat(32)}`,
+      ticketPurchase: {
+        ticketId: { toFixed: () => '1' },
+        drawingId: { toFixed: () => '1' },
+        normals: proof.normals,
+        bonusBall: proof.bonusBall,
+        originTxHash: proof.originTxHash,
+        logIndex: 0,
+        purchasedAt: new Date('2026-08-13T11:00:00.000Z'),
+      },
+    };
+    const prisma = {
+      ticketPurchase: {
+        findUnique: vi.fn().mockResolvedValue(persistedTicket),
+      },
+      backendPlanet: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(existingPlanet),
+        create: vi.fn().mockRejectedValue({ code: 'P2002' }),
+      },
+    } as unknown as PrismaClient;
+    const store = new PrismaBackendPlanetStore(prisma);
+
+    await expect(store.generatePlanet(proof)).resolves.toMatchObject({
+      planetId: 'planet-row',
+      generatedAt: existingPlanet.generatedAt.toISOString(),
+    });
+    expect(prisma.backendPlanet.create).toHaveBeenCalledOnce();
+  });
 });

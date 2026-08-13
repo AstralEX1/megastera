@@ -1,3 +1,40 @@
+import { CHAIN, type ChainName } from '@/config/contracts';
+
+const DEFAULT_API_BASE_URL: Record<ChainName, string> = {
+  testnet: 'https://api-testnet.megapot.io/v1',
+  mainnet: 'https://api.megapot.io/v1',
+};
+
+function isSameOriginProxyUrl(value: string | undefined): boolean {
+  return Boolean(value?.startsWith('/') && !value.startsWith('//'));
+}
+
+export function getApiBaseUrlEnvironmentMismatch(
+  chain: ChainName,
+  apiBaseUrl: string | undefined,
+): string | undefined {
+  const baseUrl = apiBaseUrl?.trim().replace(/\/+$/, '');
+  if (!baseUrl || isSameOriginProxyUrl(baseUrl)) return undefined;
+  const testnetHost = DEFAULT_API_BASE_URL.testnet;
+  const mainnetHost = DEFAULT_API_BASE_URL.mainnet;
+  if (chain === 'testnet' && baseUrl === mainnetHost) {
+    return `[megapot-api] ${mainnetHost} serves Base Mainnet; use ${testnetHost} for Base Sepolia.`;
+  }
+  if (chain === 'mainnet' && baseUrl === testnetHost) {
+    return `[megapot-api] ${testnetHost} serves Base Sepolia; use ${mainnetHost} for Base Mainnet.`;
+  }
+  return undefined;
+}
+
+/** Resolve a chain-compatible host; never silently read the other network. */
+export function resolveApiBaseUrl(chain: ChainName, explicitBaseUrl?: string): string {
+  const value = explicitBaseUrl?.trim();
+  if (!value) return DEFAULT_API_BASE_URL[chain];
+  return getApiBaseUrlEnvironmentMismatch(chain, value)
+    ? DEFAULT_API_BASE_URL[chain]
+    : value;
+}
+
 /**
  * ---
  * @skill      https://llms.megapot.io/data-api
@@ -41,8 +78,9 @@
  * Base URL for v1 of the Megapot Data API.
  *
  * Override via `VITE_API_BASE_URL` to switch tiers:
- *   1. Anonymous (default): leave unset. Browser hits `api.megapot.io`
- *      directly, anonymous tier (10/min, 500/day).
+ *   1. Anonymous (default): leave unset. Browser hits the active chain host
+ *      directly (`api-testnet.megapot.io` on Base Sepolia), anonymous tier
+ *      (10/min, 500/day).
  *   2. Browser key: set `VITE_MEGAPOT_API_KEY`. Same default base URL,
  *      higher tier (60/min, 10K/day). Key ships to the browser bundle.
  *   3. Proxy: set `VITE_API_BASE_URL=/api/megapot` and deploy a
@@ -51,8 +89,10 @@
  *
  * Empty / whitespace-only env values fall back to the default URL.
  */
-export const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || 'https://api.megapot.io/v1';
+export const API_BASE_URL = resolveApiBaseUrl(
+  CHAIN,
+  import.meta.env.VITE_API_BASE_URL as string | undefined,
+);
 
 /**
  * Centralized TanStack Query key prefixes for every Data API resource.
@@ -75,6 +115,15 @@ export const QK = {
 
 /** Optional bearer key. When undefined, requests fall back to the anonymous tier. */
 const API_KEY = import.meta.env.VITE_MEGAPOT_API_KEY as string | undefined;
+
+const API_BASE_ENVIRONMENT_WARNING = getApiBaseUrlEnvironmentMismatch(
+  CHAIN,
+  import.meta.env.VITE_API_BASE_URL as string | undefined,
+);
+if (API_BASE_ENVIRONMENT_WARNING) {
+  // biome-ignore lint/suspicious/noConsole: deliberate configuration diagnostic
+  console.warn(API_BASE_ENVIRONMENT_WARNING);
+}
 
 // `mpk_dev_*` keys target a separate environment from `mpk_live_*`; sending the
 // wrong tier returns `403 key_environment_mismatch`. Surface the mismatch at

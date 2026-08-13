@@ -9,10 +9,10 @@ function QuickPickTicketRow({ index }: { index: number }) {
   return <div
     data-testid="quick-pick-ticket"
     data-ticket-index={index + 1}
-    className="ticket-row-enter flex min-h-14 items-center gap-2 border-b border-[var(--border)] px-3 py-2 last:border-b-0"
+    className="ticket-row-enter grid min-h-14 grid-cols-[64px_minmax(0,1fr)] gap-x-2 gap-y-1 border-b border-[var(--border)] px-3 py-2 last:border-b-0"
     style={{ animationDelay: `${index * 40}ms` }}
   >
-    <span className="w-16 shrink-0 font-mono text-xs text-[var(--text-secondary)]">TICKET {String(index + 1).padStart(2, '0')}</span>
+    <span className="row-span-2 self-center font-mono text-xs text-[var(--text-secondary)]">TICKET {String(index + 1).padStart(2, '0')}</span>
     <div role="img" className="flex min-w-0 flex-1 items-center gap-1" aria-label={`Quick pick ticket ${index + 1}`}>
       {['normal-1', 'normal-2', 'normal-3', 'normal-4', 'normal-5'].map((slot) => <span key={slot} aria-hidden className="grid h-6 w-6 place-items-center rounded-full border border-dashed border-[var(--border-strong)] bg-[var(--surface)] font-mono text-[10px] text-[var(--text-disabled)]">?</span>)}
       <span aria-hidden className="mx-0.5 h-5 w-px bg-[var(--border-strong)]" />
@@ -48,7 +48,7 @@ export function CoordinatesPanel({ quantity, bounds, manuallyEditedTickets, auto
       <button type="button" onClick={shuffle} disabled={!bounds} className="h-8 rounded-lg border border-[var(--border-strong)] bg-[var(--surface-raised)] px-3 telemetry font-bold text-[var(--rare)] transition-colors hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-50">Shuffle</button>
     </div>
     <div className="mt-4 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-raised)]">
-      <div className="grid grid-cols-[minmax(42px,1fr)_4.5fr] gap-2 border-b border-[var(--border)] bg-[var(--surface-hover)] px-3 py-2.5 telemetry text-[9px] text-[var(--text-secondary)]">
+      <div className="grid grid-cols-[46px_minmax(0,1fr)] gap-2 border-b border-[var(--border)] bg-[var(--surface-hover)] px-3 py-2.5 telemetry text-[9px] text-[var(--text-secondary)]">
         <span>TKT</span><span className="text-center">01 · 02 · 03 · 04 · 05 · BONUS</span>
       </div>
       {manuallyEditedTickets.map((ticket, index) => <ManualTicketRow

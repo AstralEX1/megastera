@@ -32,10 +32,11 @@ import { useRound } from '@/hooks/useRound';
 import { useWalletTickets, type WalletTicketsByRound } from '@/hooks/useWalletTickets';
 import { formatApiError, type Ticket } from '@/lib/api';
 import { hasPartialTicketHistory } from '@/lib/ticketHistory';
+import { deriveTicketStatus } from '@/lib/ticketStatus';
 
 export function PastRoundTickets() {
   const { address } = useAccount();
-  const { drawingId } = useJackpotState();
+  const { drawingId, phase, state } = useJackpotState();
   const {
     visibleGroupedByRound,
     fetchNextPage,
@@ -70,7 +71,13 @@ export function PastRoundTickets() {
       ) : (
         <div className="space-y-2">
           {visibleGroupedByRound.map((row) => (
-            <PastRoundCard key={row.roundId} row={row} />
+            <PastRoundCard
+              key={row.roundId}
+              row={row}
+              currentDrawingId={drawingId}
+              phase={phase}
+              drawingTime={state?.drawingTime}
+            />
           ))}
           {hasPartialTicketHistory(error, visibleGroupedByRound.length) && (
             <p className="text-xs text-amber-600 dark:text-amber-300">
@@ -97,7 +104,17 @@ export function PastRoundTickets() {
   );
 }
 
-function PastRoundCard({ row }: { row: WalletTicketsByRound }) {
+function PastRoundCard({
+  row,
+  currentDrawingId,
+  phase,
+  drawingTime,
+}: {
+  row: WalletTicketsByRound;
+  currentDrawingId?: bigint;
+  phase: Parameters<typeof deriveTicketStatus>[0]['phase'];
+  drawingTime?: bigint;
+}) {
   // Native <details>/<summary> for the disclosure — semantic, accessible,
   // and the browser handles open/close state. The `onToggle` listener
   // mirrors that state so the inner detail subcomponent (which fires the
@@ -127,12 +144,32 @@ function PastRoundCard({ row }: { row: WalletTicketsByRound }) {
         </span>
       </summary>
 
-      {expanded && <PastRoundDetail roundId={row.roundId} tickets={row.tickets} />}
+      {expanded && (
+        <PastRoundDetail
+          roundId={row.roundId}
+          tickets={row.tickets}
+          currentDrawingId={currentDrawingId}
+          phase={phase}
+          drawingTime={drawingTime}
+        />
+      )}
     </details>
   );
 }
 
-function PastRoundDetail({ roundId, tickets }: { roundId: string; tickets: Ticket[] }) {
+function PastRoundDetail({
+  roundId,
+  tickets,
+  currentDrawingId,
+  phase,
+  drawingTime,
+}: {
+  roundId: string;
+  tickets: Ticket[];
+  currentDrawingId?: bigint;
+  phase: Parameters<typeof deriveTicketStatus>[0]['phase'];
+  drawingTime?: bigint;
+}) {
   const roundQuery = useRound(roundId);
   const winningNormals = roundQuery.data?.winning_numbers?.normals;
   const winningBonusball = roundQuery.data?.winning_numbers?.bonusball;
@@ -160,6 +197,15 @@ function PastRoundDetail({ roundId, tickets }: { roundId: string; tickets: Ticke
             claimable={claimable}
             winnings={isWinner ? winnings : undefined}
             claimed={isWinner ? t.claimed : undefined}
+            status={deriveTicketStatus({
+              ticketId: t.user_ticket_id,
+              drawingId: roundId,
+              currentDrawingId,
+              phase,
+              drawingTime,
+              nowMs: Date.now(),
+              apiTicket: t,
+            })}
           />
         );
       })}

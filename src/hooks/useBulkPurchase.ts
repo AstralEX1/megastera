@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   useAccount,
   useChainId,
@@ -24,8 +24,10 @@ import {
   readPersistedBulkOrder,
 } from '@/lib/bulkOrder';
 import {
+  clearPendingPurchase,
   type PurchasedTicket,
   persistPurchasedTickets,
+  persistPendingPurchase,
   readPurchasedTickets,
 } from '@/lib/purchaseReceipt';
 import { invalidatePostWriteQueries } from '@/lib/queryInvalidation';
@@ -78,6 +80,7 @@ export function useBulkPurchase(draft: BulkOrderDraft | null) {
   const [submissionError, setSubmissionError] = useState<Error | null>(null);
   const [cancellationError, setCancellationError] = useState<Error | null>(null);
   const [isPreparing, setIsPreparing] = useState(false);
+  const processedExecutionHashes = useRef(new Set<string>());
   const hasBulkContext = hasBulkPurchaseContext(draft, createdOrder);
 
   const minimum = useReadContract({
@@ -141,6 +144,7 @@ export function useBulkPurchase(draft: BulkOrderDraft | null) {
     setProvenanceError(null);
     setSubmissionError(null);
     setCancellationError(null);
+    processedExecutionHashes.current.clear();
     if (!address) {
       setCreatedOrder(null);
       return;
@@ -176,6 +180,11 @@ export function useBulkPurchase(draft: BulkOrderDraft | null) {
   const processExecution = useCallback(
     async (transactionHash: `0x${string}` | null | undefined) => {
       if (!address || !publicClient || !transactionHash) return;
+      const key = transactionHash.toLowerCase();
+      if (processedExecutionHashes.current.has(key)) return;
+      processedExecutionHashes.current.add(key);
+      persistPendingPurchase(address, transactionHash);
+      let processed = false;
       try {
         const receipt = await publicClient.getTransactionReceipt({ hash: transactionHash });
         void invalidatePostWriteQueries(queryClient);
@@ -190,10 +199,14 @@ export function useBulkPurchase(draft: BulkOrderDraft | null) {
         });
         setProvenanceError(null);
         invalidateWalletData();
+        processed = true;
       } catch (error) {
+        processedExecutionHashes.current.delete(key);
         setProvenanceError(
           error instanceof Error ? error : new Error('Bulk ticket provenance failed.'),
         );
+      } finally {
+        if (processed) clearPendingPurchase(address, transactionHash);
       }
     },
     [address, publicClient, invalidateWalletData, queryClient],
@@ -278,9 +291,21 @@ export function useBulkPurchase(draft: BulkOrderDraft | null) {
     }
   };
 
+  const reset = useCallback(() => {
+    setConfirmedTickets([]);
+    setProgress(null);
+    setProvenanceError(null);
+    setSubmissionError(null);
+    setCancellationError(null);
+    processedExecutionHashes.current.clear();
+    create.reset();
+    cancel.reset();
+  }, [cancel, create]);
+
   return {
     createOrder,
     cancelOrder,
+    reset,
     confirmedTickets,
     createdOrder,
     progress,

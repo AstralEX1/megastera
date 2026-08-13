@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({
   account: { address: '0x2222222222222222222222222222222222222222' as `0x${string}` | undefined },
   error: undefined as Error | undefined,
+  isLoading: false,
 }));
 
 const current = {
@@ -22,10 +23,8 @@ const current = {
 
 vi.mock('wagmi', () => ({ useAccount: () => state.account }));
 vi.mock('@/hooks/useLeaderboard', () => ({
-  useCurrentLeaderboard: () => ({ data: current, isLoading: false, error: state.error, refetch: vi.fn() }),
+  useCurrentLeaderboard: () => ({ data: current, isLoading: state.isLoading, error: state.error, refetch: vi.fn() }),
   useWalletLeaderboardPosition: () => ({ data: { period: current.period, asOf: current.asOf, row: current.rows[1], distanceToNextRankMicros: '6000000' }, isLoading: false }),
-  useLeaderboardHistory: () => ({ data: { total: 1, offset: 0, limit: 20, periods: [{ id: '2026-08-11', startsAt: '2026-08-11T00:00:00.000Z', endsAt: '2026-08-12T00:00:00.000Z', finalizedAt: '2026-08-12T00:00:01.000Z' }] } }),
-  useArchivedLeaderboard: () => ({ data: undefined, isLoading: false, error: undefined }),
 }));
 
 import { Leaderboard } from './Leaderboard';
@@ -33,21 +32,31 @@ import { Leaderboard } from './Leaderboard';
 describe('Leaderboard', () => {
   beforeEach(() => {
     state.error = undefined;
+    state.isLoading = false;
     state.account = { address: '0x2222222222222222222222222222222222222222' };
   });
   afterEach(cleanup);
 
-  it('shows public standings, daily snapshot status, and the connected wallet position', () => {
+  it('shows the FadeArc loading state during the initial standings load', () => {
+    state.isLoading = true;
+
+    render(<Leaderboard />);
+
+    expect(screen.getByRole('status', { name: 'Loading leaderboard' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Loading leaderboard' })).toBeInTheDocument();
+  });
+
+  it('shows live standings and the connected wallet position', () => {
     const { container } = render(<Leaderboard />);
 
     expect(screen.getByRole('heading', { name: 'Leaderboard' })).toBeInTheDocument();
-    expect(screen.getByRole('progressbar', { name: 'Daily snapshot progress' })).toBeInTheDocument();
+    expect(screen.getByText('LIVE · GENERATED AT + BASE RATE')).toBeInTheDocument();
     expect(screen.getAllByText('25').length).toBeGreaterThan(0);
     expect(screen.getAllByText('19').length).toBeGreaterThan(0);
     expect(screen.getByText('Your rank')).toBeInTheDocument();
     expect(screen.getByText('6 to next rank')).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Latest snapshot/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Aug 11/ })).toBeInTheDocument();
+    expect(screen.getByText(/As of Aug 12/)).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar', { name: 'Daily snapshot progress' })).not.toBeInTheDocument();
     expect(container.querySelector('[data-wallet-row="true"]')).toBeInTheDocument();
     expect(container.querySelector('[data-mobile-standings]')).toHaveClass('md:hidden');
   });

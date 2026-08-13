@@ -12,10 +12,14 @@ function formatJackpot(amount: bigint) {
   return Number(formatUnits(amount, 6)).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
+export type JackpotStatus = 'loading' | 'ready' | 'error';
+
 export function ExpeditionConfigurator({
   quantity,
   total,
   jackpotAmount = 0n,
+  jackpotStatus = 'ready',
+  onRetryJackpot,
   bounds,
   manuallyEditedTickets,
   automaticQuickPick,
@@ -32,6 +36,8 @@ export function ExpeditionConfigurator({
   quantity: number;
   total: bigint;
   jackpotAmount?: bigint;
+  jackpotStatus?: JackpotStatus;
+  onRetryJackpot?: () => void;
   bounds: TicketBounds | null;
   manuallyEditedTickets: readonly CustomTicket[];
   automaticQuickPick: boolean;
@@ -47,62 +53,88 @@ export function ExpeditionConfigurator({
 }) {
   const [coordinatesOpen, setCoordinatesOpen] = useState(false);
   const coordinatesLabel = coordinatesOpen ? 'Close coordinates' : 'Open coordinates';
+  const checkoutDisabled = disabled || jackpotStatus !== 'ready';
+  const exploreButtonLabel =
+    exploreLabel ??
+    (jackpotStatus === 'loading'
+      ? 'Loading drawing data…'
+      : jackpotStatus === 'error'
+        ? 'Drawing data unavailable'
+        : undefined);
 
   return (
     <section className="relative mx-auto w-full px-4 py-0 sm:px-6">
-      <div className="w-full">
-        <div
-          data-testid="expedition-core"
-          data-layout-anchor="fixed"
-          className="mx-auto w-full max-w-[840px]"
-        >
-          <div className="flex flex-col items-center">
-            <h1 className="max-w-full text-center">
-              <DepthText
-                text={`Win up to $${formatJackpot(jackpotAmount)}`}
-                faceColor="#f8fafc"
-                depthColor="#7c3aed"
-                layers={28}
-                depth={1.5}
-                tilt={10.5}
-                smoothing={0.3}
-                perspective={1_500}
-                orbitSpeed={0.1}
-                pointerTracking={false}
-                autoOrbit
-                fontSize="clamp(2rem, 4vw, 3.4rem)"
-                fontWeight={950}
-                shadow
-              />
-            </h1>
-            <StaticDepthStack quantity={quantity} />
-            <div className="w-full">
-              <CompactPlanetDial quantity={quantity} onChange={onQuantityChange} />
-            </div>
-            <div className="w-full">
-              {approvalSpender !== undefined && approvalAmount !== undefined ? (
-                <ApprovalButton
-                  spender={approvalSpender}
-                  amount={approvalAmount}
-                  onApproved={onApproved}
-                >
+      <div className="relative w-full">
+        <div className="min-w-0">
+          <div
+            data-testid="expedition-core"
+            data-layout-anchor="fixed"
+            className="mx-auto w-full max-w-[840px]"
+          >
+            <div className="flex flex-col items-center">
+              <h1 className="max-w-full text-center">
+                {jackpotStatus === 'ready' ? (
+                  <DepthText
+                    text={`Win up to $${formatJackpot(jackpotAmount)}`}
+                    faceColor="#f8fafc"
+                    depthColor="#7c3aed"
+                    layers={28}
+                    depth={1.5}
+                    tilt={10.5}
+                    smoothing={0.3}
+                    perspective={1_500}
+                    orbitSpeed={0.1}
+                    pointerTracking={false}
+                    autoOrbit
+                    fontSize="clamp(2rem, 4vw, 3.4rem)"
+                    fontWeight={950}
+                    shadow
+                  />
+                ) : (
+                  <span className="block px-4 font-hud text-3xl font-bold tracking-[-0.05em] text-[var(--text-primary)] sm:text-5xl">
+                    {jackpotStatus === 'loading' ? 'Loading jackpot…' : 'Jackpot unavailable'}
+                  </span>
+                )}
+              </h1>
+              {jackpotStatus === 'error' ? (
+                <div role="alert" className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-[var(--text-secondary)]">
+                  <span>Drawing data unavailable.</span>
+                  {onRetryJackpot ? (
+                    <button type="button" onClick={onRetryJackpot} className="font-semibold text-[var(--rare)] underline-offset-4 hover:underline">
+                      Retry
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+              <StaticDepthStack quantity={quantity} />
+              <div className="w-full">
+                <CompactPlanetDial quantity={quantity} onChange={onQuantityChange} />
+              </div>
+              <div className="w-full">
+                {approvalSpender !== undefined && approvalAmount !== undefined ? (
+                  <ApprovalButton
+                    spender={approvalSpender}
+                    amount={approvalAmount}
+                    onApproved={onApproved}
+                  >
+                    <ExploreButton
+                      quantity={quantity}
+                      total={total}
+                      disabled={checkoutDisabled}
+                      label={exploreButtonLabel}
+                      onClick={onExplore}
+                    />
+                  </ApprovalButton>
+                ) : (
                   <ExploreButton
                     quantity={quantity}
                     total={total}
-                    disabled={disabled}
-                    label={exploreLabel}
+                    disabled={checkoutDisabled}
+                    label={exploreButtonLabel}
                     onClick={onExplore}
                   />
-                </ApprovalButton>
-              ) : (
-                <ExploreButton
-                  quantity={quantity}
-                  total={total}
-                  disabled={disabled}
-                  label={exploreLabel}
-                  onClick={onExplore}
-                />
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -111,16 +143,28 @@ export function ExpeditionConfigurator({
           aria-label={coordinatesLabel}
           aria-expanded={coordinatesOpen}
           onClick={() => setCoordinatesOpen((open) => !open)}
-          className={`absolute left-[calc(50%+420px)] top-1/2 z-10 hidden h-40 w-14 -translate-y-1/2 items-center justify-center bg-[var(--background)] text-4xl text-[var(--text-primary)] transition-colors hover:bg-[var(--surface-raised)] xl:flex ${coordinatesOpen ? 'border-l border-[var(--border)]' : ''}`}
+          className="absolute top-1/2 z-40 hidden h-40 w-[52px] -translate-y-1/2 items-center justify-center border-x border-[var(--border)] bg-[var(--background)] text-[var(--text-primary)] transition-[left,background-color] duration-300 ease-out hover:bg-[var(--surface-raised)] xl:flex"
+          style={{
+            left: coordinatesOpen
+              ? 'min(calc(50% + 420px), calc(50% + 50vw - 448px))'
+              : 'calc(50% + 420px)',
+          }}
         >
-          <span aria-hidden>{coordinatesOpen ? '‹' : '›'}</span>
+          <span className="flex -rotate-90 items-center gap-2 whitespace-nowrap telemetry font-bold" aria-hidden>
+            <span className="text-2xl leading-none">{coordinatesOpen ? '‹' : '›'}</span>
+            <span>Coordinates</span>
+          </span>
         </button>
         <div
           data-testid="coordinates-disclosure"
           data-side="right"
-          className={`absolute left-[calc(50%+476px)] top-0 hidden h-full w-[min(430px,calc(50vw-492px))] min-w-0 overflow-y-auto overflow-x-hidden transition-opacity duration-300 ease-out xl:block ${coordinatesOpen ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+          data-state={coordinatesOpen ? 'open' : 'closed'}
+          aria-hidden={!coordinatesOpen}
+          inert={!coordinatesOpen || undefined}
+          className={`absolute top-0 z-30 hidden h-full max-h-[calc(100svh-7rem)] overflow-hidden transition-[width,opacity,transform] duration-300 ease-out xl:block ${coordinatesOpen ? 'pointer-events-auto w-[380px] translate-x-0 opacity-100' : 'pointer-events-none w-0 translate-x-3 opacity-0'}`}
+          style={{ left: 'min(calc(50% + 472px), calc(50% + 50vw - 396px))' }}
         >
-          {coordinatesOpen && (
+          <div className="h-full w-[380px] overflow-y-auto">
             <CoordinatesPanel
               quantity={quantity}
               bounds={bounds}
@@ -129,7 +173,7 @@ export function ExpeditionConfigurator({
               onAutomaticQuickPickChange={onAutomaticQuickPickChange}
               onTicketsChange={onTicketsChange}
             />
-          )}
+          </div>
         </div>
       </div>
       <div className="mx-auto mt-5 w-full max-w-[560px] xl:hidden">
