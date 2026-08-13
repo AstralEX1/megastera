@@ -38,7 +38,7 @@ const RPC_FALLBACK_URLS = (import.meta.env.VITE_RPC_FALLBACK_URLS ?? '')
   .filter(Boolean)
   .filter((value, index, values) => value !== RPC_URL && values.indexOf(value) === index);
 const WALLETCONNECT_PROJECT_ID = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID ?? '';
-const APP_NAME = import.meta.env.VITE_APP_NAME ?? 'MegaPlanets';
+const APP_NAME = import.meta.env.VITE_APP_NAME ?? 'Megastera';
 
 // JSON-RPC batching: groups concurrent `eth_call` requests into a single
 // HTTP POST (batchSize = max calls per batch, wait = ms to coalesce).

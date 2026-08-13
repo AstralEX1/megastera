@@ -1,87 +1,33 @@
-export type OperationalRole = 'api' | 'indexer';
-
-export type OperationalIndexerResult = {
-  planets?: { eventsProcessed?: number; reorgDetected?: boolean };
-};
-
 export type OperationalSnapshot = {
-  role: OperationalRole;
+  role: 'api';
   startedAt: string;
   requestsTotal: number;
   errorsTotal: number;
-  indexerCyclesTotal: number;
-  indexerFailuresTotal: number;
-  lastIndexerCycleAt?: string;
-  lastIndexerFailureAt?: string;
-  lastIndexerDurationMs?: number;
-  lastIndexerResult?: {
-    planetEventsProcessed: number;
-    planetReorgDetected: boolean;
-  };
 };
 
 export type OperationalState = {
   recordHttpRequest: (status: number) => void;
-  recordIndexerCycle: (result: OperationalIndexerResult, durationMs: number) => void;
-  recordIndexerFailure: (durationMs: number) => void;
   snapshot: () => OperationalSnapshot;
   reset: () => void;
 };
 
-export function createOperationalState(options: { role: OperationalRole; now?: () => number }): OperationalState {
+export function createOperationalState(options: { now?: () => number } = {}): OperationalState {
   const now = options.now ?? Date.now;
   const startedAt = new Date(now()).toISOString();
   let requestsTotal = 0;
   let errorsTotal = 0;
-  let indexerCyclesTotal = 0;
-  let indexerFailuresTotal = 0;
-  let lastIndexerCycleAt: string | undefined;
-  let lastIndexerFailureAt: string | undefined;
-  let lastIndexerDurationMs: number | undefined;
-  let lastIndexerResult: OperationalSnapshot['lastIndexerResult'];
 
   return {
     recordHttpRequest(status) {
       requestsTotal += 1;
       if (status >= 500) errorsTotal += 1;
     },
-    recordIndexerCycle(result, durationMs) {
-      indexerCyclesTotal += 1;
-      lastIndexerCycleAt = new Date(now()).toISOString();
-      lastIndexerDurationMs = durationMs;
-      lastIndexerResult = {
-        planetEventsProcessed: result.planets?.eventsProcessed ?? 0,
-        planetReorgDetected: result.planets?.reorgDetected ?? false,
-      };
-    },
-    recordIndexerFailure(durationMs) {
-      indexerFailuresTotal += 1;
-      lastIndexerFailureAt = new Date(now()).toISOString();
-      lastIndexerDurationMs = durationMs;
-    },
     snapshot() {
-      return {
-        role: options.role,
-        startedAt,
-        requestsTotal,
-        errorsTotal,
-        indexerCyclesTotal,
-        indexerFailuresTotal,
-        lastIndexerCycleAt,
-        lastIndexerFailureAt,
-        lastIndexerDurationMs,
-        lastIndexerResult,
-      };
+      return { role: 'api', startedAt, requestsTotal, errorsTotal };
     },
     reset() {
       requestsTotal = 0;
       errorsTotal = 0;
-      indexerCyclesTotal = 0;
-      indexerFailuresTotal = 0;
-      lastIndexerCycleAt = undefined;
-      lastIndexerFailureAt = undefined;
-      lastIndexerDurationMs = undefined;
-      lastIndexerResult = undefined;
     },
   };
 }

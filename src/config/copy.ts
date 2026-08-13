@@ -17,11 +17,11 @@
 export const COPY = {
   // App shell
   /** Wallet-connect modal title — falls back here when VITE_APP_NAME is empty. */
-  appName: 'MegaPlanets',
+  appName: 'Megastera',
   /** Header brand block — short prefix shown on mobile. */
   brandShort: 'Mega',
   /** Header brand block — suffix shown on `sm+` only. */
-  brandSuffix: 'Planets',
+  brandSuffix: 'stera',
 
   // Play page
   connectToBuy: 'Connect your wallet to buy tickets.',

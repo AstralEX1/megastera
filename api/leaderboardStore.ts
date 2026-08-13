@@ -165,15 +165,33 @@ export async function finalizeLeaderboardPeriod(
       });
     }
 
-    const planets = await transaction.planet.findMany({
-      where: {
-        ownerAddress: { not: ZERO_ADDRESS },
-        baseMineralsPerDay: { not: null },
-        mintedAt: { lt: period.endsAt },
-      },
-      select: { ownerAddress: true, baseMineralsPerDay: true, mintedAt: true },
+    const backendPlanet = (transaction as typeof transaction & {
+      backendPlanet?: {
+        findMany: (args: unknown) => Promise<unknown[]>;
+      };
+    }).backendPlanet;
+    const planets = backendPlanet
+      ? await backendPlanet.findMany({
+          where: { status: 'READY', baseMineralsPerDay: { gt: 0n }, generatedAt: { lt: period.endsAt } },
+          select: { ownerAddress: true, baseMineralsPerDay: true, generatedAt: true },
+        })
+      : await transaction.planet.findMany({
+          where: {
+            ownerAddress: { not: ZERO_ADDRESS },
+            baseMineralsPerDay: { not: null },
+            mintedAt: { lt: period.endsAt },
+          },
+          select: { ownerAddress: true, baseMineralsPerDay: true, mintedAt: true },
+        });
+    const rows = calculateLeaderboardRows({
+      period,
+      asOf: period.endsAt,
+      planets: planets.map((planet) => ({
+        ownerAddress: (planet as { ownerAddress: string }).ownerAddress,
+        baseMineralsPerDay: (planet as { baseMineralsPerDay: bigint | null }).baseMineralsPerDay,
+        mintedAt: (planet as { generatedAt?: Date; mintedAt?: Date }).generatedAt ?? (planet as { mintedAt: Date }).mintedAt,
+      })),
     });
-    const rows = calculateLeaderboardRows({ period, asOf: period.endsAt, planets });
     await transaction.leaderboardPeriod.upsert({
       where: { id: period.id },
       create: { id: period.id, startsAt: period.startsAt, endsAt: period.endsAt, finalizedAt },
@@ -203,21 +221,37 @@ export async function ensureOverdueLeaderboardPeriodsFinalized(
   prisma: PrismaClient,
   now: Date,
 ): Promise<void> {
+  const backendPlanet = (prisma as typeof prisma & {
+    backendPlanet?: {
+      findFirst: (args: unknown) => Promise<{ generatedAt: Date } | null>;
+    };
+  }).backendPlanet;
   const [latest, earliestPlanet] = await Promise.all([
     prisma.leaderboardPeriod.findFirst({
       where: { finalizedAt: { not: null }, endsAt: { lte: now } },
       orderBy: { endsAt: 'desc' },
       select: { endsAt: true },
     }),
-    prisma.planet.findFirst({
-      where: { baseMineralsPerDay: { not: null } },
-      orderBy: { mintedAt: 'asc' },
-      select: { mintedAt: true },
-    }),
+    backendPlanet
+      ? backendPlanet.findFirst({
+          where: { status: 'READY', baseMineralsPerDay: { gt: 0n } },
+          orderBy: { generatedAt: 'asc' },
+          select: { generatedAt: true },
+        })
+      : prisma.planet.findFirst({
+          where: { baseMineralsPerDay: { not: null } },
+          orderBy: { mintedAt: 'asc' },
+          select: { mintedAt: true },
+        }),
   ]);
   if (!latest && !earliestPlanet) return;
 
-  let period = getLeaderboardPeriod(latest?.endsAt ?? earliestPlanet?.mintedAt ?? now);
+  const earliestTime = earliestPlanet
+    ? 'generatedAt' in earliestPlanet
+      ? earliestPlanet.generatedAt
+      : earliestPlanet.mintedAt
+    : undefined;
+  let period = getLeaderboardPeriod(latest?.endsAt ?? earliestTime ?? now);
   let finalizedPeriods = 0;
   while (period.endsAt <= now) {
     await finalizeLeaderboardPeriod(prisma, period, now);

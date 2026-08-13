@@ -2,7 +2,7 @@
  * ---
  * @skill      https://llms.megapot.io/contracts/reference
  * Set VITE_REFERRER_ADDRESS only for an explicitly approved deployment
- * configuration. The checked-in value is the approved MegaPlanets referrer;
+ * configuration. The checked-in value is the approved Megastera referrer;
  * never replace it with a dead address. Base Sepolia is the current target.
  * ---
  *
@@ -26,11 +26,10 @@ export const CHAIN = parseChainName(import.meta.env.VITE_CHAIN);
 export const VIEM_CHAIN = CHAIN === 'mainnet' ? base : baseSepolia;
 
 /**
- * Block explorer for the active chain. Three prefixes are derived from a single
- * base map so address, tx, and NFT URLs stay in lockstep:
+ * Block explorer for the active chain. Address and transaction prefixes are derived
+ * from a single base map:
  *   `${EXPLORER_ADDRESS_URL}${addr}` → e.g. https://basescan.org/address/0x...
  *   `${EXPLORER_TX_URL}${hash}`      → e.g. https://basescan.org/tx/0x...
- *   `${EXPLORER_NFT_URL}${contract}/${tokenId}` → e.g. https://basescan.org/nft/0x.../1
  */
 const EXPLORER_BASE: Record<ChainName, string> = {
   mainnet: 'https://basescan.org/',
@@ -42,9 +41,6 @@ export const EXPLORER_ADDRESS_URL = `${EXPLORER_BASE[CHAIN]}address/`;
 
 /** Chain-resolved explorer URL prefix for transactions. Append the tx hash. */
 export const EXPLORER_TX_URL = `${EXPLORER_BASE[CHAIN]}tx/`;
-
-/** Chain-resolved explorer URL prefix for individual ERC-721 tokens. Append contract/tokenId. */
-export const EXPLORER_NFT_URL = `${EXPLORER_BASE[CHAIN]}nft/`;
 
 /** USDC has 6 decimals on every chain Megapot deploys to. */
 export const USDC_DECIMALS = 6;
@@ -64,11 +60,6 @@ export const BONUSBALL_MIN = 1;
  * Computed from a UTF-8 string padded to 32 bytes via `viem.stringToHex`.
  */
 export const TICKET_SOURCE = stringToHex('MEGAPLANETS_V1', { size: 32 });
-
-/** First Base Sepolia block whose MegaPlanets ticket events can mint Planets. */
-export const MEGAPLANETS_LAUNCH_BLOCK = 44_997_183n;
-/** First canonical MegaPlanets_V1 ticket in the pre-launch activation window. */
-export const MEGAPLANETS_TICKET_START_BLOCK = 44_996_796n;
 
 /**
  * Referral split weights — must sum to 1e18 (= 100%). Single referrer = `[1e18]`.
@@ -111,10 +102,6 @@ const ADDRESSES = {
     mainnet: '0x3bAe643002069dBCbcd62B1A4eb4C4A397d042a2',
     testnet: '0x465dA3c859f193A3807386387bEE941B2A4c3279',
   },
-  JackpotTicketNFT: {
-    mainnet: '0x48FfE35AbB9f4780a4f1775C2Ce1c46185b366e4',
-    testnet: '0x45084829ac63f9dC6a3D4981A46FA896f9180ECd',
-  },
   BatchPurchaseFacilitator: {
     mainnet: '0xBA343479D98a1Ed333899999D95a7343B808a76F',
     testnet: '0x62A5D60F486D01a28071652a7951Aff1EA4c5b7c',
@@ -127,19 +114,6 @@ const ADDRESSES = {
 
 export const USDC_ADDRESS = ADDRESSES.USDC[CHAIN] as Address;
 export const JACKPOT_ADDRESS = ADDRESSES.Jackpot[CHAIN] as Address;
-export const JACKPOT_TICKET_NFT_ADDRESS = ADDRESSES.JackpotTicketNFT[CHAIN] as Address;
-export function parseMegaPlanetsContractAddress(value: string | undefined): Address | undefined {
-  const configured = value?.trim();
-  if (!configured) return undefined;
-  if (!isAddress(configured)) {
-    throw new Error('VITE_MEGAPLANETS_CONTRACT_ADDRESS must be an EVM address.');
-  }
-  return getAddress(configured);
-}
-
-/** Active MegaPlanets ERC721A V2. Undefined until the V2 deployment gate is complete. */
-export const MEGAPLANETS_CONTRACT_ADDRESS: Address | undefined =
-  parseMegaPlanetsContractAddress(import.meta.env.VITE_MEGAPLANETS_CONTRACT_ADDRESS);
 export const BATCH_PURCHASE_FACILITATOR_ADDRESS = ADDRESSES.BatchPurchaseFacilitator[
   CHAIN
 ] as Address;

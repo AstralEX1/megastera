@@ -10,8 +10,8 @@
  *
  *             For sub-block "I just bought, where's my ticket?" feedback
  *             a fork can swap to RPC `getUserTickets` + a
- *             `TicketPurchased` event subscription. The demo accepts the
- *             API's small indexer lag and surfaces an error message
+ *             `TicketPurchased` event subscription. The demo combines the
+ *             API with locally persisted receipt data and surfaces an error
  *             rather than vanishing the section if the fetch fails.
  * ---
  */

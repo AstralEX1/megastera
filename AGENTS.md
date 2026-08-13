@@ -1,4 +1,4 @@
-# MegaPlanets repository guidance
+# Megastera repository guidance
 
 ## Working language
 
@@ -8,18 +8,13 @@
 
 ## Workflow
 
-- Work on only the stage explicitly requested by the user.
-- Stop at the end of every stage and report changed files, verification results,
-  and observable behavior.
+- Work only on the explicitly requested stage and stop after reporting its result.
 - Preserve user changes and keep unrelated edits out of the current stage.
 - Use pnpm. Do not introduce another JavaScript package manager.
 - Never commit secrets. Use `.env.local`, host environment variables, or placeholders.
-- For every task, read in this order: `AGENTS.md`, `README.md`, the relevant section of
-  `docs/ARCHITECTURE.md`, then `docs/STATUS.md` and `docs/OPERATIONS.md` when deployment,
-  indexing, or runtime configuration is involved. Historical plans/specs are not current
-  requirements.
-- Stop at the requested stage and report changed files, fresh verification output, and
-  observable behavior before moving to a separate stage.
+- Before changing code, read `README.md`, the relevant section of
+  `docs/ARCHITECTURE.md`, then `docs/STATUS.md` and `docs/OPERATIONS.md` when
+  deployment or runtime configuration is involved.
 
 ## Megapot integration rules
 
@@ -30,17 +25,27 @@
 - Read ticket price, drawing ID, ball limits, fees, and lifecycle state dynamically.
 - Keep `TICKET_SOURCE` equal to `MEGAPLANETS_V1`.
 - Never deploy with the dead referrer address.
-- Keep the approved unlimited USDC approval policy: compare allowance with the exact required amount before every action; when insufficient, approve the route-specific spender with `maxUint256`, then refetch/invalidate allowance after a successful receipt.
-- Current deployed V2 identity is Base Sepolia `84532`, contract
-  `0x7a29bfD9d1A7a243A212d4E81bc9A52bE50fb9f2`, deployment block `45347860`. Runtime
-  activation remains environment-only; never copy it into checked-in defaults.
-- Preserve these invariants: server-side receipt-verified Megastera Proof; direct
-  ERC721A holdings by default; finalized PlanetMinted/Transfer projector only; lifetime
-  mining from immutable mint time and base rate; daily UTC leaderboard snapshots; and
-  immutable short WebM artifacts. Do not reintroduce a continuous Ticket indexer,
-  accrual/ledger writes, same-type bonuses, transfer settlement, or application auth.
+- Compare allowance with the exact required amount before every purchase. When
+  insufficient, approve the route-specific spender with `maxUint256`, then refetch
+  or invalidate allowance after a successful receipt.
 
-## Code conventions
+## Backend Planet MVP invariants
+
+- A confirmed Megapot receipt is the source of truth for a purchase; persist the
+  immutable `MegasteraProof` and `TicketPurchase` before generating a planet.
+- A generated `BackendPlanet` is keyed idempotently by `TicketPurchase`, stores its
+  deterministic traits and GIF in the database, and is displayed from the backend.
+- Mining is read-only and calculated from immutable backend generation time and the
+  persisted base rate. Leaderboard snapshots remain daily UTC snapshots.
+- The active runtime has no Planet contract, NFT mint/reveal, voucher signer,
+  Pinata upload, direct wallet holdings, continuous ticket indexer, or Transfer/
+  PlanetMinted projector.
+- Legacy Prisma tables and migrations may remain only for database compatibility;
+  they must not be imported by the active API or frontend.
+- No application auth or user-provided wallet ownership claim is introduced in
+  this MVP. Wallet address is the existing product identity boundary.
+
+## Code conventions and verification
 
 - Follow existing TypeScript, React, wagmi, viem, TanStack Query, Tailwind, and
   Biome patterns from this repository.
@@ -49,25 +54,10 @@
 - Keep shared deterministic generation logic free of browser-only global state.
 - Prefer explicit errors over silent fallbacks.
 
-## Required verification
+From the repository root run the full gate before claiming completion:
 
-- Frontend/config changes: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`.
-- Contract changes: also run `forge test` and relevant fuzz/invariant tests.
-- User-flow changes: add a focused Playwright smoke test when browser automation is
-  introduced.
+`pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm db:generate`,
+`pnpm db:validate`, and `pnpm --filter @megaplanets/planet-generator golden`.
 
-## Source orientation
-
-- `src/` contains the current starter-kit frontend.
-- `contracts/` will contain the Foundry project.
-- `packages/planet-generator/` will contain the deterministic generator.
-- `api/` will contain metadata, eligibility, indexing, and leaderboard services.
-- `docs/` contains durable product and architecture decisions.
-
-## Verification gate
-
-From the repository root run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`,
-`pnpm db:generate`, and `pnpm db:validate`. Contract changes additionally require
-`forge build --sizes`, `forge test`, invariant/fuzz coverage, and
-`contracts/script/check-abi.sh`. If a gate is blocked by missing dependencies, network,
-secrets, or a funded wallet, record the exact command and blocker; do not claim it passed.
+Record any blocked live RPC, database, browser, deployment, or funded-wallet check
+separately; local build/test success is not a production verification claim.

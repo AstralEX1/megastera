@@ -16,10 +16,8 @@ describe('post-write query invalidation', () => {
         ['megapot-api', expect.any(String), 'wallet-tickets'],
         ['megapot-api', expect.any(String), 'wallet-stats'],
         ['megapot-api', expect.any(String), 'wallet-wins'],
-        ['megapot-api', 'eligible-planet-tickets'],
-        ['megapot-api', 'direct-planet-holdings'],
-        ['megapot-api', expect.any(String), 'indexed-planets'],
-        ['megaplanets-backend', expect.any(String), 'wallet-mining'],
+        ['megastera-backend', expect.any(String), 'planets'],
+        ['megastera-backend', expect.any(String), 'wallet-mining'],
       ]),
     );
   });

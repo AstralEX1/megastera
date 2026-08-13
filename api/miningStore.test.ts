@@ -1,110 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import type { PrismaClient } from './generated/prisma/client';
-import { getPlanetMiningSnapshot, getWalletMiningSnapshot } from './miningStore';
+import { getBackendPlanetMiningSnapshot, getBackendWalletMiningSnapshot } from './miningStore';
 
-describe('getWalletMiningSnapshot', () => {
-  it('assigns the full lifetime value to the current owner without reading ledger or accrual state', async () => {
-    const ownerAddress = '0x0000000000000000000000000000000000000001';
+describe('backend Planet mining snapshots', () => {
+  it('calculates lifetime production from backend-generatedAt', async () => {
     const prisma = {
-      planet: {
+      backendPlanet: {
         findMany: async () => [
-          {
-            id: 'planet-1',
-            tokenId: { toFixed: () => '1' },
-            baseMineralsPerDay: 86_400n,
-            mintedAt: new Date('2026-08-10T00:00:00.000Z'),
-          },
-          {
-            id: 'planet-2',
-            tokenId: { toFixed: () => '2' },
-            baseMineralsPerDay: 172_800n,
-            mintedAt: new Date('2026-08-09T00:00:00.000Z'),
-          },
+          { id: 'planet-1', baseMineralsPerDay: 86_400n, generatedAt: new Date('2026-08-10T00:00:00.000Z') },
+          { id: 'planet-2', baseMineralsPerDay: 172_800n, generatedAt: new Date('2026-08-09T00:00:00.000Z') },
         ],
       },
     } as unknown as PrismaClient;
-
-    const snapshot = await getWalletMiningSnapshot(
-      prisma,
-      ownerAddress,
-      new Date('2026-08-10T00:00:01.000Z'),
-      {
-        chainId: 84_532,
-        contractAddress: '0x0000000000000000000000000000000000000003',
-      },
-    );
-
-    expect(snapshot).toEqual({
-      ownerAddress,
-      asOf: '2026-08-10T00:00:01.000Z',
-      ownedPlanetCount: 2,
-      earnedMicros: '172803000000',
-      effectiveMineralsPerDayMicros: '259200000000',
-      planets: [
-        {
-          tokenId: '1',
-          baseMineralsPerDay: '86400',
-          effectiveMineralsPerDayMicros: '86400000000',
-          earnedMicros: '1000000',
-          activeSince: '2026-08-10T00:00:00.000Z',
-        },
-        {
-          tokenId: '2',
-          baseMineralsPerDay: '172800',
-          effectiveMineralsPerDayMicros: '172800000000',
-          earnedMicros: '172802000000',
-          activeSince: '2026-08-09T00:00:00.000Z',
-        },
-      ],
-    });
+    const snapshot = await getBackendWalletMiningSnapshot(prisma, '0x0000000000000000000000000000000000000001', new Date('2026-08-10T00:00:01.000Z'));
+    expect(snapshot.ownedPlanetCount).toBe(2);
+    expect(snapshot.earnedMicros).toBe('172803000000');
+    expect(snapshot.planets[0]?.planetId).toBe('planet-1');
   });
-});
 
-describe('getPlanetMiningSnapshot', () => {
-  it('returns the same lifetime value after ownership changes', async () => {
+  it('reads one backend Planet by id', async () => {
     const prisma = {
-      planet: {
+      backendPlanet: {
         findFirst: async () => ({
-          tokenId: { toFixed: () => '7' },
-          ownerAddress: '0x0000000000000000000000000000000000000002',
-          baseMineralsPerDay: 10n,
-          mintedAt: new Date('2026-08-10T00:00:00.000Z'),
+          id: 'planet-7', ownerAddress: '0x0000000000000000000000000000000000000002',
+          baseMineralsPerDay: 10n, generatedAt: new Date('2026-08-10T00:00:00.000Z'),
         }),
       },
     } as unknown as PrismaClient;
-
-    const snapshot = await getPlanetMiningSnapshot(
-      prisma,
-      '7',
-      new Date('2026-08-12T00:00:00.000Z'),
-      { chainId: 84_532, contractAddress: '0x0000000000000000000000000000000000000003' },
-    );
-
-    expect(snapshot).toMatchObject({
-      tokenId: '7',
-      ownerAddress: '0x0000000000000000000000000000000000000002',
-      earnedMicros: '20000000',
-      activeSince: '2026-08-10T00:00:00.000Z',
-    });
-  });
-
-  it('does not expose a burned Planet as mining data', async () => {
-    const prisma = {
-      planet: {
-        findFirst: async () => ({
-          tokenId: { toFixed: () => '7' },
-          ownerAddress: '0x0000000000000000000000000000000000000000',
-          baseMineralsPerDay: 10n,
-          mintedAt: new Date('2026-08-10T00:00:00.000Z'),
-        }),
-      },
-    } as unknown as PrismaClient;
-
-    await expect(
-      getPlanetMiningSnapshot(prisma, '7', new Date('2026-08-12T00:00:00.000Z'), {
-        chainId: 84_532,
-        contractAddress: '0x0000000000000000000000000000000000000003',
-      }),
-    ).resolves.toBeUndefined();
+    const snapshot = await getBackendPlanetMiningSnapshot(prisma, 'planet-7', new Date('2026-08-12T00:00:00.000Z'));
+    expect(snapshot).toMatchObject({ planetId: 'planet-7', earnedMicros: '20000000' });
   });
 });

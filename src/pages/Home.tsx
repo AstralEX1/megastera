@@ -59,8 +59,8 @@ export function Home({ onNavigate }: { onNavigate: (k: NavKey) => void }) {
       </>
     ) : null;
 
-  // Tickets sold comes from chain (real-time, no indexer lag); players come
-  // from the API (indexer-computed, refreshed every 30s).
+  // Tickets sold comes from chain (real-time); player aggregates come from the
+  // Megapot Data API and refresh every 30s.
   const ticketsSold = state?.globalTicketsBought;
   const uniquePlayers = activeRound.data?.unique_participants;
 

@@ -5,15 +5,12 @@
  *             BaseScan link when a hash is available.
  *
  *             On-chain write/receipt errors remain generic so raw wagmi/viem
- *             revert reasons and RPC noise do not leak into the UI. Typed
- *             voucher-service failures are safe preflight messages and retain
- *             their request reference for support/debugging.
+ *             revert reasons and RPC noise do not leak into the UI.
  * ---
  */
 
 import { ExternalLinkIcon } from '@/components/icons/ExternalLinkIcon';
 import { EXPLORER_TX_URL } from '@/config/contracts';
-import { isPlanetVoucherServiceError } from '@/lib/planetVoucher';
 
 type Variant = 'pending' | 'success' | 'error';
 
@@ -41,10 +38,9 @@ export function TxStatus({
 
   let variant: Variant = 'pending';
   let label = 'Submitting…';
-  const voucherError = error && isPlanetVoucherServiceError(error) ? error : undefined;
   if (error) {
     variant = 'error';
-    label = voucherError ? voucherError.message : 'Transaction failed — please try again.';
+    label = 'Transaction failed — please try again.';
   } else if (isSuccess) {
     variant = 'success';
     label = 'Confirmed';
@@ -58,15 +54,9 @@ export function TxStatus({
       className={`flex items-center justify-between rounded-md border px-3 py-2 text-xs font-medium ${STYLES[variant]}`}
       role="status"
       aria-live="polite"
-      data-error-stage={voucherError?.stage}
-      data-error-code={voucherError?.code}
-      data-request-id={voucherError?.requestId}
     >
       <span>
         {label}
-        {voucherError?.requestId ? (
-          <span className="ml-2 opacity-80">Reference {voucherError.requestId}</span>
-        ) : null}
       </span>
       {hash && (
         <a

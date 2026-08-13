@@ -1,106 +1,66 @@
 import type { PrismaClient } from './generated/prisma/client';
 import { calculateLifetimeMinerals, MINERAL_SCALE } from './mining';
-import type { PlanetScope } from './stage2Store';
 
-export async function getPlanetMiningSnapshot(
+export async function getBackendPlanetMiningSnapshot(
   prisma: PrismaClient,
-  tokenId: string,
+  planetId: string,
   now: Date,
-  scope: PlanetScope,
 ) {
-  const planet = await prisma.planet.findFirst({
-    where: {
-      tokenId,
-      chainId: scope.chainId,
-      contractAddress: scope.contractAddress.toLowerCase(),
-      ownerAddress: { not: '0x0000000000000000000000000000000000000000' },
-    },
-    select: {
-      tokenId: true,
-      ownerAddress: true,
-      baseMineralsPerDay: true,
-      mintedAt: true,
-    },
+  const planet = await prisma.backendPlanet.findFirst({
+    where: { id: planetId, status: 'READY' },
+    select: { id: true, ownerAddress: true, baseMineralsPerDay: true, generatedAt: true },
   });
-  if (
-    !planet ||
-    planet.baseMineralsPerDay === null ||
-    planet.ownerAddress.toLowerCase() === '0x0000000000000000000000000000000000000000'
-  )
-    return undefined;
-  const lifetimeMicros = calculateLifetimeMinerals({
+  if (!planet) return undefined;
+  const earnedMicros = calculateLifetimeMinerals({
     baseMineralsPerDay: planet.baseMineralsPerDay,
-    mintedAt: planet.mintedAt,
+    mintedAt: planet.generatedAt,
     asOf: now,
   });
   return {
-    tokenId: planet.tokenId.toFixed(0),
+    planetId: planet.id,
     ownerAddress: planet.ownerAddress,
     baseMineralsPerDay: planet.baseMineralsPerDay.toString(),
-    earnedMicros: lifetimeMicros.toString(),
-    activeSince: planet.mintedAt.toISOString(),
+    effectiveMineralsPerDayMicros: (planet.baseMineralsPerDay * MINERAL_SCALE).toString(),
+    earnedMicros: earnedMicros.toString(),
+    activeSince: planet.generatedAt.toISOString(),
   };
 }
 
-export async function getWalletMiningSnapshot(
+export async function getBackendWalletMiningSnapshot(
   prisma: PrismaClient,
   ownerAddress: string,
   now: Date,
-  scope: PlanetScope,
 ) {
-  if (ownerAddress.toLowerCase() === '0x0000000000000000000000000000000000000000') {
-    return {
-      ownerAddress,
-      asOf: now.toISOString(),
-      ownedPlanetCount: 0,
-      earnedMicros: '0',
-      effectiveMineralsPerDayMicros: '0',
-      planets: [],
-    };
-  }
-  const planets = await prisma.planet.findMany({
-    where: {
-      ownerAddress,
-      chainId: scope.chainId,
-      contractAddress: scope.contractAddress.toLowerCase(),
-      baseMineralsPerDay: { not: null },
-    },
-    select: {
-      tokenId: true,
-      baseMineralsPerDay: true,
-      mintedAt: true,
-    },
+  const planets = await prisma.backendPlanet.findMany({
+    where: { ownerAddress: ownerAddress.toLowerCase(), status: 'READY' },
+    select: { id: true, baseMineralsPerDay: true, generatedAt: true },
+    orderBy: [{ generatedAt: 'desc' }, { id: 'asc' }],
   });
-
-  let lifetimeMicros = 0n;
+  let earnedMicros = 0n;
   let effectiveMineralsPerDayMicros = 0n;
-  const planetSnapshots = planets.flatMap((planet) => {
-    if (planet.baseMineralsPerDay === null) return [];
-    const lifetime = calculateLifetimeMinerals({
+  const snapshots = planets.map((planet) => {
+    const earned = calculateLifetimeMinerals({
       baseMineralsPerDay: planet.baseMineralsPerDay,
-      mintedAt: planet.mintedAt,
+      mintedAt: planet.generatedAt,
       asOf: now,
     });
-    const effectiveRate = planet.baseMineralsPerDay * MINERAL_SCALE;
-    lifetimeMicros += lifetime;
-    effectiveMineralsPerDayMicros += effectiveRate;
-    return [
-      {
-        tokenId: planet.tokenId.toFixed(0),
-        baseMineralsPerDay: planet.baseMineralsPerDay.toString(),
-        effectiveMineralsPerDayMicros: effectiveRate.toString(),
-        earnedMicros: lifetime.toString(),
-        activeSince: planet.mintedAt.toISOString(),
-      },
-    ];
+    const effective = planet.baseMineralsPerDay * MINERAL_SCALE;
+    earnedMicros += earned;
+    effectiveMineralsPerDayMicros += effective;
+    return {
+      planetId: planet.id,
+      baseMineralsPerDay: planet.baseMineralsPerDay.toString(),
+      effectiveMineralsPerDayMicros: effective.toString(),
+      earnedMicros: earned.toString(),
+      activeSince: planet.generatedAt.toISOString(),
+    };
   });
-
   return {
     ownerAddress,
     asOf: now.toISOString(),
-    ownedPlanetCount: planets.length,
-    earnedMicros: lifetimeMicros.toString(),
+    ownedPlanetCount: snapshots.length,
+    earnedMicros: earnedMicros.toString(),
     effectiveMineralsPerDayMicros: effectiveMineralsPerDayMicros.toString(),
-    planets: planetSnapshots,
+    planets: snapshots,
   };
 }

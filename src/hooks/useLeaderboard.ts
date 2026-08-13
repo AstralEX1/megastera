@@ -62,7 +62,7 @@ export function fetchArchivedLeaderboard(periodId: string, offset = 0, limit = 5
 
 export function useCurrentLeaderboard(offset = 0, limit = 50) {
   return useQuery({
-    queryKey: ['megaplanets-backend', BACKEND_API_BASE_URL, 'leaderboard', 'current', offset, limit],
+    queryKey: ['megastera-backend', BACKEND_API_BASE_URL, 'leaderboard', 'current', offset, limit],
     queryFn: () => fetchCurrentLeaderboard(offset, limit),
     staleTime: 15 * 60_000,
   });
@@ -70,7 +70,7 @@ export function useCurrentLeaderboard(offset = 0, limit = 50) {
 
 export function useWalletLeaderboardPosition(address: `0x${string}` | undefined) {
   return useQuery({
-    queryKey: ['megaplanets-backend', BACKEND_API_BASE_URL, 'leaderboard', 'current-wallet', address],
+    queryKey: ['megastera-backend', BACKEND_API_BASE_URL, 'leaderboard', 'current-wallet', address],
     queryFn: () => {
       if (!address) throw new Error('A connected wallet is required.');
       return fetchWalletLeaderboardPosition(address);
@@ -82,7 +82,7 @@ export function useWalletLeaderboardPosition(address: `0x${string}` | undefined)
 
 export function useLeaderboardHistory() {
   return useQuery({
-    queryKey: ['megaplanets-backend', BACKEND_API_BASE_URL, 'leaderboard', 'history'],
+    queryKey: ['megastera-backend', BACKEND_API_BASE_URL, 'leaderboard', 'history'],
     queryFn: () => fetchLeaderboardHistory(),
     staleTime: 60 * 60_000,
   });
@@ -90,7 +90,7 @@ export function useLeaderboardHistory() {
 
 export function useArchivedLeaderboard(periodId: string | undefined) {
   return useQuery({
-    queryKey: ['megaplanets-backend', BACKEND_API_BASE_URL, 'leaderboard', 'day', periodId],
+    queryKey: ['megastera-backend', BACKEND_API_BASE_URL, 'leaderboard', 'day', periodId],
     queryFn: () => {
       if (!periodId) throw new Error('A leaderboard period is required.');
       return fetchArchivedLeaderboard(periodId);

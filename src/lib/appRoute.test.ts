@@ -8,9 +8,9 @@ describe('app routes', () => {
     expect(navPath('planets')).toBe('/my-planets');
   });
 
-  it('parses a numeric Planet detail route', () => {
-    expect(parseAppRoute('/planet/42')).toEqual({ active: 'planets', planetId: '42' });
-    expect(parseAppRoute('/planet/not-a-token')).toEqual({ active: 'home' });
+  it('parses a backend Planet detail route', () => {
+    expect(parseAppRoute('/planet/planet-42')).toEqual({ active: 'planets', planetId: 'planet-42' });
+    expect(parseAppRoute('/planet/not/a-planet')).toEqual({ active: 'home' });
   });
 
   it('maps the visible primary navigation to stable paths', () => {

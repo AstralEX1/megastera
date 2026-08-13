@@ -8,12 +8,8 @@ interface ImportMetaEnv {
   readonly VITE_WALLETCONNECT_PROJECT_ID?: string;
   /** Optional Megapot Data API key (mpk_live_…). Anonymous tier without one. */
   readonly VITE_MEGAPOT_API_KEY?: string;
-  /** Base URL for the server-side Planet voucher service. Empty disables Planet minting. */
-  readonly VITE_PLANET_API_BASE_URL?: string;
-  /** Shared base URL for Planet, mining, leaderboard, and voucher APIs. */
+  /** Shared base URL for backend Planet, mining, and leaderboard APIs. */
   readonly VITE_BACKEND_API_BASE_URL?: string;
-  /** Current Planet ownership source: direct RPC (default) or explicit indexed rollback. */
-  readonly VITE_PLANET_HOLDINGS_SOURCE?: 'auto' | 'direct' | 'indexed' | string;
 }
 
 interface ImportMeta {

@@ -10,8 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - uses: pnpm/action-setup@v4
         with:
           version: 11
@@ -26,17 +24,3 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
-
-  contracts:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: foundry-rs/foundry-toolchain@v1
-      - run: forge build --sizes
-        working-directory: contracts
-      - run: FOUNDRY_INVARIANT_RUNS=16 FOUNDRY_INVARIANT_DEPTH=32 forge test -vv
-        working-directory: contracts
-      - run: ./script/check-abi.sh
-        working-directory: contracts

@@ -1,5 +1,36 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { backendApiUrl, fetchMegasteraProofPage } from './backendApi';
+import { backendApiUrl, fetchBackendPlanets, requestBackendPlanetGeneration } from './backendApi';
+
+const ADDRESS = '0x0000000000000000000000000000000000000001' as const;
+const TX = `0x${'a'.repeat(64)}` as const;
+const planet = {
+  planetId: 'planet-1',
+  chainId: 84532,
+  ticketId: '7',
+  ownerAddress: ADDRESS,
+  name: 'Astraea',
+  seed: `0x${'1'.repeat(64)}`,
+  traitsHash: `0x${'2'.repeat(64)}`,
+  generatorVersion: 3,
+  planetType: 'Nebula',
+  terrain: 'simplex',
+  rarity: 'Common',
+  satelliteCount: 1,
+  hasRing: false,
+  baseMineralsPerDay: '24',
+  generatedAt: '2026-08-13T12:00:00.000Z',
+  status: 'READY',
+  gifHash: `0x${'3'.repeat(64)}`,
+  gifUrl: '/api/planets/planet-1/gif',
+  ticket: {
+    ticketId: '7',
+    drawingId: '218',
+    normals: [4, 11, 17, 26, 39],
+    bonusBall: 6,
+    originTxHash: TX,
+    logIndex: '4',
+  },
+};
 
 describe('backendApiUrl', () => {
   it('keeps same-origin routes relative', () => {
@@ -13,57 +44,33 @@ describe('backendApiUrl', () => {
   });
 });
 
-describe('fetchMegasteraProofPage', () => {
+describe('backend Planet API', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('fetches and validates a bounded server proof page', async () => {
+  it('fetches and validates backend Planet rows', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          proofs: [
-            {
-              recipient: '0x0000000000000000000000000000000000000001',
-              ticketId: '7',
-              drawingId: '218',
-              normals: [4, 11, 17, 26, 39],
-              bonusBall: 66,
-              originTxHash: `0x${'a'.repeat(64)}`,
-              blockNumber: '45000000',
-              blockHash: `0x${'b'.repeat(64)}`,
-              logIndex: '4',
-              chainId: 84532,
-              jackpotAddress: '0x465dA3c859f193A3807386387bEE941B2A4c3279',
-              source: `0x${Buffer.from('MEGAPLANETS_V1').toString('hex').padEnd(64, '0')}`,
-            },
-          ],
-          total: 1,
-          offset: 0,
-          limit: 100,
-        }),
-        { status: 200 },
-      ),
+      new Response(JSON.stringify({ planets: [planet] }), { status: 200 }),
     );
 
-    const page = await fetchMegasteraProofPage('0x0000000000000000000000000000000000000001');
+    const result = await fetchBackendPlanets(ADDRESS);
 
-    expect(page.proofs[0]?.ticketId).toBe('7');
+    expect(result[0]?.planetId).toBe('planet-1');
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining(
-        '/api/planets/megastera-proofs?recipient=0x0000000000000000000000000000000000000001&offset=0&limit=100',
-      ),
+      `/api/planets?owner=${ADDRESS}`,
       expect.objectContaining({ signal: undefined }),
     );
   });
 
-  it('fails closed on malformed proof fields', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({ proofs: [{ ticketId: 'not-a-proof' }], total: 1, offset: 0, limit: 100 }),
-        { status: 200 },
-      ),
+  it('posts a receipt reference and fails closed on malformed responses', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ planet }), { status: 201 }),
     );
-    await expect(
-      fetchMegasteraProofPage('0x0000000000000000000000000000000000000001'),
-    ).rejects.toThrow(/malformed/i);
+    const result = await requestBackendPlanetGeneration({ transactionHash: TX, logIndex: 4n, recipient: ADDRESS });
+    expect(result.ticketId).toBe('7');
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ planet: { ticketId: 'broken' } }), { status: 200 }),
+    );
+    await expect(requestBackendPlanetGeneration({ transactionHash: TX, logIndex: 4n })).rejects.toThrow(/malformed/i);
   });
 });

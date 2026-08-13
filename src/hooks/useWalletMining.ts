@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { BACKEND_API_BASE_URL, backendApiFetch } from '@/lib/backendApi';
 
 export type PlanetMiningSnapshot = {
-  tokenId: string;
+  planetId?: string;
+  tokenId?: string;
   baseMineralsPerDay: string;
   effectiveMineralsPerDayMicros: string;
   earnedMicros: string;
@@ -21,12 +22,19 @@ export type WalletMiningSnapshot = {
 export async function fetchWalletMining(address: `0x${string}`): Promise<WalletMiningSnapshot> {
   const response = await backendApiFetch(`/api/wallets/${address}/mining`);
   if (!response.ok) throw new Error(`Wallet mining returned HTTP ${response.status}.`);
-  return ((await response.json()) as { mining: WalletMiningSnapshot }).mining;
+  const mining = ((await response.json()) as { mining: WalletMiningSnapshot }).mining;
+  return {
+    ...mining,
+    planets: mining.planets.map((planet) => ({
+      ...planet,
+      planetId: planet.planetId ?? planet.tokenId,
+    })),
+  };
 }
 
 export function useWalletMining(address: `0x${string}` | undefined) {
   return useQuery({
-    queryKey: ['megaplanets-backend', BACKEND_API_BASE_URL, 'wallet-mining', address],
+    queryKey: ['megastera-backend', BACKEND_API_BASE_URL, 'wallet-mining', address],
     queryFn: () => {
       if (!address) throw new Error('A connected wallet is required.');
       return fetchWalletMining(address);

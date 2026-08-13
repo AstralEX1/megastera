@@ -1,228 +1,84 @@
-# MegaPlanets
+# Megastera
 
-MegaPlanets is a deterministic space-collection game built around the Megapot lottery
-on Base. Players buy an eligible Megapot ticket, reveal the Planet encoded by that
-ticket's canonical draw data, mint a free Planet NFT, earn off-chain minerals, and
-compete on a daily leaderboard snapshot.
+Megastera is a one-day hackathon MVP built around Megapot tickets on Base Sepolia.
+Planets are deliberately backend records, not on-chain NFTs: a confirmed ticket receipt
+creates one database row, the server renders a deterministic GIF, and My Planets displays
+that row. Mining remains a read-only lifetime calculation.
 
-> **Current state:** the local MVP and Base Sepolia rehearsal are implemented. The
-> seasonless ERC721A V2 is deployed and verified, but checked-in runtime defaults stay
-> empty until the API, PostgreSQL, indexer, monitoring, and end-to-end operations gate
-> is approved. This repository is not yet a public testnet release.
-
-## The game in one minute
+## The demo loop
 
 ```mermaid
 flowchart LR
-  A["Buy 1–10 tickets"] --> B["Megastera Proof"]
-  A2["Create 11–50 all-random order"] --> A3["Keeper execution"] --> B
-  B --> C["Eligibility + deterministic Planet identity"]
-  C --> D["Immutable IPFS metadata + signed voucher"]
-  D --> E["Mint one or many Planets"]
-  E --> F["Passive mineral production"]
-  F --> G["Daily UTC leaderboard"]
+  A["Buy 1–10 tickets"] --> B["Confirmed TicketPurchased receipt"]
+  A2["Create 11–50 bulk order"] --> A3["Keeper execution"] --> B
+  B --> C["Persist ticket + BackendPlanet"]
+  C --> D["Render GIF into PostgreSQL"]
+  D --> E["My Planets"]
+  C --> F["Lazy mining snapshot"]
+  F --> G["Daily leaderboard"]
 ```
 
 1. Connect a wallet to Base Sepolia.
-2. Buy one to ten custom or quick-pick tickets directly through Megapot, or create an
-   all-random keeper order for eleven to fifty tickets.
-3. After `TicketPurchased` becomes a confirmed Megastera Proof, MegaPlanets derives the
-   Planet from the ticket ID, drawing ID, numbers, bonus ball, and purchase transaction.
-4. The API verifies eligibility, generates immutable metadata and a 128×128 animated
-   short WebM, pins both to IPFS, and signs an EIP-712 mint voucher.
-5. Mint one Planet or an atomic batch. The mint is nonpayable: the user pays Base gas,
-   not a MegaPlanets mint fee.
-6. A Planet's lifetime minerals equal its immutable daily rate multiplied by time since
-   mint. Its current owner receives that full value; the leaderboard snapshots this once per UTC day.
+2. Buy one to ten direct tickets or create an eleven-to-fifty keeper order.
+3. After the execution receipt is finalized, the frontend sends its transaction hash and
+   log index to the backend.
+4. The backend verifies the canonical `MEGAPLANETS_V1` `TicketPurchased` event, persists
+   immutable ticket provenance, derives deterministic traits, and stores GIF bytes.
+5. My Planets reads only ready backend rows. The same rows power lazy mining and the daily
+   leaderboard.
 
-## Game rules
+There is no Planet contract call, mint button, voucher, Pinata/IPFS artifact, direct
+ERC721A holdings read, or continuous indexer in the active MVP.
 
-### Tickets and eligibility
+## Product rules
 
-- The active network is Base Sepolia (`chainId 84532`). Mainnet is not part of this MVP.
-- Direct purchases support one to ten custom or quick-pick tickets through
-  `Jackpot.buyTickets`.
-- Keeper bulk orders support eleven to fifty all-random tickets through
-  `BatchPurchaseFacilitator`. The order quantity is read and passed dynamically; the
-  frontend never invents ticket bounds or prices.
-- Every purchase uses the source tag `MEGAPLANETS_V1`. The source name is historical
-  Megapot attribution and does **not** refer to the unsupported MegaPlanets V1 NFT
-  contract.
-- Eligibility is based on Megastera Proof: a confirmed execution receipt containing the
-  required `MEGAPLANETS_V1` `TicketPurchased` event for the recipient.
-  For a keeper order, each execution transaction is the provenance source; the order
-  creation transaction is not reused as the Planet seed.
-- A ticket can mint exactly one Planet while it is live and owned by the voucher
-  recipient. Claimed, burned, duplicate, or currently transferred tickets fail closed.
+- Base Sepolia (`chainId 84532`) only.
+- `MEGAPLANETS_V1` remains the Megapot source tag.
+- Direct checkout supports one to ten tickets; bulk checkout supports eleven to fifty.
+- Backend generation is idempotent on `originTxHash:logIndex` and rejects conflicting
+  persisted provenance.
+- Planet traits use the shared deterministic generator. GIF bytes and their hash are stored
+  in `BackendPlanet`.
+- Mining is `baseMineralsPerDay × elapsed time` with fixed-point integer arithmetic. The
+  browser never writes mineral state.
+- Public reads require no application auth; server secrets stay outside Vite env variables.
 
-USDC uses the intentional approve-once policy: the app compares the current allowance
-with the exact action amount, sends `approve(spender, maxUint256)` only when allowance
-is insufficient, then refetches allowance after a successful receipt. This avoids
-repeated approval signatures but gives the route-specific spender permission to pull
-more than one purchase amount, so the trade-off must be accepted before deployment.
-
-### Reveal and mint
-
-The browser does not choose Planet traits. The API revalidates the purchase, derives the
-canonical seed and traits, pins immutable JSON/WebM metadata to IPFS, and signs a voucher
-that binds:
-
-- recipient and live Megapot ticket ID;
-- drawing ID and canonical origin transaction hash;
-- deterministic seed and traits hash;
-- metadata hash and IPFS URI; and
-- an expiration timestamp.
-
-The ERC721A V2 contract verifies the signature, current ticket ownership, duplicate
-provenance, and batch consistency on-chain. Planet token IDs are sequential and start
-at one; they are intentionally different from Megapot ticket IDs. The contract exposes
-both `ticketId → planetTokenId` and `planetTokenId → ticketId` mappings.
-
-### Minerals and leaderboard
-
-Each Planet has a deterministic base `mineralsPerDay` value. Lifetime minerals are
-calculated with fixed-point integer arithmetic from `mintedAt` to the requested time;
-there are no accrual rows, transfer settlements, same-Type bonuses, or per-second writes.
-A transfer moves the Planet and its entire lifetime value to the new owner. A burned
-Planet is excluded. The leaderboard stores one immutable snapshot per completed UTC day.
-The MVP has no XP, colonies, special editions, or on-chain mineral payouts.
-
-## Deterministic Planets
-
-The generator is shared by the browser, API, and tests. Its canonical seed is the
-Keccak-256 hash of standard Solidity ABI encoding:
-
-```text
-keccak256(
-  abi.encode(
-    uint16 generatorVersion,
-    uint256 ticketId,
-    uint256 drawingId,
-    uint8[5] sortedNormals,
-    uint8 bonusBall,
-    bytes32 originTxHash
-  )
-)
-```
-
-The ten current Types are Nebula, Desert, Triplex, Toxic, Void, Gaia, Volcanic, Gas
-Giant, Rocky, and Oceanic. Names, palette, terrain, satellites, rings, rarity, and
-minerals are deterministic. Public metadata keeps the attributes in this order:
-**Name, Type, Satellites, Minerals, Rarity, Seed**. Ticket ID, drawing ID, origin
-transaction hash, and traits hashes remain audit provenance.
-
-New canonical media is a bounded three-second 128×128 VP8 WebM. Existing token URIs and
-the checked-in GIF golden fixtures are immutable legacy/regression artifacts; they are not
-rewritten. The frontend scales the logical scene with nearest-neighbor rendering:
-
-| Ticket vector | Derived Planet | Golden GIF |
-| --- | --- | --- |
-| `ticket-456` · Volcanic · Common | Canonical seed and traits for ticket 456 | ![Ticket 456 Volcanic Planet](packages/planet-generator/tests/fixtures/ticket-456.gif) |
-| `ticket-1001` · Nebula · Common | Ringed Nebula fixture for ticket 1001 | ![Ticket 1001 Nebula Planet](packages/planet-generator/tests/fixtures/ticket-1001.gif) |
-| `ticket-4242` · Gaia · Uncommon | Gaia fixture for ticket 4242 | ![Ticket 4242 Gaia Planet](packages/planet-generator/tests/fixtures/ticket-4242.gif) |
-
-The fixture manifest records each input, seed, canonical trait JSON, hashes, and GIF
-size: [`manifest.json`](packages/planet-generator/tests/fixtures/manifest.json). Run
-the focused golden suite with:
-
-```bash
-pnpm --filter @megaplanets/planet-generator golden
-```
-
-The GIFs are test fixtures, not a substitute for runtime metadata. Intentional fixture
-replacement requires a reviewed `golden:update` run.
-
-## System boundaries
+## Runtime boundaries
 
 | Boundary | Responsibility |
 | --- | --- |
-| **Megapot + Base RPC** | Live drawing state, ticket purchases, Megastera Proof verification, and on-chain writes |
-| **MegaPlanets ERC721A V2** | Voucher validation, live ticket ownership, one-ticket-one-Planet enforcement, sequential IDs, and provenance mappings |
-| **Frontend** | Wallet connection, Play checkout, reveal/mint UX, My Planets, mining overlays, and leaderboard views |
-| **API + PostgreSQL** | Megastera Proofs, immutable WebM artifacts, voucher signing, Planet mint timestamps, lifetime mining, and daily snapshots |
-| **Finalized Planet projector** | Minimal `PlanetMinted`/`Transfer` projection for mint time, current owner, idempotency, and bounded reorg recovery |
-| **Planet generator** | DOM-free deterministic traits, metadata, previews, browser GIF compatibility, server WebM encoding, and golden outputs |
+| Megapot + Base RPC | Ticket purchase, receipt finality, and canonical event verification |
+| Frontend | Wallet checkout, generation progress, backend collection, mining display |
+| API + PostgreSQL | Ticket provenance, BackendPlanet rows, GIF bytes, mining, leaderboard |
+| Planet generator | DOM-free deterministic traits and server/browser rendering support |
 
-The normal flow is deliberately split into separate transactions:
+## API
 
-```text
-Megapot ticket purchase → Megastera Proof → API voucher → MegaPlanets mint
-→ direct ownership → lifetime minerals → daily snapshot
-```
+See [`api/README.md`](api/README.md) for the full route surface. The important paths are:
 
-## Deployment identity and release gate
+- `POST /api/planets/generate` and `/generate/batch`
+- `GET /api/planets?owner=...` and `/planets/:planetId/gif`
+- `GET /api/wallets/:address/mining`
+- `GET /api/leaderboard/current`
 
-The active seasonless ERC721A V2 deployment is on Base Sepolia:
+## Local development
 
-- Contract: [`0x7a29bfD9d1A7a243A212d4E81bc9A52bE50fb9f2`](https://sepolia.basescan.org/address/0x7a29bfD9d1A7a243A212d4E81bc9A52bE50fb9f2)
-- Deployment transaction: [`0xe29aa681e25ba222df04a1acdb2d2e48d2c47ac7cc1d46da0f2e8920ea9f9b6c`](https://sepolia.basescan.org/tx/0xe29aa681e25ba222df04a1acdb2d2e48d2c47ac7cc1d46da0f2e8920ea9f9b6c)
-- Deployment block: `45,347,860`
-- Verification: Sourcify exact match and BaseScan verification recorded in the repository
-
-The earlier [`0xa94b...5b7c`](https://sepolia.basescan.org/address/0xa94b947256fa977E63a7970CDf513FDD7632d744)
-deployment is the unsupported OpenZeppelin ERC-721 V1. It exposes V1-only special-mint
-selectors and must never be configured as the V2 Planet contract.
-
-Runtime activation remains environment-only. Keep these values empty in checked-in
-defaults and set them together only after the operations gate passes:
-
-```text
-VITE_MEGAPLANETS_CONTRACT_ADDRESS
-MEGAPLANETS_CONTRACT_ADDRESS
-MEGAPLANETS_PLANET_DEPLOYMENT_BLOCK=45347860
-```
-
-Keep `MEGAPLANETS_LAUNCH_BLOCK=44997183` and `TICKET_SOURCE=MEGAPLANETS_V1` unchanged.
-Ticket eligibility begins at the canonical activation boundary `44,996,796`; the bounded
-activation recovery scan covers that block through the launch block `44,997,183`, while
-normal post-launch purchases continue to be eligible. This preserves the original
-activation purchases without admitting unrelated legacy tickets. Historical receipt reads should configure
-`VITE_RPC_FALLBACK_URLS` (frontend) and `BASE_SEPOLIA_RPC_FALLBACK_URLS` (API/indexer)
-with comma-separated archive-capable endpoints.
-The remaining gate includes managed PostgreSQL, a minimal finalized Planet projector,
-backfill and replay checks, direct/keeper and batch rehearsals, transfer/burn ownership
-checks, scheduler/monitoring, backups, and browser E2E coverage.
-
-## Run locally
-
-### Requirements
-
-- Node.js 22 or newer
-- pnpm 11 or newer
-- An injected EVM wallet for the default local wallet flow
-- A Base Sepolia RPC URL for live reads (the public endpoint is suitable for casual development)
-
-### Frontend and local API
+Requirements: Node.js 22+, pnpm, and a Base Sepolia RPC URL for live receipt reads.
 
 ```bash
-cp .env.example .env.local
 pnpm install
 pnpm db:generate
+pnpm db:validate
 pnpm dev
+pnpm api:server
+pnpm api:leaderboard-worker
 ```
 
-The Vite frontend runs on `http://127.0.0.1:5173`. For a production-like local split,
-run the API and finalized indexer in separate processes:
+Backend generation requires `BASE_SEPOLIA_RPC_URL` and `DATABASE_URL`; optional RPC
+failover uses `BASE_SEPOLIA_RPC_FALLBACK_URLS`. Keep `.env.local` and server secrets out
+of git.
 
-```bash
-pnpm api:server    # default: http://127.0.0.1:8787
-pnpm api:indexer
-```
-
-The API exposes health, readiness, metrics, voucher, Planet, mining,
-and leaderboard routes. Check `/api/planets/health`, `/api/planets/readiness`, and
-`/api/planets/metrics` before using a configured environment. The browser uses
-`VITE_BACKEND_API_BASE_URL` for split frontend/API deployments; same-origin routes are
-the local default. Set `MEGAPLANETS_ALLOWED_ORIGINS` to an exact comma-separated
-frontend-origin allowlist for a split deployment; wildcard CORS is rejected.
-
-Never commit `.env.local`, private keys, signer material, Pinata credentials, database
-URLs, or API keys. The checked-in `.env.example` contains placeholders and intentionally
-leaves V2 runtime addresses empty.
-
-## Verification commands
-
-Run the application checks from the repository root:
+## Verification
 
 ```bash
 pnpm lint
@@ -233,29 +89,3 @@ pnpm db:generate
 pnpm db:validate
 pnpm --filter @megaplanets/planet-generator golden
 ```
-
-For contract work:
-
-```bash
-cd contracts
-forge build --sizes
-forge test
-./script/check-abi.sh
-```
-
-## Repository map
-
-- [`src/`](src/) — React/Vite game UI, wallet flows, hooks, and Planet views.
-- [`api/`](api/) — Hono API, voucher service, indexer, mining, and leaderboard.
-- [`contracts/`](contracts/) — ERC721A V2 source, ABI, deployment/verification scripts, and Foundry tests.
-- [`packages/planet-generator/`](packages/planet-generator/) — canonical deterministic generator and golden fixtures.
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — authoritative source-of-truth and data-flow boundaries.
-- [`docs/STATUS.md`](docs/STATUS.md) — current implementation state, V2 identity, and blockers.
-- [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — deployment, projector recovery, and release runbook.
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — submission path and explicitly approved next work.
-- [`docs/DECISIONS.md`](docs/DECISIONS.md) — active architectural decisions.
-- [Official Summer Game Jam brief](https://www.inco.org/blog/summer-game-jam-resources-and-what-to-build) — judging criteria and submission requirements.
-
-## License
-
-MIT. The imported Megapot starter-kit license is preserved in [`LICENSE`](LICENSE).

@@ -315,7 +315,7 @@ export class MemoryBackendPlanetStore implements BackendPlanetStore {
     const existing = this.rows.get(key);
     if (existing?.status === 'READY') return withoutGifData(existing);
     const draft = deriveBackendPlanet(normalized);
-    const planetId = existing?.planetId ?? `backend-${key}`;
+    const planetId = existing?.planetId ?? `backend-${key.replace(':', '-')}`;
     const row: MemoryRow = {
       planetId,
       chainId: draft.chainId,

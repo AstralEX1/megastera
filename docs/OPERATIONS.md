@@ -1,35 +1,24 @@
 # Operations and deployment runbook
 
-This runbook is for the current Base Sepolia seasonless V2 deployment. It assumes no
-secrets are committed and no transaction is sent without an explicitly approved funded
-environment.
+This runbook covers the backend-only Megastera MVP on Base Sepolia. No Planet contract,
+NFT signer, Pinata credential, or indexer process is required.
 
-## Required services and environment
+## Required environment
 
-Run the frontend, API, finalized Planet projector, and daily leaderboard worker as
-separate processes. Production uses managed PostgreSQL; the local JSON store is for one
-process only and is rejected by the production voucher service.
-
-Required server values:
+Server values:
 
 ```text
 BASE_SEPOLIA_RPC_URL
-BASE_SEPOLIA_RPC_FALLBACK_URLS       # optional comma-separated archive-capable URLs
+BASE_SEPOLIA_RPC_FALLBACK_URLS       # optional comma-separated URLs
 DATABASE_URL
-MEGAPLANETS_METADATA_SIGNER_PRIVATE_KEY
-PINATA_JWT
-MEGAPLANETS_CONTRACT_ADDRESS=0x7a29bfD9d1A7a243A212d4E81bc9A52bE50fb9f2
-MEGAPLANETS_PLANET_DEPLOYMENT_BLOCK=45347860
-MEGAPLANETS_LAUNCH_BLOCK=44997183
-MEGAPLANETS_CONFIRMATIONS=6
-MEGAPLANETS_ALLOWED_ORIGINS=https://<frontend-origin>
-MEGAPLANETS_WORKER_TOKEN=<scheduler-only secret>
+MEGAPLANETS_CONFIRMATIONS=6          # optional, non-negative integer
+MEGAPLANETS_ALLOWED_ORIGINS           # optional exact comma-separated origins
+MEGAPLANETS_WORKER_TOKEN              # required only for the finalize route
 ```
 
-Frontend activation uses the same V2 address in
-`VITE_MEGAPLANETS_CONTRACT_ADDRESS`, `VITE_CHAIN=testnet`, and a matching
-`VITE_RPC_URL`. Keep `TICKET_SOURCE` equal to `MEGAPLANETS_V1`. Never put server secrets,
-the signer key, database URL, Pinata JWT, or worker token in a `VITE_*` variable.
+Frontend values use `VITE_*` only for public configuration, including the wallet/RPC and
+optional `VITE_BACKEND_API_BASE_URL`. Never put `DATABASE_URL`, worker tokens, or private
+keys in a Vite variable.
 
 ## Start and health checks
 
@@ -37,79 +26,50 @@ the signer key, database URL, Pinata JWT, or worker token in a `VITE_*` variable
 pnpm db:generate
 pnpm db:validate
 pnpm api:server
-pnpm api:indexer
-pnpm api:leaderboard-worker      # scheduler invokes this once per day
+pnpm api:leaderboard-worker      # scheduler invokes once per day
 pnpm dev --host 127.0.0.1
 ```
 
 Check:
 
-- `GET /api/planets/health` — process liveness;
-- `GET /api/planets/readiness` — database, RPC chain/code, V2 deployment block, and
-  metadata-signer readiness;
-- `GET /api/planets/metrics` — safe process counters and last projector cycle.
+- `GET /api/planets/health` for liveness;
+- `GET /api/planets/metrics` for process-local HTTP counters; and
+- `GET /api/planets?owner=...` after a confirmed receipt generation.
 
-Readiness must remain closed (`503`) when server configuration is incomplete. Metrics are
-process-local and must be exported or scraped by the hosting platform; they are not a
-durable audit log.
+There is intentionally no readiness route that probes a Planet contract and no
+indexer process to start.
 
-For a split frontend/API deployment, set exact origins in
-`MEGAPLANETS_ALLOWED_ORIGINS`. Empty means same-origin only. Wildcards, URL paths,
-credentials, and malformed origins are rejected. The API body limit is 16 KiB; voucher
-preparation is bounded by a process-local work limiter and rate limiter. Add a durable
-edge limiter before running more than one API replica.
+## Purchase and generation troubleshooting
 
-## Projector backfill and recovery
+The frontend must send the execution transaction hash and exact `TicketPurchased` log
+index. The API then checks receipt status, Base Sepolia, canonical jackpot, source tag,
+ticket fields, confirmation depth, canonical block hash, and optional recipient.
 
-The projector starts at the V2 deployment block and consumes finalized `PlanetMinted` and
-ERC721A `Transfer` events only. It stores the last finalized block hash with its cursor.
-The normal cycle is:
+If generation returns `422`, inspect server logs for the request and RPC stage; do not
+retry with a different log index unless the receipt actually contains another canonical
+ticket event. Repeating the same valid request is safe: the key is
+`originTxHash:logIndex`, and an existing ready row is returned.
 
-1. choose the finalized range using the configured confirmation depth;
-2. compare the cursor boundary hash with the chain;
-3. on boundary mismatch, stop and replay the full V2 deployment scope because one
-   boundary hash cannot prove a safe recent common ancestor;
-4. delete dependent artifact/voucher/ticket rows in FK-safe order when a ticket proof is
-   inside the rewind window;
-5. replay events idempotently; and
-6. advance the v2 cursor only after all writes succeed.
+If the database already contains a conflicting ticket or Planet row, preserve it and
+investigate the immutable provenance mismatch. Do not delete production data as a first
+response.
 
-The activation recovery window for Megastera Proof is separate: ticket discovery starts at
-block `44996796` and the immutable launch gate remains `44997183`. The continuous Ticket
-indexer is retired; proofs are created from receipt-time verification.
+GIFs are stored in PostgreSQL and served with an immutable content hash. A missing GIF is
+a failed generation/storage issue, not a reason to fall back to browser-generated media.
 
-After a restore or rewind, verify:
+## Mining and leaderboard
 
-- cursor `nextBlock` and `lastBlockHash` for `megaplanets-v2`;
-- sequential Planet IDs and one `PlanetMinted` plus initial Transfer per mint;
-- current `ownerAddress` against finalized `ownerOf` reads;
-- artifact/voucher rows against their immutable receipt keys; and
-- a second replay produces zero conflicting writes.
+Mining is lazy:
 
-Never delete the production database as a first response. Stop the indexer, preserve the
-on-chain source of truth, restore into a disposable database first, and compare counts and
-hashes before promotion.
+```text
+baseMineralsPerDay × elapsed milliseconds × 1_000_000 / 86_400_000
+```
 
-## Leaderboard operations
-
-`api/leaderboardWorker.ts` is the only scheduled mutator. It finalizes every completed UTC
-day from immutable Planet rate and mint-time data. Public `/api/leaderboard/current`,
-`/history`, and `/days/:periodId` routes are read-only. The finalize route, when exposed
-for scheduler integration, requires `Authorization: Bearer $MEGAPLANETS_WORKER_TOKEN`.
-
-Alert on worker failure, a growing finalization backlog, an empty snapshot after known
-minted Planets, and disagreement between indexed current owners and direct RPC reads.
-
-## Voucher/media safety
-
-The server verifies receipt status, confirmation depth, canonical block hash, recipient,
-source, drawing, and ticket data before signing. `PlanetArtifact` is immutable and keyed
-by the origin transaction hash plus log index. WebM is bounded by the generator tests and
-must remain `video/webm`; GIF fixtures are not a runtime fallback for newly minted media.
+The start time is the backend generation timestamp for the MVP. The browser never writes
+accrual or ledger rows. The leaderboard worker finalizes completed UTC days from ready
+backend Planet rows; public routes are read-only.
 
 ## Release gate
-
-From the repository root:
 
 ```sh
 pnpm lint
@@ -118,18 +78,8 @@ pnpm test
 pnpm build
 pnpm db:generate
 pnpm db:validate
+pnpm --filter @megaplanets/planet-generator golden
 ```
 
-From `contracts/`:
-
-```sh
-forge build --sizes
-forge test
-./script/check-abi.sh
-```
-
-Before a public testnet release, run a funded direct purchase, keeper bulk execution,
-voucher preparation, single/batch mint, transfer/burn, projector replay, and leaderboard
-finalization in a disposable or approved environment. A simulation is not evidence of a
-live transaction. Browser smoke must cover Play → My Planets → Leaderboard plus loading,
-empty, and error/recovery states when a real browser connection is available.
+Live funded purchases, production database checks, and browser smoke require a separately
+approved environment. Local green tests do not claim live RPC or deployment readiness.

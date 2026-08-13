@@ -8,7 +8,7 @@ export function parseAppRoute(pathname: string): AppRoute {
   if (pathname === '/leaderboard') return { active: 'history' };
   if (pathname === '/tickets') return { active: 'tickets' };
   if (pathname === '/lab') return { active: 'lab' };
-  const planetMatch = pathname.match(/^\/planet\/(\d+)$/);
+  const planetMatch = pathname.match(/^\/planet\/([A-Za-z0-9-]+)$/);
   if (planetMatch?.[1]) return { active: 'planets', planetId: planetMatch[1] };
   return { active: 'home' };
 }

@@ -4,8 +4,8 @@
  * @endpoint   GET /v1/rounds/active
  * @customize  Aggregate stats for the LIVE round — `ticket_count`,
  *             `unique_participants`, `prize_pool`, etc. Use this when you
- *             need API-derived aggregates (participants, indexer-computed
- *             totals); use `useJackpotState` for sub-block chain state
+ *             need API-derived aggregates (participants and totals); use
+ *             `useJackpotState` for sub-block chain state
  *             (lifecycle phase, drawing time, ball bounds).
  *
  *             Active rounds change as tickets sell, so `staleTime` is short

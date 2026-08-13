@@ -34,14 +34,14 @@ if (import.meta.env.DEV) {
   if (REFERRER_ADDRESS.toLowerCase() !== DEFAULT_REFERRER_ADDRESS.toLowerCase()) {
     // biome-ignore lint/suspicious/noConsole: deliberate dev-mode diagnostic
     console.warn(
-      '[megaplanets] VITE_REFERRER_ADDRESS overrides the approved project referrer. Confirm this is intentional before testing ticket purchases.',
+      '[megastera] VITE_REFERRER_ADDRESS overrides the approved project referrer. Confirm this is intentional before testing ticket purchases.',
     );
   }
   const REQUIRED_SOURCE = stringToHex('MEGAPLANETS_V1', { size: 32 });
   if (TICKET_SOURCE !== REQUIRED_SOURCE) {
     // biome-ignore lint/suspicious/noConsole: deliberate dev-mode diagnostic
     console.warn(
-      '[megaplanets] TICKET_SOURCE must remain MEGAPLANETS_V1 so ticket eligibility can be verified from on-chain events.',
+      '[megastera] TICKET_SOURCE must remain MEGAPLANETS_V1 so ticket eligibility can be verified from on-chain events.',
     );
   }
   if (!import.meta.env.VITE_WALLETCONNECT_PROJECT_ID) {

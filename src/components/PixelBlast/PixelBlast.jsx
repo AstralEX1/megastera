@@ -580,7 +580,7 @@ const PixelBlast = ({
     };
     } catch {
       // PixelBlast is decorative. A browser without WebGL support must still
-      // be able to render and use the rest of MegaPlanets.
+      // be able to render and use the rest of Megastera.
     }
   }, [
     antialias,

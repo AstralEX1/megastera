@@ -1,17 +1,6 @@
 import type { ReactNode } from 'react';
 import { Button } from '@/components/common/Button';
 import { ExpeditionSteps, type ExpeditionStep } from '@/components/expedition/ExpeditionSteps';
-import { UnrevealedPlanetVisual } from '@/components/planets/UnrevealedPlanetVisual';
-
-const FEATURED_TICKET_COUNT = 3;
-
-function PluralPlanets({ count }: { count: number }) {
-  return (
-    <>
-      {count} {count === 1 ? 'planet' : 'planets'}
-    </>
-  );
-}
 
 export function ExpeditionStatusScreen({
   step,
@@ -51,44 +40,6 @@ export function ExpeditionStatusScreen({
   );
 }
 
-export function ExpeditionCompleteScreen({
-  count,
-  revealAction,
-}: {
-  count: number;
-  revealAction: ReactNode;
-}) {
-  const featuredTickets = Math.min(count, FEATURED_TICKET_COUNT);
-  return (
-    <section className="mx-auto flex min-h-[590px] max-w-5xl flex-col items-center px-4 py-16 text-center sm:px-6 sm:py-20">
-      <ExpeditionSteps active="reveal" />
-      <p className="mt-12 telemetry font-bold text-[var(--success)]">EXPEDITION COMPLETE</p>
-      <h1 className="mt-3 text-balance font-hud text-4xl font-bold tracking-[-0.05em] text-[var(--text-primary)] sm:text-[44px]">
-        You found <PluralPlanets count={count} />!
-      </h1>
-      <div className="mt-12 flex h-[220px] items-center justify-center pt-4">
-        {Array.from({ length: featuredTickets }, (_, index) => ({
-          id: `mystery-${index + 1}`,
-          index,
-        })).map(({ id, index }) => (
-          <div
-            key={id}
-            className={`h-[158px] w-[158px] shrink-0 overflow-hidden rounded-full border-2 border-[var(--rare)] bg-[var(--surface-raised)] shadow-[0_0_0_8px_var(--background)] sm:h-[210px] sm:w-[210px] ${index === 0 ? '' : '-ml-10 sm:-ml-[54px]'}`}
-          >
-            <UnrevealedPlanetVisual
-              className="h-full w-full scale-[1.03]"
-              label={`Unrevealed ticket ${index + 1}`}
-            />
-          </div>
-        ))}
-      </div>
-      <div className="mt-8 w-full max-w-[310px] [&>div>button]:w-full [&>button]:w-full">
-        {revealAction}
-      </div>
-    </section>
-  );
-}
-
 export function RevealCompleteScreen({
   cards,
   drawingId,
@@ -103,7 +54,7 @@ export function RevealCompleteScreen({
   return (
     <section className="mx-auto flex min-h-[590px] max-w-5xl flex-col items-center px-4 py-14 text-center sm:px-6 sm:py-16">
       <ExpeditionSteps active="reveal" />
-      <p className="mt-10 telemetry font-bold text-[var(--success)]">REVEAL COMPLETE</p>
+      <p className="mt-10 telemetry font-bold text-[var(--success)]">PLANETS READY</p>
       <h1 className="mt-3 text-balance font-hud text-4xl font-bold tracking-[-0.05em] text-[var(--text-primary)]">
         Your new planets are ready.
       </h1>

@@ -5,8 +5,8 @@ import { BACKEND_API_BASE_URL } from './backendApi';
 /**
  * Invalidates browser reads that can change after a confirmed wallet write.
  *
- * Keep this list centralized: direct purchases, keeper executions, Planet
- * mints, and claims all affect overlapping ticket/ownership surfaces.
+ * Keep this list centralized: direct purchases, keeper executions, and claims
+ * affect overlapping ticket and backend-Planet surfaces.
  */
 export async function invalidatePostWriteQueries(
   queryClient: Pick<QueryClient, 'invalidateQueries'>,
@@ -16,10 +16,8 @@ export async function invalidatePostWriteQueries(
     [QK.NS, API_BASE_URL, QK.walletTickets],
     [QK.NS, API_BASE_URL, QK.walletStats],
     [QK.NS, API_BASE_URL, QK.walletWins],
-    [QK.NS, 'eligible-planet-tickets'],
-    [QK.NS, 'direct-planet-holdings'],
-    [QK.NS, BACKEND_API_BASE_URL, 'indexed-planets'],
-    ['megaplanets-backend', BACKEND_API_BASE_URL, 'wallet-mining'],
+    ['megastera-backend', BACKEND_API_BASE_URL, 'planets'],
+    ['megastera-backend', BACKEND_API_BASE_URL, 'wallet-mining'],
   ] as const;
 
   await Promise.all(

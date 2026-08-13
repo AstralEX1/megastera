@@ -10,7 +10,7 @@ import {
   getWalletLeaderboardPosition,
   listLeaderboardPeriods,
 } from './leaderboardStore';
-import { loadStage2Config } from './stage2Config';
+import { loadBackendPlanetConfig } from './backendConfig';
 
 const paginationSchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
@@ -30,7 +30,7 @@ type LeaderboardDependencies = {
 };
 
 const defaultDependencies: LeaderboardDependencies = {
-  getPrisma: () => getPrismaClient(loadStage2Config(process.env).databaseUrl),
+  getPrisma: () => getPrismaClient(loadBackendPlanetConfig(process.env).databaseUrl),
   now: () => new Date(),
   getCurrent: getCurrentLeaderboard,
   getWalletPosition: getWalletLeaderboardPosition,

@@ -5,7 +5,7 @@
 import type { ReactNode } from 'react';
 
 const DISCLAIMER_URL =
-  'https://github.com/AstralEX1/megaplanets/blob/main/docs/DISCLAIMER.md';
+  'https://github.com/AstralEX1/megastera/blob/main/docs/DISCLAIMER.md';
 
 export function DisclaimerLink({
   children = 'full disclaimer',

@@ -1,466 +1,162 @@
-import { derivePlanetPreview, type PlanetPreview } from '@megaplanets/planet-generator';
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { useAccount, useChainId } from 'wagmi';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAccount } from 'wagmi';
 import { Button } from '@/components/common/Button';
 import { TxStatus } from '@/components/common/TxStatus';
 import { ExpeditionConfigurator } from '@/components/explore/ExpeditionConfigurator';
-import {
-  ExpeditionCompleteScreen,
-  RevealCompleteScreen,
-} from '@/components/explore/ExpeditionSuccessScreens';
+import { ExpeditionStatusScreen, RevealCompleteScreen } from '@/components/explore/ExpeditionSuccessScreens';
 import { BulkProgress } from '@/components/lottery/BulkProgress';
-import { MintPlanetBatchButton } from '@/components/planets/MintPlanetBatchButton';
-import { MintPlanetButton } from '@/components/planets/MintPlanetButton';
-import { PlanetInventoryCard } from '@/components/planets/PlanetInventoryCard';
-import {
-  BATCH_PURCHASE_FACILITATOR_ADDRESS,
-  EXPLORER_TX_URL,
-  JACKPOT_ADDRESS,
-} from '@/config/contracts';
-import { COPY } from '@/config/copy';
-import { PLANET_CONFIG } from '@/config/planetConfig';
+import { BATCH_PURCHASE_FACILITATOR_ADDRESS, EXPLORER_TX_URL, JACKPOT_ADDRESS } from '@/config/contracts';
 import { useBulkPurchase } from '@/hooks/useBulkPurchase';
 import { useBuyTickets } from '@/hooks/useBuyTickets';
-import { useEligiblePlanetTickets } from '@/hooks/useEligiblePlanetTickets';
-import { useExpeditionAnimation } from '@/hooks/useExpeditionAnimation';
-import { useIndexedPlanets } from '@/hooks/useIndexedPlanets';
 import { useJackpotState } from '@/hooks/useJackpotState';
-import { usePlanetTicketStatuses } from '@/hooks/usePlanetTicketStatuses';
-import {
-  clampExpeditionQuantity,
-  deriveExpeditionFlow,
-  type RevealFlowState,
-} from '@/lib/expeditionFlow';
-import {
-  clearExpeditionSession,
-  type ExpeditionSessionV1,
-  writeExpeditionSession,
-} from '@/lib/expeditionSession';
-import { selectRevealTickets } from '@/lib/revealPlan';
+import { clampExpeditionQuantity } from '@/lib/expeditionFlow';
+import { requestBackendPlanetGeneration, type BackendPlanet } from '@/lib/backendApi';
 import { BULK_THRESHOLD, type CustomTicket, isValidTicket, totalCost } from '@/lib/tickets';
+import type { PurchasedTicket } from '@/lib/purchaseReceipt';
 
-type DiscoveredPlanet = { preview: PlanetPreview; logIndex: bigint | undefined };
-
-/** Purchase orchestration stays here; the expedition screens consume only hook-derived state. */
 export function Play() {
   const { address, isConnected } = useAccount();
-  const chainId = useChainId();
   const { state, drawingId, phase, refetch: refetchJackpot } = useJackpotState();
   const [count, setCount] = useState(3);
   const [automaticQuickPick, setAutomaticQuickPick] = useState(true);
   const [staticTickets, setStaticTickets] = useState<readonly CustomTicket[]>([]);
   const [flowActive, setFlowActive] = useState(false);
-  const [session, setSession] = useState<ExpeditionSessionV1 | null>(null);
-  const [revealedTicketIds, setRevealedTicketIds] = useState<ReadonlySet<string>>(() => new Set());
-  const [revealState, setRevealState] = useState<RevealFlowState>('idle');
+  const [generatedPlanets, setGeneratedPlanets] = useState<BackendPlanet[]>([]);
+  const [generationError, setGenerationError] = useState<Error | null>(null);
+  const generatedKeys = useRef(new Set<string>());
 
   const bounds = useMemo(
     () => (state ? { ballMax: state.ballMax, bonusballMax: state.bonusballMax } : null),
     [state],
   );
   const isBulk = count > BULK_THRESHOLD;
-  const bulkDraft = isBulk
-    ? { dynamicCount: count, staticTickets: [] }
-    : session?.purchaseMode === 'bulk'
-      ? { dynamicCount: session.quantity, staticTickets: [] }
-      : null;
+  const bulkDraft = isBulk ? { dynamicCount: count, staticTickets: [] } : null;
   const bulk = useBulkPurchase(bulkDraft);
   const direct = useBuyTickets();
-  const validStaticTickets =
-    bounds !== null && staticTickets.every((ticket) => isValidTicket(ticket, bounds));
+  const validStaticTickets = bounds !== null && staticTickets.every((ticket) => isValidTicket(ticket, bounds));
   const manualSelectionComplete = automaticQuickPick || staticTickets.length === count;
-  const directReady =
-    !isBulk && bounds !== null && validStaticTickets && manualSelectionComplete && direct.isReady;
-  const meetsBulkMinimum =
-    bulk.minimumTicketCount !== undefined && BigInt(count) >= bulk.minimumTicketCount;
+  const directReady = !isBulk && bounds !== null && validStaticTickets && manualSelectionComplete && direct.isReady;
+  const meetsBulkMinimum = bulk.minimumTicketCount !== undefined && BigInt(count) >= bulk.minimumTicketCount;
   const bulkReady = isBulk && meetsBulkMinimum && !bulk.hasActiveOrder && bulk.create.isReady;
   const total = state ? totalCost({ ticketPriceUsdcRaw: state.ticketPrice, count }) : 0n;
   const purchase = isBulk ? bulk.create : direct;
   const approvalSpender = isBulk ? BATCH_PURCHASE_FACILITATOR_ADDRESS : JACKPOT_ADDRESS;
   const approvalAmount = isBulk ? (bulkReady ? total : 0n) : directReady ? total : 0n;
-  const checkoutDisabled =
-    !isConnected || phase !== 'open' || purchase.isPending || !(isBulk ? bulkReady : directReady);
-  const recovered = useEligiblePlanetTickets(address, {
-    enabled: flowActive || session !== null,
-    refetchInterval: flowActive ? 5_000 : undefined,
-  });
-  const indexed = useIndexedPlanets(address);
-  const indexedTicketIds = useMemo(
-    () =>
-      new Set(
-        indexed.planets.flatMap((planet) => (planet.ticketId === null ? [] : [planet.ticketId])),
-      ),
-    [indexed.planets],
-  );
-  const expectedCount = session?.quantity ?? count;
-  const revealPurchaseMode = session?.purchaseMode ?? (isBulk ? 'bulk' : 'direct');
-  const candidateTickets = useMemo(
-    () =>
-      selectRevealTickets({
-        exactTickets:
-          revealPurchaseMode === 'bulk' ? bulk.confirmedTickets : direct.purchasedTickets,
-        recoveredTickets: recovered.tickets,
-        mode: revealPurchaseMode,
-        drawingId,
-        purchaseTxHash: session?.purchaseTxHash,
-        expectedCount,
-        indexedTicketIds,
-      }),
-    [
-      bulk.confirmedTickets,
-      direct.purchasedTickets,
-      drawingId,
-      expectedCount,
-      indexedTicketIds,
-      revealPurchaseMode,
-      recovered.tickets,
-      session?.purchaseTxHash,
-    ],
-  );
-  const confirmedTickets = useMemo(() => {
-    if (!flowActive) return [];
-    return candidateTickets.slice(0, expectedCount);
-  }, [candidateTickets, expectedCount, flowActive]);
+  const checkoutDisabled = !isConnected || phase !== 'open' || purchase.isPending || !(isBulk ? bulkReady : directReady);
+  const purchasedTickets: readonly PurchasedTicket[] = isBulk ? bulk.confirmedTickets : direct.purchasedTickets;
   const activeBatch = bulk.orderInfo?.[0];
 
   useEffect(() => {
-    if (!address) {
-      setSession(null);
-      setFlowActive(false);
-      setRevealedTicketIds(new Set());
-      setRevealState('idle');
-      return;
+    if (!flowActive || !address) return;
+    for (const ticket of purchasedTickets) {
+      const key = `${ticket.originTxHash.toLowerCase()}:${ticket.logIndex.toString()}`;
+      if (generatedKeys.current.has(key)) continue;
+      generatedKeys.current.add(key);
+      setGenerationError(null);
+      void requestBackendPlanetGeneration({
+        transactionHash: ticket.originTxHash,
+        logIndex: ticket.logIndex,
+        recipient: address,
+      })
+        .then((planet) => setGeneratedPlanets((current) => current.some((item) => item.planetId === planet.planetId) ? current : [...current, planet]))
+        .catch((error) => setGenerationError(error instanceof Error ? error : new Error('Planet generation failed.')));
     }
-    clearExpeditionSession(address, chainId);
-    setSession(null);
-    setFlowActive(false);
-    setRevealedTicketIds(new Set());
-    setRevealState('idle');
-  }, [address, chainId]);
+  }, [address, flowActive, purchasedTickets]);
 
-  useEffect(() => {
-    if (!session?.purchaseTxHash || session.purchaseMode !== 'direct' || !address) return;
-    const indexedFromPurchase = indexed.planets.filter(
-      (planet) =>
-        planet.ticket?.originTxHash.toLowerCase() === session.purchaseTxHash?.toLowerCase(),
-    ).length;
-    if (indexedFromPurchase < session.quantity) return;
-    clearExpeditionSession(address, chainId);
-    setSession(null);
-  }, [address, chainId, indexed.planets, session]);
-
-  useEffect(() => {
-    if (!session || !address) return;
-    const txHash = session.purchaseMode === 'bulk' ? bulk.create.txHash : direct.txHash;
-    if (!txHash || session.purchaseTxHash === txHash) return;
-    const next = {
-      ...session,
-      purchaseTxHash: txHash,
-      bulkOrderReference: session.purchaseMode === 'bulk' ? txHash : null,
-    };
-    writeExpeditionSession(next);
-    setSession(next);
-  }, [address, bulk.create.txHash, direct.txHash, session]);
-
-  const discoveredPlanets = useMemo<readonly DiscoveredPlanet[]>(() => {
-    return confirmedTickets.flatMap((ticket) => {
-      try {
-        return [
-          {
-            preview: derivePlanetPreview(
-              {
-                ticketId: ticket.ticketId,
-                drawingId: ticket.drawingId,
-                normals: ticket.normals,
-                bonusBall: ticket.bonusBall,
-                originTxHash: ticket.originTxHash,
-              },
-              PLANET_CONFIG,
-            ),
-            logIndex: ticket.logIndex,
-          },
-        ];
-      } catch {
-        return [];
-      }
-    });
-  }, [confirmedTickets]);
-  const allPlanetsRevealed =
-    discoveredPlanets.length >= expectedCount &&
-    discoveredPlanets.every(({ preview }) =>
-      revealedTicketIds.has(preview.descriptor.input.ticketId.toString()),
-    );
-  const resultRefs = useMemo(
-    () =>
-      discoveredPlanets.map(({ preview }) => ({
-        ticketId: preview.descriptor.input.ticketId.toString(),
-        drawingId: preview.descriptor.input.drawingId.toString(),
-      })),
-    [discoveredPlanets],
-  );
-  const ticketStatuses = usePlanetTicketStatuses(address, resultRefs, {
-    drawingId,
-    phase,
-    drawingTime: state?.drawingTime,
-  });
-  const indexedByTicketId = useMemo(
-    () =>
-      new Map(
-        indexed.planets.flatMap((planet) =>
-          planet.ticketId ? [[planet.ticketId, planet] as const] : [],
-        ),
-      ),
-    [indexed.planets],
-  );
-
-  const purchaseConfirmed = isBulk
-    ? bulk.create.isSuccess || bulk.hasActiveOrder || activeBatch !== undefined
-    : direct.isSuccess;
-  const purchaseError = purchase.error ?? null;
-  const normalizedRevealState: RevealFlowState = allPlanetsRevealed ? 'complete' : revealState;
-  const flow = deriveExpeditionFlow({
-    isActive: flowActive,
-    expectedTicketCount: expectedCount,
-    confirmedTicketCount: confirmedTickets.length,
-    isBulkOrder: isBulk,
-    isWaitingSignature: purchase.isWaitingSignature || purchase.isPreparing,
-    isMiningPurchase: purchase.isMining,
-    isPurchaseConfirmed: purchaseConfirmed,
-    revealState: normalizedRevealState,
-    error: purchaseError,
-  });
-  useExpeditionAnimation(flow.scene);
-
-  const markRevealed = useCallback(
-    (ticketIds: readonly bigint[]) => {
-      setRevealedTicketIds((current) => new Set([...current, ...ticketIds.map(String)]));
-      if (address) clearExpeditionSession(address, chainId);
-    },
-    [address, chainId],
-  );
-  const handleRevealState = useCallback(
-    (next: 'idle' | 'wallet-confirmation' | 'confirming' | 'complete' | 'error') => {
-      setRevealState(next);
-    },
-    [],
-  );
-
-  const setQuantity = (value: number) => {
-    const next = clampExpeditionQuantity(value);
-    setCount(next);
-    if (next > BULK_THRESHOLD) {
-      setStaticTickets([]);
-      setAutomaticQuickPick(true);
-    } else setStaticTickets((current) => current.slice(0, next));
-  };
   const launch = () => {
     if (!address || drawingId === undefined) return;
-    const next: ExpeditionSessionV1 = {
-      version: 1,
-      account: address,
-      chainId,
-      purchaseMode: isBulk ? 'bulk' : 'direct',
-      drawingId: drawingId.toString(),
-      quantity: count,
-      automaticQuickPick,
-      coordinates: staticTickets,
-      purchaseTxHash: null,
-      bulkOrderReference: null,
-      createdAt: Date.now(),
-    };
-    writeExpeditionSession(next);
-    setSession(next);
+    generatedKeys.current.clear();
+    setGeneratedPlanets([]);
+    setGenerationError(null);
     setFlowActive(true);
-    setRevealState('idle');
     if (isBulk) void bulk.createOrder();
-    else if (bounds) {
-      // A new expedition must never reuse receipt tickets from a prior wallet
-      // or expedition while the new purchase is still being confirmed.
-      direct.reset();
-      void direct.buy({ customTickets: staticTickets, count, bounds });
-    }
+    else if (bounds) void direct.buy({ customTickets: staticTickets, count, bounds });
   };
-  const retry = () => {
-    purchase.reset();
-    launch();
-  };
-  const exploreAgain = () => {
-    if (address) clearExpeditionSession(address, chainId);
+
+  const exploreAgain = useCallback(() => {
     direct.reset();
     bulk.create.reset();
-    setSession(null);
+    generatedKeys.current.clear();
+    setGeneratedPlanets([]);
+    setGenerationError(null);
     setFlowActive(false);
-    setRevealState('idle');
-    setRevealedTicketIds(new Set());
+  }, [bulk.create, direct]);
+
+  const retryGeneration = () => {
+    generatedKeys.current.clear();
+    setGenerationError(null);
+    setGeneratedPlanets([]);
   };
 
-  const revealAction =
-    discoveredPlanets.length > 1 ? (
-      <MintPlanetBatchButton
-        planets={discoveredPlanets}
-        buttonLabel={`REVEAL (${discoveredPlanets.length})`}
-        onMinted={markRevealed}
-        onStateChange={handleRevealState}
-      />
-    ) : discoveredPlanets[0] ? (
-      <MintPlanetButton
-        preview={discoveredPlanets[0].preview}
-        logIndex={discoveredPlanets[0].logIndex}
-        buttonLabel="REVEAL (1)"
-        onMinted={(ticketId) => markRevealed([ticketId])}
-        onStateChange={handleRevealState}
-      />
-    ) : null;
-  const issuedCount = activeBatch
-    ? Number(activeBatch.totalTicketsOrdered - activeBatch.remainingTickets)
-    : confirmedTickets.length;
-  const progress = `${Math.min(issuedCount, expectedCount)} / ${expectedCount}`;
-  const purchaseInline = flow.step !== 'reveal';
-  const mysteryVisible =
-    flow.scene === 'signals-located' ||
-    flow.scene === 'reveal-wallet-confirmation' ||
-    flow.scene === 'confirming-reveal' ||
-    (flow.scene === 'recoverable-error' && revealState === 'error');
-  const exploreLabel = purchaseInline ? purchaseProgressLabel(flow.scene, progress) : undefined;
-  const inlineRetry = flow.scene === 'recoverable-error' && revealState !== 'error';
+  const purchaseConfirmed = purchasedTickets.length > 0 || (isBulk && (bulk.create.isSuccess || bulk.hasActiveOrder));
+  const expectedCount = count;
+  const ready = generatedPlanets.length >= expectedCount;
+  const progress = `${Math.min(generatedPlanets.length, expectedCount)} / ${expectedCount}`;
 
-  let content: ReactNode;
-  if (purchaseInline) {
-    content = (
-      <ExpeditionConfigurator
-        quantity={count}
-        total={total}
-        jackpotAmount={state?.prizePool}
-        bounds={bounds}
-        manuallyEditedTickets={staticTickets}
-        automaticQuickPick={automaticQuickPick}
-        disabled={flowActive && !inlineRetry ? true : checkoutDisabled}
-        exploreLabel={exploreLabel}
-        approvalSpender={approvalSpender}
-        approvalAmount={approvalAmount}
-        onApproved={refetchJackpot}
-        onQuantityChange={setQuantity}
-        onAutomaticQuickPickChange={setAutomaticQuickPick}
-        onTicketsChange={setStaticTickets}
-        onExplore={inlineRetry ? retry : launch}
-      />
-    );
-  } else if (mysteryVisible) {
-    content = (
-      <ExpeditionCompleteScreen count={discoveredPlanets.length} revealAction={revealAction} />
-    );
-  } else if (flow.scene === 'results') {
+  let content = (
+    <ExpeditionConfigurator
+      quantity={count}
+      total={total}
+      jackpotAmount={state?.prizePool}
+      bounds={bounds}
+      manuallyEditedTickets={staticTickets}
+      automaticQuickPick={automaticQuickPick}
+      disabled={flowActive ? true : checkoutDisabled}
+      exploreLabel={flowActive ? 'Generating planets…' : undefined}
+      approvalSpender={approvalSpender}
+      approvalAmount={approvalAmount}
+      onApproved={refetchJackpot}
+      onQuantityChange={(value) => {
+        const next = clampExpeditionQuantity(value);
+        setCount(next);
+        if (next > BULK_THRESHOLD) {
+          setStaticTickets([]);
+          setAutomaticQuickPick(true);
+        } else setStaticTickets((current) => current.slice(0, next));
+      }}
+      onAutomaticQuickPickChange={setAutomaticQuickPick}
+      onTicketsChange={setStaticTickets}
+      onExplore={launch}
+    />
+  );
+
+  if (flowActive && purchase.error) {
+    content = <ExpeditionStatusScreen step="explore" eyebrow="PURCHASE FAILED" title="The expedition can be retried" description={purchase.error.message} action={<Button variant="primary" onClick={exploreAgain}>Try again</Button>} />;
+  } else if (flowActive && generationError) {
+    content = <ExpeditionStatusScreen step="discover" eyebrow="GENERATION ERROR" title="The ticket is safe" description={generationError.message} action={<Button variant="primary" onClick={retryGeneration}>Retry generation</Button>} />;
+  } else if (flowActive && ready) {
     content = (
       <RevealCompleteScreen
         drawingId={drawingId}
         onExploreAgain={exploreAgain}
         onViewPlanets={() => window.location.assign('/my-planets')}
-        cards={
-          <div className="grid grid-cols-1 gap-4 text-left sm:grid-cols-2 lg:grid-cols-3">
-            {discoveredPlanets.map(({ preview }, index) => {
-              const ticketId = preview.descriptor.input.ticketId.toString();
-              const indexedPlanet = indexedByTicketId.get(ticketId);
-              return (
-                <div
-                  key={ticketId}
-                  className="expedition-result-card"
-                  style={{ animationDelay: `${Math.min(index * 45, 900)}ms` }}
-                >
-                  <PlanetInventoryCard
-                    preview={preview}
-                    tokenId={indexedPlanet?.tokenId}
-                    revealed
-                    ticketStatus={ticketStatuses.statuses.get(ticketId) ?? { kind: 'unavailable' }}
-                    selected={false}
-                    onSelect={() =>
-                      window.location.assign(
-                        indexedPlanet?.tokenId ? `/planet/${indexedPlanet.tokenId}` : '/my-planets',
-                      )
-                    }
-                  />
-                </div>
-              );
-            })}
-          </div>
-        }
+        cards={<div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{generatedPlanets.map((planet) => <img key={planet.planetId} src={planet.gifUrl} alt={planet.name} className="aspect-square w-full rounded-2xl border border-[var(--border)] object-cover" />)}</div>}
       />
     );
-  } else content = null;
+  } else if (flowActive && purchaseConfirmed) {
+    content = <ExpeditionStatusScreen step="discover" eyebrow="RECEIPT CONFIRMED" title="Generating your planets" description="The backend is rendering a GIF and saving your Planet to the database. You can safely keep this page open." progress={progress} />;
+  }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-2 pb-6">
-      {!isConnected && <Notice>{COPY.connectToBuy}</Notice>}
-      {phase !== 'open' && (
-        <Notice>{COPY.ticketsPaused}. Wait for the next drawing to open.</Notice>
-      )}
+    <div className="mx-auto max-w-5xl space-y-3 pb-6">
+      {!isConnected && <Notice>Connect your wallet to buy tickets.</Notice>}
+      {phase !== 'open' && <Notice>Tickets are paused until the next drawing opens.</Notice>}
       {content}
-      {isBulk && bulk.minimumTicketCount !== undefined && !meetsBulkMinimum && !flowActive && (
-        <Notice>
-          Megapot requires at least {bulk.minimumTicketCount.toString()} tickets for this order.
-        </Notice>
-      )}
+      {isBulk && bulk.minimumTicketCount !== undefined && !meetsBulkMinimum && !flowActive && <Notice>Megapot requires at least {bulk.minimumTicketCount.toString()} tickets for this order.</Notice>}
       {flowActive && isBulk && bulk.hasActiveOrder && activeBatch ? (
         <section className="mx-auto max-w-[560px] rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
-          <BulkProgress
-            totalTickets={activeBatch.totalTicketsOrdered}
-            remainingTickets={activeBatch.remainingTickets}
-            remainingUSDC={activeBatch.remainingUSDC}
-          />
+          <BulkProgress totalTickets={activeBatch.totalTicketsOrdered} remainingTickets={activeBatch.remainingTickets} remainingUSDC={activeBatch.remainingUSDC} />
           <div className="mt-4 flex items-center justify-between gap-3">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={bulk.cancelOrder}
-              disabled={bulk.cancel.isPending}
-            >
-              Cancel remaining order
-            </Button>
-            {bulk.createdOrder ? (
-              <a
-                className="text-sm font-semibold text-[var(--accent)]"
-                href={`${EXPLORER_TX_URL}${bulk.createdOrder.creationTxHash}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                View transaction
-              </a>
-            ) : null}
+            <Button variant="secondary" size="sm" onClick={bulk.cancelOrder} disabled={bulk.cancel.isPending}>Cancel remaining order</Button>
+            {bulk.createdOrder ? <a className="text-sm font-semibold text-[var(--accent)]" href={`${EXPLORER_TX_URL}${bulk.createdOrder.creationTxHash}`} target="_blank" rel="noreferrer">View transaction</a> : null}
           </div>
-          <TxStatus
-            hash={bulk.cancel.txHash}
-            isPending={bulk.cancel.isPending}
-            isSuccess={bulk.cancel.isSuccess}
-            error={bulk.cancel.error}
-          />
+          <TxStatus hash={bulk.cancel.txHash} isPending={bulk.cancel.isPending} isSuccess={bulk.cancel.isSuccess} error={bulk.cancel.error} />
         </section>
       ) : null}
     </div>
   );
 }
 
-function purchaseProgressLabel(
-  scene: ReturnType<typeof deriveExpeditionFlow>['scene'],
-  progress: string,
-) {
-  switch (scene) {
-    case 'wallet-confirmation':
-      return 'Confirm in wallet';
-    case 'confirming-purchase':
-      return 'Confirming purchase…';
-    case 'discovering-planets':
-    case 'verifying-tickets':
-      return `Discovering planets ${progress}`;
-    case 'recoverable-error':
-      return 'Retry';
-    default:
-      return undefined;
-  }
-}
-
-function Notice({ children }: { children: ReactNode }) {
-  return (
-    <p className="mx-auto max-w-[560px] rounded-xl border border-[var(--warning)]/40 bg-[var(--surface)] px-4 py-3 text-sm text-[var(--text-secondary)]">
-      {children}
-    </p>
-  );
+function Notice({ children }: { children: React.ReactNode }) {
+  return <p className="mx-auto max-w-[560px] rounded-xl border border-[var(--warning)]/40 bg-[var(--surface)] px-4 py-3 text-sm text-[var(--text-secondary)]">{children}</p>;
 }

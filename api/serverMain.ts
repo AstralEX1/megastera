@@ -95,7 +95,7 @@ async function main() {
   const address = server.address();
   const host = parseApiHost(process.env);
   const port = typeof address === 'object' && address ? address.port : parseApiPort(process.env);
-  process.stdout.write(`MegaPlanets API listening on http://${host}:${port}\n`);
+  process.stdout.write(`Megastera API listening on http://${host}:${port}\n`);
   const shutdown = () => server.close(() => process.exit(0));
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);
