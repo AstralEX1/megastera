@@ -19,6 +19,52 @@ function relativeTimeLabel(timestamp: number | undefined, now: number) {
   return `${hours} hour${hours === 1 ? '' : 's'} ago`;
 }
 
+function SeasonOnePanel() {
+  return (
+    <section
+      aria-labelledby="season-1-title"
+      data-season-panel
+      className="relative overflow-hidden rounded-2xl border border-violet-300/25 bg-[var(--surface)] p-5 shadow-[0_18px_50px_rgba(4,3,16,0.28)]"
+    >
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-gradient-to-br from-violet-400/10 via-transparent to-cyan-300/[0.06]"
+      />
+      <div className="relative grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(19rem,0.9fr)] md:items-center">
+        <div>
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h2
+              id="season-1-title"
+              className="font-hud text-2xl font-bold tracking-[-0.04em] text-[var(--text-primary)]"
+            >
+              Season 1
+            </h2>
+            <span className="font-mono text-xs text-cyan-200">
+              Final standings close August 23, 2026
+            </span>
+          </div>
+          <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--text-secondary)]">
+            The top 10 places receive USDC and 1/1 Planet NFT prizes at the end of Season 1.
+          </p>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div className="rounded-xl border border-violet-200/20 bg-violet-300/[0.06] p-3">
+            <p className="telemetry text-violet-200">Prize category</p>
+            <p className="mt-2 font-hud text-lg font-bold text-[var(--text-primary)]">USDC</p>
+          </div>
+          <div className="rounded-xl border border-cyan-200/20 bg-cyan-300/[0.05] p-3">
+            <p className="telemetry text-cyan-200">Prize category</p>
+            <p className="mt-2 font-hud text-lg font-bold text-[var(--text-primary)]">
+              1/1 Planet NFT
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function Leaderboard() {
   const { address } = useAccount();
   const current = useCurrentLeaderboard();
@@ -37,10 +83,7 @@ export function Leaderboard() {
     setManualRefreshing(true);
 
     try {
-      await Promise.all([
-        current.refetch(),
-        address ? wallet.refetch() : Promise.resolve(),
-      ]);
+      await Promise.all([current.refetch(), address ? wallet.refetch() : Promise.resolve()]);
 
       const remaining = 500 - (Date.now() - startedAt);
       if (remaining > 0) {
@@ -54,19 +97,30 @@ export function Leaderboard() {
 
   if (current.isLoading) {
     return (
-      <section aria-live="polite" className="card-pad mx-auto flex max-w-3xl flex-col items-center text-center">
-        <FadeArc aria-label="Loading leaderboard" className="h-10 w-10 text-violet-300 [--duration:1.1s]" />
+      <section
+        aria-live="polite"
+        className="card-pad mx-auto flex max-w-3xl flex-col items-center text-center"
+      >
+        <FadeArc
+          aria-label="Loading leaderboard"
+          className="h-10 w-10 text-violet-300 [--duration:1.1s]"
+        />
         <h1 className="mt-5 font-hud text-2xl font-bold">Loading leaderboard</h1>
       </section>
     );
   }
-  if (current.error || !data) return (
-    <section role="alert" className="card-pad mx-auto max-w-2xl space-y-4 text-center">
-      <h1 className="font-hud text-2xl font-bold">Leaderboard unavailable</h1>
-      <p className="text-sm text-[var(--text-secondary)]">The live mining backend could not return current standings.</p>
-      <Button variant="secondary" onClick={() => void handleRefresh()}>Retry</Button>
-    </section>
-  );
+  if (current.error || !data)
+    return (
+      <section role="alert" className="card-pad mx-auto max-w-2xl space-y-4 text-center">
+        <h1 className="font-hud text-2xl font-bold">Leaderboard unavailable</h1>
+        <p className="text-sm text-[var(--text-secondary)]">
+          The live mining backend could not return current standings.
+        </p>
+        <Button variant="secondary" onClick={() => void handleRefresh()}>
+          Retry
+        </Button>
+      </section>
+    );
 
   const refreshing = current.isFetching || manualRefreshing;
   const lastRefreshAt = current.dataUpdatedAt || (data.asOf ? Date.parse(data.asOf) : undefined);
@@ -75,11 +129,18 @@ export function Leaderboard() {
     <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-[var(--border)] pb-5">
         <div>
-          <h1 className="font-hud text-3xl font-bold tracking-[-0.04em] text-[var(--text-primary)]">Leaderboard</h1>
-          <p className="mt-2 max-w-xl text-sm text-[var(--text-secondary)]">Current lifetime mining from every backend Planet. Standings refresh automatically every minute.</p>
+          <h1 className="font-hud text-3xl font-bold tracking-[-0.04em] text-[var(--text-primary)]">
+            Leaderboard
+          </h1>
+          <p className="mt-2 max-w-xl text-sm text-[var(--text-secondary)]">
+            Current lifetime mining from every backend Planet. Standings refresh automatically every
+            minute.
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <span className="font-mono text-xs text-[var(--text-secondary)]">Last refresh: {relativeTimeLabel(lastRefreshAt, now)}</span>
+          <span className="font-mono text-xs text-[var(--text-secondary)]">
+            Last refresh: {relativeTimeLabel(lastRefreshAt, now)}
+          </span>
           <Button
             variant="secondary"
             disabled={refreshing}
@@ -89,16 +150,28 @@ export function Leaderboard() {
           >
             {refreshing ? (
               <span className="inline-flex items-center gap-2">
-                <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                <span
+                  aria-hidden
+                  className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"
+                />
                 Refreshing…
               </span>
-            ) : 'Refresh'}
+            ) : (
+              'Refresh'
+            )}
           </Button>
         </div>
       </header>
 
+      <SeasonOnePanel />
+
       {data.rows.length === 0 ? (
-        <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center"><h2 className="font-hud text-xl font-bold">No mineral production yet</h2><p className="mt-2 text-sm text-[var(--text-secondary)]">Standings appear after the first backend Planet begins mining.</p></section>
+        <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
+          <h2 className="font-hud text-xl font-bold">No mineral production yet</h2>
+          <p className="mt-2 text-sm text-[var(--text-secondary)]">
+            Standings appear after the first backend Planet begins mining.
+          </p>
+        </section>
       ) : (
         <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_17rem]">
           <LeaderboardTable rows={data.rows} walletAddress={address} />

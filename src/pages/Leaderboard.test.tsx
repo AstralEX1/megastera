@@ -14,28 +14,60 @@ const state = vi.hoisted(() => ({
 }));
 
 const current = {
-  period: { id: '2026-08-12', startsAt: '2026-08-12T00:00:00.000Z', endsAt: '2026-08-13T00:00:00.000Z' },
+  period: {
+    id: '2026-08-12',
+    startsAt: '2026-08-12T00:00:00.000Z',
+    endsAt: '2026-08-13T00:00:00.000Z',
+  },
   asOf: '2026-08-12T12:00:00.000Z',
   total: 2,
   offset: 0,
   limit: 50,
   rows: [
-    { rank: 1, walletAddress: '0x1111111111111111111111111111111111111111', scoreMicros: '25000000', effectiveMineralsPerDayMicros: '12000000' },
-    { rank: 2, walletAddress: '0x2222222222222222222222222222222222222222', scoreMicros: '19000000', effectiveMineralsPerDayMicros: '8000000' },
+    {
+      rank: 1,
+      walletAddress: '0x1111111111111111111111111111111111111111',
+      scoreMicros: '25000000',
+      effectiveMineralsPerDayMicros: '12000000',
+    },
+    {
+      rank: 2,
+      walletAddress: '0x2222222222222222222222222222222222222222',
+      scoreMicros: '19000000',
+      effectiveMineralsPerDayMicros: '8000000',
+    },
   ],
 };
 
 vi.mock('wagmi', () => ({ useAccount: () => state.account }));
 vi.mock('@/hooks/useLeaderboard', () => ({
-  useCurrentLeaderboard: () => ({ data: current, isFetching: state.isFetching, isLoading: state.isLoading, error: state.error, refetch: refreshMocks.current }),
-  useWalletLeaderboardPosition: () => ({ data: { period: current.period, asOf: current.asOf, row: current.rows[1], distanceToNextRankMicros: '6000000' }, isLoading: false, refetch: refreshMocks.wallet }),
+  useCurrentLeaderboard: () => ({
+    data: current,
+    isFetching: state.isFetching,
+    isLoading: state.isLoading,
+    error: state.error,
+    refetch: refreshMocks.current,
+  }),
+  useWalletLeaderboardPosition: () => ({
+    data: {
+      period: current.period,
+      asOf: current.asOf,
+      row: current.rows[1],
+      distanceToNextRankMicros: '6000000',
+    },
+    isLoading: false,
+    refetch: refreshMocks.wallet,
+  }),
 }));
 
-vi.stubGlobal('IntersectionObserver', class {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-});
+vi.stubGlobal(
+  'IntersectionObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  },
+);
 
 import { Leaderboard } from './Leaderboard';
 
@@ -63,6 +95,11 @@ describe('Leaderboard', () => {
     const { container } = render(<Leaderboard />);
 
     expect(screen.getByRole('heading', { name: 'Leaderboard' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Season 1' })).toBeInTheDocument();
+    expect(screen.getByText('Final standings close August 23, 2026')).toBeInTheDocument();
+    expect(
+      screen.getByText(/top 10 places receive USDC and 1\/1 Planet NFT prizes/i),
+    ).toBeInTheDocument();
     expect(screen.queryByText('LIVE MINERAL SCORE')).not.toBeInTheDocument();
     expect(screen.queryByText('LIVE · GENERATED AT + BASE RATE')).not.toBeInTheDocument();
     expect(screen.queryByText(/As of Aug 12/)).not.toBeInTheDocument();
@@ -70,8 +107,12 @@ describe('Leaderboard', () => {
     expect(container.querySelectorAll('.count-up-text')).toHaveLength(10);
     expect(screen.getByText('Your rank')).toBeInTheDocument();
     expect(screen.getByText(/to next rank/)).toBeInTheDocument();
-    expect(screen.queryByRole('progressbar', { name: 'Daily snapshot progress' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('progressbar', { name: 'Daily snapshot progress' }),
+    ).not.toBeInTheDocument();
     expect(container.querySelector('[data-wallet-row="true"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-rank-tier="gold"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-rank-tier="silver"]')).toBeInTheDocument();
     expect(container.querySelector('[data-mobile-standings]')).toHaveClass('md:hidden');
   });
 
@@ -97,9 +138,12 @@ describe('Leaderboard', () => {
   it('refreshes both standings and wallet data when Refresh is clicked', async () => {
     const user = userEvent.setup();
     let resolveCurrent: ((value: { error: null }) => void) | undefined;
-    refreshMocks.current.mockImplementation(() => new Promise((resolve) => {
-      resolveCurrent = resolve;
-    }));
+    refreshMocks.current.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCurrent = resolve;
+        }),
+    );
 
     render(<Leaderboard />);
     await user.click(screen.getByRole('button', { name: 'Refresh' }));
