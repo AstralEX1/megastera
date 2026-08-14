@@ -96,7 +96,7 @@ export function TicketStatusBadge({ status, appearance = 'default' }: { status: 
   return (
     <span
       data-testid="ticket-status-unavailable"
-      className={`${base} border-zinc-700 bg-zinc-800 text-zinc-300`}
+      className={`${base} ${appearance === 'compact' ? 'border-zinc-700 bg-zinc-800 text-zinc-300' : 'border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400'}`}
     >
       Unavailable
     </span>

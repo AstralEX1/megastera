@@ -22,7 +22,10 @@ describe('Landing', () => {
 
     expect(screen.getByRole('heading', { name: /Explore\.\s*Mine\.\s*Win\./ })).toBeInTheDocument();
     expect(screen.getByText('Every ticket becomes a Planet and enters the draw.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Powered by Megapot' })).toHaveAttribute('href', 'https://megapot.io/ecosystem');
+    const poweredBy = screen.getByRole('link', { name: 'Powered by Megapot' });
+    expect(poweredBy).toHaveAttribute('href', 'https://megapot.io/ecosystem');
+    expect(poweredBy.closest('.landing-live-jackpot')).toBeTruthy();
+    expect(container.querySelector('.landing-hero-powered-by')).not.toBeInTheDocument();
     expect(container.textContent).not.toContain('A planet-first cosmic lottery game');
     expect(screen.queryByText(/connect wallet/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/MegaPlanets/i)).not.toBeInTheDocument();
@@ -43,6 +46,8 @@ describe('Landing', () => {
     const ctas = screen.getAllByRole('link', { name: 'Play' });
     expect(ctas.length).toBeGreaterThanOrEqual(2);
     expect(ctas.every((cta) => cta.getAttribute('href') === '/play')).toBe(true);
+    expect(ctas.every((cta) => !cta.textContent?.includes('↗'))).toBe(true);
+    expect(container.querySelector('.landing-hero-actions .landing-button')).toHaveClass('landing-button-primary');
     expect(screen.queryByText('Mint Planet')).not.toBeInTheDocument();
     expect(
       [...container.querySelectorAll('img')]
@@ -69,9 +74,12 @@ describe('Landing', () => {
     expect(container.querySelector('.landing-mechanics-connection')).not.toBeInTheDocument();
     expect(landing.queryByText('PLANET = TICKET')).not.toBeInTheDocument();
     expect(landing.queryByText('MEGAPOT · IN DRAW')).not.toBeInTheDocument();
-    const generatePlanetButton = landing.getByRole('button', { name: 'Tap to generate' });
+    const generatePlanetButton = landing.getByRole('button', { name: 'Tap' });
     expect(generatePlanetButton).toBeInTheDocument();
     expect(generatePlanetButton).not.toHaveTextContent('↗');
+    expect(generatePlanetButton).not.toHaveAttribute('aria-label');
+    expect(generatePlanetButton).not.toHaveAttribute('title');
+    expect(generatePlanetButton.closest('.landing-live-generator-art')).toBeTruthy();
     expect(container.querySelector('.landing-megapot-ticket')).toBeInTheDocument();
     expect(container.querySelectorAll('.landing-ticket-ball')).toHaveLength(6);
     expect(container.querySelectorAll('.landing-ticket-ball-bonus')).toHaveLength(1);

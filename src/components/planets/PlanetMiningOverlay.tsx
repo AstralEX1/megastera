@@ -53,10 +53,9 @@ function MetricsContent({ mining, miningAsOf, size }: PlanetMiningMetricsProps &
       <div className={`flex min-w-0 items-center border-r border-[var(--border)] ${cellSpacing}`}>
         <img src={mineralIcon} alt="Minerals" className={`${iconSize} shrink-0 object-contain invert`} />
         <span className="flex min-w-0 items-baseline whitespace-nowrap">
-          <strong className={`truncate font-hud tabular-nums ${valueSize} ${effectiveRateClass}`}>
+          <strong className={`font-hud tabular-nums whitespace-nowrap ${valueSize} ${effectiveRateClass}`}>
             {formatMinerals(BigInt(mining.effectiveMineralsPerDayMicros))}
           </strong>
-          <span className="ml-0.5 shrink-0 text-xs text-[var(--text-secondary)]">/day</span>
         </span>
       </div>
       <div className={`flex min-w-0 items-center ${cellSpacing}`}>
@@ -66,9 +65,8 @@ function MetricsContent({ mining, miningAsOf, size }: PlanetMiningMetricsProps &
             snapshotMicros={mining.earnedMicros}
             effectiveMineralsPerDayMicros={mining.effectiveMineralsPerDayMicros}
             asOf={miningAsOf}
-            className={`truncate font-hud tabular-nums text-[var(--text-primary)] ${valueSize}`}
+            className={`font-hud tabular-nums whitespace-nowrap text-[var(--text-primary)] ${valueSize}`}
           />
-          <span className="ml-1 shrink-0 text-xs text-[var(--text-secondary)]">{' mined'}</span>
         </span>
       </div>
       <section aria-label={boosted ? 'Boosted by same type collection bonus' : 'No same type collection bonus'} className={`flex min-w-0 items-center justify-center border-l border-[var(--border)] ${size === 'compact' ? 'p-2' : 'p-3'}`}>

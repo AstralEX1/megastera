@@ -42,7 +42,7 @@ export function PlanetTicketAction({
   return (
     <div
       data-testid="planet-ticket-action"
-      className={compact ? 'inline-flex w-fit min-h-8 items-center rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5' : 'flex min-h-10 items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2'}
+      className={compact ? 'inline-flex w-fit min-h-8 items-center' : 'flex min-h-10 items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2'}
     >
       <TicketStatusBadge status={status} appearance={compact ? 'compact' : 'default'} />
     </div>

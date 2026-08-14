@@ -67,25 +67,9 @@ export function Landing() {
               delay={72}
               duration={0.8}
             />
-            <a
-              className="landing-hero-powered-by"
-              href="https://megapot.io/ecosystem"
-              target="_blank"
-              rel="noreferrer noopener"
-              aria-label="Powered by Megapot"
-            >
-              <img
-                src="/brand/powered-by-megapot.svg"
-                alt=""
-                width="150"
-                height="34"
-                draggable="false"
-              />
-            </a>
             <div className="landing-hero-actions">
-              <a className="landing-button" href="/play">
+              <a className="landing-button landing-button-primary" href="/play">
                 <LandingSplitText text="Play" className="landing-button-label" />
-                <span aria-hidden="true">↗</span>
               </a>
             </div>
           </div>
@@ -187,7 +171,6 @@ export function Landing() {
             />
             <a className="landing-button landing-button-small" href="/play">
               <LandingSplitText text="Play" className="landing-button-label" />
-              <span aria-hidden="true">↗</span>
             </a>
           </div>
         </section>

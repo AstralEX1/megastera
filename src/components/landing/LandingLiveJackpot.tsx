@@ -49,6 +49,21 @@ export function LandingLiveJackpot() {
               className="landing-live-jackpot-depth"
             />
           </div>
+          <a
+            className="landing-powered-by landing-live-jackpot-powered-by"
+            href="https://megapot.io/ecosystem"
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-label="Powered by Megapot"
+          >
+            <img
+              src="/brand/powered-by-megapot.svg"
+              alt=""
+              width="150"
+              height="34"
+              draggable="false"
+            />
+          </a>
         </div>
         <div className="landing-live-jackpot-footer landing-live-jackpot-drawing-panel" data-testid="landing-drawing-in">
           <div>

@@ -25,9 +25,9 @@ describe('PlanetMiningOverlay', () => {
     expect(screen.getByRole('img', { name: 'Mined' })).toBeInTheDocument();
     expect(screen.getByText('25.2')).toHaveClass('text-[var(--rare)]');
     expect(screen.queryByText('24')).not.toBeInTheDocument();
-    expect(screen.getByText('/day')).toBeInTheDocument();
     expect(screen.getByText('10.1')).toBeInTheDocument();
-    expect(screen.getByText('mined')).toBeInTheDocument();
+    expect(screen.queryByText('/day')).not.toBeInTheDocument();
+    expect(screen.queryByText('mined')).not.toBeInTheDocument();
     expect(screen.getByText('+5%')).toHaveClass('text-[var(--rare)]');
     expect(screen.queryByText('MINERALS / DAY')).not.toBeInTheDocument();
     expect(screen.queryByText('MINED')).not.toBeInTheDocument();

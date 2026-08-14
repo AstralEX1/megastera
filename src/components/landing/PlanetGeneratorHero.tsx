@@ -35,10 +35,10 @@ export function PlanetGeneratorHero() {
     <article className="landing-live-generator" aria-label="Interactive Planet preview">
       <div className="landing-live-generator-art">
         <PlanetGif preview={preview} deferGeneration />
+        <button className="landing-live-generator-button" type="button" onClick={generatePlanet}>
+          <LandingSplitText text="Tap" className="landing-button-label" />
+        </button>
       </div>
-      <button className="landing-live-generator-button" type="button" onClick={generatePlanet}>
-        <LandingSplitText text="Tap to generate" className="landing-button-label" />
-      </button>
     </article>
   );
 }

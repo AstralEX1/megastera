@@ -28,8 +28,11 @@ describe('PlanetGeneratorHero', () => {
     expect(screen.queryByText('PLANET = TICKET')).not.toBeInTheDocument();
     expect(screen.queryByText('MEGAPOT · IN DRAW')).not.toBeInTheDocument();
 
-    const generatePlanetButton = screen.getByRole('button', { name: 'Tap to generate' });
+    const generatePlanetButton = screen.getByRole('button', { name: 'Tap' });
     expect(generatePlanetButton).not.toHaveTextContent('↗');
+    expect(generatePlanetButton).not.toHaveAttribute('aria-label');
+    expect(generatePlanetButton).not.toHaveAttribute('title');
+    expect(generatePlanetButton.closest('.landing-live-generator-art')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Generate another/i })).not.toBeInTheDocument();
 
     fireEvent.click(generatePlanetButton);

@@ -63,7 +63,7 @@ function CollectionSummary({
       {metrics.map((metric, index) => (
         <div key={metric.label} className={`min-w-0 px-4 py-3.5 ${index % 2 === 0 ? 'border-r border-[var(--border)]' : ''} ${index < 2 ? 'border-b border-[var(--border)]' : ''} sm:border-b-0 sm:border-r sm:last:border-r-0`}>
           <dt className="telemetry truncate text-[var(--text-secondary)]">{metric.label}</dt>
-          <dd data-testid={metric.testId} className={`mt-1 truncate font-hud text-xl font-bold tabular-nums tracking-[-0.03em] ${metric.accent ? 'text-[var(--rare)]' : 'text-[var(--text-primary)]'}`}>
+          <dd data-testid={metric.testId} className={`mt-1 whitespace-nowrap font-hud text-xl font-bold tabular-nums tracking-[-0.03em] ${metric.accent ? 'text-[var(--rare)]' : 'text-[var(--text-primary)]'}`}>
             {metric.value}
           </dd>
         </div>
@@ -77,19 +77,11 @@ function BackendPlanetCard({
   mining,
   selected,
   onSelect,
-  ticketStatus,
-  onClaim,
-  isClaimPending,
-  claimError,
 }: {
   planet: BackendPlanet;
   mining?: PlanetMiningSnapshot;
   selected: boolean;
   onSelect: () => void;
-  ticketStatus: TicketStatus;
-  onClaim: () => void;
-  isClaimPending: boolean;
-  claimError?: Error | null;
 }) {
   return (
     <article
@@ -114,21 +106,10 @@ function BackendPlanetCard({
         </div>
         <div className="p-3.5">
           <h2 className="truncate font-hud text-lg font-bold tracking-[-0.03em] text-[var(--text-primary)]">{planet.name}</h2>
-          <div className="mt-3">
-            <PlanetMiningMetrics mining={mining} miningAsOf={mining?.activeSince} />
-          </div>
         </div>
       </button>
-      <div data-testid="planet-status-overlay" className="pointer-events-none absolute right-3 top-3 z-20">
-        <div className="pointer-events-auto">
-          <PlanetTicketAction
-            status={ticketStatus}
-            onClaim={onClaim}
-            isClaimPending={isClaimPending}
-            claimError={claimError}
-            compact
-          />
-        </div>
+      <div className="border-t border-[var(--border)] p-3.5">
+        <PlanetMiningMetrics mining={mining} miningAsOf={mining?.activeSince} />
       </div>
     </article>
   );
@@ -586,7 +567,7 @@ export function Planets({ onNavigate, onViewPlanet, routePlanetId }: PlanetsProp
                 return <PendingPlanetCard key={item.key} row={item.site} status={status} onRetry={() => void retryGeneration(item.site, item.key)} retrying={retryingKey === item.key} onClaim={() => claimTicket(ticketId)} isClaimPending={ticketId === claimingTicketId && claim.isPending} claimError={ticketId === claimingTicketId ? claim.error : null} />;
               }
               const planet = item.site.planet;
-              return <BackendPlanetCard key={item.key} planet={planet} mining={miningByPlanetId.get(planet.planetId)} selected={planet.planetId === selected?.planetId} onSelect={() => selectPlanet(planet.planetId)} ticketStatus={status} onClaim={() => claimTicket(ticketId)} isClaimPending={ticketId === claimingTicketId && claim.isPending} claimError={ticketId === claimingTicketId ? claim.error : null} />;
+              return <BackendPlanetCard key={item.key} planet={planet} mining={miningByPlanetId.get(planet.planetId)} selected={planet.planetId === selected?.planetId} onSelect={() => selectPlanet(planet.planetId)} />;
             })}
           </div>
         </section>

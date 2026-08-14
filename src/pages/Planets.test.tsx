@@ -160,7 +160,7 @@ describe('backend My Planets', () => {
     expect(screen.queryByText(/COLLECTION \/\s*2/)).not.toBeInTheDocument();
   });
 
-  it('keeps card content focused and anchors ticket status at the upper right overlay', () => {
+  it('keeps only the planet type in the image overlay and omits ticket status controls', () => {
     mocks.planets = [generatedRow(backendPlanet)];
 
     render(<Planets onNavigate={vi.fn()} onViewPlanet={vi.fn()} />);
@@ -171,9 +171,10 @@ describe('backend My Planets', () => {
     expect(within(card).queryByText('DRAWING #12')).not.toBeInTheDocument();
     expect(within(card).queryByText('24/day')).not.toBeInTheDocument();
     expect(within(card).queryByText('#456')).not.toBeInTheDocument();
-    const statusOverlay = within(card).getByTestId('planet-status-overlay');
-    expect(statusOverlay).toHaveClass('absolute', 'right-3', 'top-3');
-    expect(statusOverlay).toContainElement(within(card).getByTestId('planet-ticket-action'));
+    expect(within(card).queryByTestId('planet-status-overlay')).not.toBeInTheDocument();
+    expect(within(card).queryByTestId('planet-status-footer')).not.toBeInTheDocument();
+    expect(within(card).queryByTestId('planet-ticket-action')).not.toBeInTheDocument();
+    expect(within(card).getByTestId('planet-mining-metrics')).toBeInTheDocument();
   });
 
   it('places mining metrics and the same-type bonus in the card body instead of the image overlay', () => {
@@ -193,10 +194,13 @@ describe('backend My Planets', () => {
 
     const card = screen.getByTestId('backend-planet-card-planet-1');
     const metrics = within(card).getByTestId('planet-mining-metrics');
-    expect(metrics).toHaveTextContent('25.2/day');
-    expect(metrics).toHaveTextContent('10.1 mined');
+    expect(metrics).toHaveTextContent('25.2');
+    expect(metrics).toHaveTextContent('10.1');
+    expect(within(metrics).queryByText('/day')).not.toBeInTheDocument();
+    expect(within(metrics).queryByText('mined')).not.toBeInTheDocument();
     expect(metrics).toHaveTextContent('+5%');
     expect(within(card).queryByTestId('planet-mining-overlay')).not.toBeInTheDocument();
+    expect(within(card).queryByTestId('planet-ticket-action')).not.toBeInTheDocument();
   });
 
   it('uses rarity glow on the card and detail image without redundant detail headings', () => {
@@ -303,7 +307,7 @@ describe('backend My Planets', () => {
 
     const selectionButton = screen.getByRole('button', { name: 'Select Astraea' });
     const claimButtons = screen.getAllByRole('button', { name: 'Claim $12.50 USDC' });
-    expect(claimButtons).toHaveLength(2);
+    expect(claimButtons).toHaveLength(1);
     expect(selectionButton).not.toContainElement(claimButtons[0]);
 
     fireEvent.click(claimButtons[0]);
