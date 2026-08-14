@@ -4,8 +4,7 @@
 
 Add one derived collection mechanic: owning multiple ready Backend Planets with the
 same `planetType` increases the mining rate of every Planet in that same type group.
-The mechanic must preserve the active backend-only MVP and must not introduce mineral
-spending, mutable mineral balances, authentication, workers, or new on-chain writes.
+
 
 ## Product rules
 
@@ -109,9 +108,7 @@ pnpm --filter @megaplanets/planet-generator golden
 
 ## Out of scope
 
-- mineral balances, spending, upgrades, or claims;
 - Planet ownership transfers or new authentication;
-- Atlas, Champion, age, pair, or seasonal mechanics;
 - new database tables or migrations; and
 - changes to Megapot purchase, receipt verification, ticket provenance, or Planet
   generation.

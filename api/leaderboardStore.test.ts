@@ -23,11 +23,13 @@ describe('calculateLeaderboardRows', () => {
       asOf: new Date('2026-08-11T00:00:00.000Z'),
       planets: [
         {
+          id: 'planet-a',
           ownerAddress: ADDRESS_A,
           baseMineralsPerDay: 24n,
           mintedAt: new Date('2026-08-09T00:00:00.000Z'),
         },
         {
+          id: 'planet-b',
           ownerAddress: ADDRESS_B,
           baseMineralsPerDay: 12n,
           mintedAt: new Date('2026-08-10T00:00:00.000Z'),
@@ -57,6 +59,7 @@ describe('calculateLeaderboardRows', () => {
       asOf: new Date('2026-08-20T00:00:00.000Z'),
       planets: [
         {
+          id: 'future-planet',
           ownerAddress: ADDRESS_A,
           baseMineralsPerDay: 10n,
           mintedAt: new Date('2026-08-20T00:00:00.000Z'),
@@ -66,6 +69,45 @@ describe('calculateLeaderboardRows', () => {
 
     expect(rows).toEqual([]);
   });
+
+  it('applies the same-type bonus to typed lifetime rows at the snapshot boundary', () => {
+    const rows = calculateLeaderboardRows({
+      period: PERIOD,
+      asOf: new Date('2026-08-11T00:00:00.000Z'),
+      planets: [
+        {
+          id: 'planet-a1',
+          ownerAddress: ADDRESS_A,
+          planetType: 'Nebula',
+          baseMineralsPerDay: 100n,
+          mintedAt: new Date('2026-08-08T00:00:00.000Z'),
+        },
+        {
+          id: 'planet-a2',
+          ownerAddress: ADDRESS_A,
+          planetType: 'Nebula',
+          baseMineralsPerDay: 100n,
+          mintedAt: new Date('2026-08-09T00:00:00.000Z'),
+        },
+        {
+          id: 'planet-a3',
+          ownerAddress: ADDRESS_A,
+          planetType: 'Nebula',
+          baseMineralsPerDay: 100n,
+          mintedAt: new Date('2026-08-10T00:00:00.000Z'),
+        },
+      ],
+    });
+
+    expect(rows).toEqual([
+      {
+        rank: 1,
+        walletAddress: ADDRESS_A,
+        scoreMicros: 615_000_000n,
+        effectiveMineralsPerDayMicros: 315_000_000n,
+      },
+    ]);
+  });
 });
 describe('live leaderboard', () => {
   it('scores every ready Backend Planet from generatedAt without a UTC-day cutoff', () => {
@@ -73,7 +115,9 @@ describe('live leaderboard', () => {
       asOf: new Date('2026-08-20T00:00:00.000Z'),
       planets: [
         {
+          id: 'planet-1',
           ownerAddress: ADDRESS_A,
+          planetType: 'Nebula',
           baseMineralsPerDay: 24n,
           generatedAt: new Date('2026-08-19T00:00:00.000Z'),
         },
@@ -86,6 +130,34 @@ describe('live leaderboard', () => {
         walletAddress: ADDRESS_A,
         scoreMicros: 24_000_000n,
         effectiveMineralsPerDayMicros: 24_000_000n,
+      },
+    ]);
+  });
+
+  it('applies the same-type bonus to every Planet while keeping other types unmodified', () => {
+    const rows = calculateLiveLeaderboardRows({
+      asOf: new Date('2026-08-20T00:00:00.000Z'),
+      planets: [
+        { id: 'a1', ownerAddress: ADDRESS_A, planetType: 'Nebula', baseMineralsPerDay: 100n, generatedAt: new Date('2026-08-17T00:00:00.000Z') },
+        { id: 'a2', ownerAddress: ADDRESS_A, planetType: 'Nebula', baseMineralsPerDay: 100n, generatedAt: new Date('2026-08-18T00:00:00.000Z') },
+        { id: 'a3', ownerAddress: ADDRESS_A, planetType: 'Nebula', baseMineralsPerDay: 100n, generatedAt: new Date('2026-08-19T00:00:00.000Z') },
+        { id: 'a4', ownerAddress: ADDRESS_A, planetType: 'Gaia', baseMineralsPerDay: 100n, generatedAt: new Date('2026-08-19T00:00:00.000Z') },
+        { id: 'b1', ownerAddress: ADDRESS_B, planetType: 'Nebula', baseMineralsPerDay: 100n, generatedAt: new Date('2026-08-19T00:00:00.000Z') },
+      ],
+    });
+
+    expect(rows).toEqual([
+      {
+        rank: 1,
+        walletAddress: ADDRESS_A,
+        scoreMicros: 715_000_000n,
+        effectiveMineralsPerDayMicros: 415_000_000n,
+      },
+      {
+        rank: 2,
+        walletAddress: ADDRESS_B,
+        scoreMicros: 100_000_000n,
+        effectiveMineralsPerDayMicros: 100_000_000n,
       },
     ]);
   });

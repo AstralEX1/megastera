@@ -1,5 +1,10 @@
 import type { PrismaClient } from './generated/prisma/client';
-import { calculateLifetimeMinerals, MINERAL_SCALE } from './mining';
+import {
+  calculateCollectionMining,
+  type CollectionMiningPlanet,
+} from './collectionMining';
+
+type BackendMiningPlanetRow = CollectionMiningPlanet;
 
 export async function getBackendPlanetMiningSnapshot(
   prisma: PrismaClient,
@@ -8,20 +13,24 @@ export async function getBackendPlanetMiningSnapshot(
 ) {
   const planet = await prisma.backendPlanet.findFirst({
     where: { id: planetId, status: 'READY' },
-    select: { id: true, ownerAddress: true, baseMineralsPerDay: true, generatedAt: true },
+    select: { id: true, ownerAddress: true, planetType: true, baseMineralsPerDay: true, generatedAt: true },
   });
   if (!planet) return undefined;
-  const earnedMicros = calculateLifetimeMinerals({
-    baseMineralsPerDay: planet.baseMineralsPerDay,
-    mintedAt: planet.generatedAt,
-    asOf: now,
+  const planets = await prisma.backendPlanet.findMany({
+    where: { ownerAddress: planet.ownerAddress, status: 'READY' },
+    select: { id: true, ownerAddress: true, planetType: true, baseMineralsPerDay: true, generatedAt: true },
   });
+  const calculated = calculateCollectionMining({ planets: planets as BackendMiningPlanetRow[], asOf: now }).get(planet.id);
+  if (!calculated) return undefined;
   return {
     planetId: planet.id,
     ownerAddress: planet.ownerAddress,
     baseMineralsPerDay: planet.baseMineralsPerDay.toString(),
-    effectiveMineralsPerDayMicros: (planet.baseMineralsPerDay * MINERAL_SCALE).toString(),
-    earnedMicros: earnedMicros.toString(),
+    planetType: calculated.planetType,
+    sameTypeCount: calculated.sameTypeCount,
+    collectionBonusBps: calculated.collectionBonusBps,
+    effectiveMineralsPerDayMicros: calculated.effectiveMineralsPerDayMicros.toString(),
+    earnedMicros: calculated.earnedMicros.toString(),
     activeSince: planet.generatedAt.toISOString(),
   };
 }
@@ -33,27 +42,27 @@ export async function getBackendWalletMiningSnapshot(
 ) {
   const planets = await prisma.backendPlanet.findMany({
     where: { ownerAddress: ownerAddress.toLowerCase(), status: 'READY' },
-    select: { id: true, baseMineralsPerDay: true, generatedAt: true },
+    select: { id: true, ownerAddress: true, planetType: true, baseMineralsPerDay: true, generatedAt: true },
     orderBy: [{ generatedAt: 'desc' }, { id: 'asc' }],
   });
+  const calculations = calculateCollectionMining({ planets: planets as BackendMiningPlanetRow[], asOf: now });
   let earnedMicros = 0n;
   let effectiveMineralsPerDayMicros = 0n;
-  const snapshots = planets.map((planet) => {
-    const earned = calculateLifetimeMinerals({
-      baseMineralsPerDay: planet.baseMineralsPerDay,
-      mintedAt: planet.generatedAt,
-      asOf: now,
-    });
-    const effective = planet.baseMineralsPerDay * MINERAL_SCALE;
-    earnedMicros += earned;
-    effectiveMineralsPerDayMicros += effective;
-    return {
+  const snapshots = planets.flatMap((planet) => {
+    const calculated = calculations.get(planet.id);
+    if (!calculated) return [];
+    earnedMicros += calculated.earnedMicros;
+    effectiveMineralsPerDayMicros += calculated.effectiveMineralsPerDayMicros;
+    return [{
       planetId: planet.id,
       baseMineralsPerDay: planet.baseMineralsPerDay.toString(),
-      effectiveMineralsPerDayMicros: effective.toString(),
-      earnedMicros: earned.toString(),
+      planetType: calculated.planetType,
+      sameTypeCount: calculated.sameTypeCount,
+      collectionBonusBps: calculated.collectionBonusBps,
+      effectiveMineralsPerDayMicros: calculated.effectiveMineralsPerDayMicros.toString(),
+      earnedMicros: calculated.earnedMicros.toString(),
       activeSince: planet.generatedAt.toISOString(),
-    };
+    }];
   });
   return {
     ownerAddress,

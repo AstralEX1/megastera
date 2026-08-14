@@ -1,4 +1,5 @@
 import type { PrismaClient } from './generated/prisma/client';
+import { calculateCollectionMining, type CollectionMiningPlanet } from './collectionMining';
 import {
   getDistanceToNextRank,
   getLeaderboardPeriod,
@@ -11,14 +12,18 @@ import { calculateLifetimeMinerals, MINERAL_SCALE } from './mining';
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 export type LifetimeLeaderboardPlanet = {
+  id: string;
   ownerAddress: string;
   baseMineralsPerDay: bigint | null;
+  planetType?: string | null;
   mintedAt: Date;
 };
 
 export type LiveLeaderboardPlanet = {
+  id: string;
   ownerAddress: string;
   baseMineralsPerDay: bigint | null;
+  planetType: string;
   generatedAt: Date;
 };
 
@@ -36,6 +41,32 @@ function addToMap(target: Map<string, bigint>, address: string, amount: bigint) 
   target.set(normalizedAddress, (target.get(normalizedAddress) ?? 0n) + amount);
 }
 
+type LeaderboardMiningPlanet = {
+  id: string;
+  ownerAddress: string;
+  baseMineralsPerDay: bigint | null;
+  planetType?: string | null;
+  generatedAt: Date;
+};
+
+function getCollectionMiningResults(
+  planets: readonly LeaderboardMiningPlanet[],
+  asOf: Date,
+) {
+  const typedPlanets: CollectionMiningPlanet[] = planets.flatMap((planet) =>
+    planet.baseMineralsPerDay !== null && typeof planet.planetType === 'string'
+      ? [{
+          id: planet.id,
+          ownerAddress: planet.ownerAddress,
+          planetType: planet.planetType,
+          baseMineralsPerDay: planet.baseMineralsPerDay,
+          generatedAt: planet.generatedAt,
+        }]
+      : [],
+  );
+  return calculateCollectionMining({ planets: typedPlanets, asOf });
+}
+
 /** Calculates a daily snapshot directly from immutable Planet traits. */
 export function calculateLeaderboardRows(input: {
   period?: LeaderboardPeriodBounds;
@@ -46,21 +77,36 @@ export function calculateLeaderboardRows(input: {
   const cutoff = new Date(Math.min(input.asOf.getTime(), period.endsAt.getTime()));
   const scoreByWallet = new Map<string, bigint>();
   const rateByWallet = new Map<string, bigint>();
+  const eligiblePlanets = input.planets.filter(
+    (planet): planet is LifetimeLeaderboardPlanet & { baseMineralsPerDay: bigint } =>
+      planet.baseMineralsPerDay !== null &&
+      planet.ownerAddress.toLowerCase() !== ZERO_ADDRESS &&
+      planet.mintedAt.getTime() < cutoff.getTime(),
+  );
+  const collectionResults = getCollectionMiningResults(
+    eligiblePlanets.map((planet) => ({
+      id: planet.id,
+      ownerAddress: planet.ownerAddress,
+      baseMineralsPerDay: planet.baseMineralsPerDay,
+      planetType: planet.planetType,
+      generatedAt: planet.mintedAt,
+    })),
+    cutoff,
+  );
 
-  for (const planet of input.planets) {
-    if (
-      planet.baseMineralsPerDay === null ||
-      planet.ownerAddress.toLowerCase() === ZERO_ADDRESS ||
-      planet.mintedAt.getTime() >= cutoff.getTime()
-    )
-      continue;
-    const score = calculateLifetimeMinerals({
+  for (const planet of eligiblePlanets) {
+    const collection = planet.planetType ? collectionResults.get(planet.id) : undefined;
+    const score = collection?.earnedMicros ?? calculateLifetimeMinerals({
       baseMineralsPerDay: planet.baseMineralsPerDay,
       mintedAt: planet.mintedAt,
       asOf: cutoff,
     });
     if (score > 0n) addToMap(scoreByWallet, planet.ownerAddress, score);
-    addToMap(rateByWallet, planet.ownerAddress, planet.baseMineralsPerDay * MINERAL_SCALE);
+    addToMap(
+      rateByWallet,
+      planet.ownerAddress,
+      collection?.effectiveMineralsPerDayMicros ?? planet.baseMineralsPerDay * MINERAL_SCALE,
+    );
   }
 
   return rankLeaderboardRows(
@@ -79,22 +125,28 @@ export function calculateLiveLeaderboardRows(input: {
 }): RankedLeaderboardRow[] {
   const scoreByWallet = new Map<string, bigint>();
   const rateByWallet = new Map<string, bigint>();
+  const eligiblePlanets = input.planets.filter(
+    (planet): planet is LiveLeaderboardPlanet & { baseMineralsPerDay: bigint } =>
+      planet.baseMineralsPerDay !== null &&
+      planet.baseMineralsPerDay > 0n &&
+      planet.ownerAddress.toLowerCase() !== ZERO_ADDRESS &&
+      planet.generatedAt.getTime() <= input.asOf.getTime(),
+  );
+  const collectionResults = getCollectionMiningResults(eligiblePlanets, input.asOf);
 
-  for (const planet of input.planets) {
-    if (
-      planet.baseMineralsPerDay === null ||
-      planet.baseMineralsPerDay <= 0n ||
-      planet.ownerAddress.toLowerCase() === ZERO_ADDRESS ||
-      planet.generatedAt.getTime() > input.asOf.getTime()
-    )
-      continue;
-    const score = calculateLifetimeMinerals({
+  for (const planet of eligiblePlanets) {
+    const collection = collectionResults.get(planet.id);
+    const score = collection?.earnedMicros ?? calculateLifetimeMinerals({
       baseMineralsPerDay: planet.baseMineralsPerDay,
       mintedAt: planet.generatedAt,
       asOf: input.asOf,
     });
     if (score > 0n) addToMap(scoreByWallet, planet.ownerAddress, score);
-    addToMap(rateByWallet, planet.ownerAddress, planet.baseMineralsPerDay * MINERAL_SCALE);
+    addToMap(
+      rateByWallet,
+      planet.ownerAddress,
+      collection?.effectiveMineralsPerDayMicros ?? planet.baseMineralsPerDay * MINERAL_SCALE,
+    );
   }
 
   return rankLeaderboardRows(
@@ -193,7 +245,7 @@ async function getLiveLeaderboardSnapshot(
   return getLiveLeaderboardCache(prisma).get(now, async (asOf) => {
     const planets = await prisma.backendPlanet.findMany({
       where: { status: 'READY', baseMineralsPerDay: { gt: 0n } },
-      select: { ownerAddress: true, baseMineralsPerDay: true, generatedAt: true },
+      select: { id: true, ownerAddress: true, planetType: true, baseMineralsPerDay: true, generatedAt: true },
     });
     return {
       asOf,
@@ -236,7 +288,7 @@ export async function finalizeLeaderboardPeriod(
     const planets = backendPlanet
       ? await backendPlanet.findMany({
           where: { status: 'READY', baseMineralsPerDay: { gt: 0n }, generatedAt: { lt: period.endsAt } },
-          select: { ownerAddress: true, baseMineralsPerDay: true, generatedAt: true },
+          select: { id: true, ownerAddress: true, planetType: true, baseMineralsPerDay: true, generatedAt: true },
         })
       : await transaction.planet.findMany({
           where: {
@@ -244,14 +296,16 @@ export async function finalizeLeaderboardPeriod(
             baseMineralsPerDay: { not: null },
             mintedAt: { lt: period.endsAt },
           },
-          select: { ownerAddress: true, baseMineralsPerDay: true, mintedAt: true },
+          select: { id: true, ownerAddress: true, planetType: true, baseMineralsPerDay: true, mintedAt: true },
         });
     const rows = calculateLeaderboardRows({
       period,
       asOf: period.endsAt,
       planets: planets.map((planet) => ({
+        id: (planet as { id: string }).id,
         ownerAddress: (planet as { ownerAddress: string }).ownerAddress,
         baseMineralsPerDay: (planet as { baseMineralsPerDay: bigint | null }).baseMineralsPerDay,
+        planetType: (planet as { planetType?: string | null }).planetType,
         mintedAt: (planet as { generatedAt?: Date; mintedAt?: Date }).generatedAt ?? (planet as { mintedAt: Date }).mintedAt,
       })),
     });

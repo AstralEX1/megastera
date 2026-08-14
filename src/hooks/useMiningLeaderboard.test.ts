@@ -23,6 +23,35 @@ describe('backend mining fetchers', () => {
     expect(fetchMock).toHaveBeenCalledWith(`/api/wallets/${ADDRESS}/mining`);
   });
 
+  it('normalizes legacy mining rows so missing collection fields cannot render NaN', async () => {
+    const payload = {
+      mining: {
+        ownerAddress: ADDRESS,
+        asOf: '2026-08-12T12:00:00.000Z',
+        ownedPlanetCount: 1,
+        earnedMicros: '2',
+        effectiveMineralsPerDayMicros: '3',
+        planets: [{
+          tokenId: '7',
+          baseMineralsPerDay: '24',
+          effectiveMineralsPerDayMicros: '25200000',
+          earnedMicros: '10100000',
+          activeSince: '2026-08-10T00:00:00.000Z',
+        }],
+      },
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 })));
+
+    await expect(fetchWalletMining(ADDRESS)).resolves.toMatchObject({
+      planets: [{
+        planetId: '7',
+        planetType: 'Unknown',
+        sameTypeCount: 1,
+        collectionBonusBps: 0,
+      }],
+    });
+  });
+
   it('surfaces an explicit error when the leaderboard backend fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 503 })));
 
