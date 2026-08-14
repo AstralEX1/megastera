@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { Button } from '@/components/common/Button';
 import { FadeArc } from '@/components/common/FadeArc';
@@ -5,15 +6,17 @@ import { LeaderboardTable } from '@/components/leaderboard/LeaderboardTable';
 import { WalletRankCard } from '@/components/leaderboard/WalletRankCard';
 import { useCurrentLeaderboard, useWalletLeaderboardPosition } from '@/hooks/useLeaderboard';
 
-function asOfLabel(value: string | undefined) {
-  if (!value) return 'waiting for first refresh';
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: 'UTC',
-  }).format(new Date(value));
+function relativeTimeLabel(timestamp: number | undefined, now: number) {
+  if (!timestamp || !Number.isFinite(timestamp)) return 'waiting for first refresh';
+
+  const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
+  if (seconds < 60) return `${seconds} second${seconds === 1 ? '' : 's'} ago`;
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+
+  const hours = Math.floor(minutes / 60);
+  return `${hours} hour${hours === 1 ? '' : 's'} ago`;
 }
 
 export function Leaderboard() {
@@ -21,6 +24,33 @@ export function Leaderboard() {
   const current = useCurrentLeaderboard();
   const wallet = useWalletLeaderboardPosition(address);
   const data = current.data;
+  const [now, setNow] = useState(() => Date.now());
+  const [manualRefreshing, setManualRefreshing] = useState(false);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const handleRefresh = async () => {
+    const startedAt = Date.now();
+    setManualRefreshing(true);
+
+    try {
+      await Promise.all([
+        current.refetch(),
+        address ? wallet.refetch() : Promise.resolve(),
+      ]);
+
+      const remaining = 500 - (Date.now() - startedAt);
+      if (remaining > 0) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
+      }
+    } finally {
+      setManualRefreshing(false);
+      setNow(Date.now());
+    }
+  };
 
   if (current.isLoading) {
     return (
@@ -34,9 +64,12 @@ export function Leaderboard() {
     <section role="alert" className="card-pad mx-auto max-w-2xl space-y-4 text-center">
       <h1 className="font-hud text-2xl font-bold">Leaderboard unavailable</h1>
       <p className="text-sm text-[var(--text-secondary)]">The live mining backend could not return current standings.</p>
-      <Button variant="secondary" onClick={() => void current.refetch()}>Retry</Button>
+      <Button variant="secondary" onClick={() => void handleRefresh()}>Retry</Button>
     </section>
   );
+
+  const refreshing = current.isFetching || manualRefreshing;
+  const lastRefreshAt = current.dataUpdatedAt || (data.asOf ? Date.parse(data.asOf) : undefined);
 
   return (
     <div className="space-y-5">
@@ -46,15 +79,15 @@ export function Leaderboard() {
           <p className="mt-2 max-w-xl text-sm text-[var(--text-secondary)]">Current lifetime mining from every backend Planet. Standings refresh automatically every minute.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <span className="font-mono text-xs text-[var(--text-secondary)]">Last refresh: {asOfLabel(data.asOf)} UTC</span>
+          <span className="font-mono text-xs text-[var(--text-secondary)]">Last refresh: {relativeTimeLabel(lastRefreshAt, now)}</span>
           <Button
             variant="secondary"
-            disabled={current.isFetching}
-            aria-busy={current.isFetching}
-            aria-label={current.isFetching ? 'Refreshing leaderboard' : 'Refresh'}
-            onClick={() => void current.refetch()}
+            disabled={refreshing}
+            aria-busy={refreshing}
+            aria-label={refreshing ? 'Refreshing leaderboard' : 'Refresh'}
+            onClick={() => void handleRefresh()}
           >
-            {current.isFetching ? (
+            {refreshing ? (
               <span className="inline-flex items-center gap-2">
                 <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
                 Refreshing…

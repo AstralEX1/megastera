@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const refreshMocks = vi.hoisted(() => ({ current: vi.fn(), wallet: vi.fn() }));
 
 const state = vi.hoisted(() => ({
   account: { address: '0x2222222222222222222222222222222222222222' as `0x${string}` | undefined },
@@ -24,8 +27,8 @@ const current = {
 
 vi.mock('wagmi', () => ({ useAccount: () => state.account }));
 vi.mock('@/hooks/useLeaderboard', () => ({
-  useCurrentLeaderboard: () => ({ data: current, isFetching: state.isFetching, isLoading: state.isLoading, error: state.error, refetch: vi.fn() }),
-  useWalletLeaderboardPosition: () => ({ data: { period: current.period, asOf: current.asOf, row: current.rows[1], distanceToNextRankMicros: '6000000' }, isLoading: false }),
+  useCurrentLeaderboard: () => ({ data: current, isFetching: state.isFetching, isLoading: state.isLoading, error: state.error, refetch: refreshMocks.current }),
+  useWalletLeaderboardPosition: () => ({ data: { period: current.period, asOf: current.asOf, row: current.rows[1], distanceToNextRankMicros: '6000000' }, isLoading: false, refetch: refreshMocks.wallet }),
 }));
 
 vi.stubGlobal('IntersectionObserver', class {
@@ -42,6 +45,8 @@ describe('Leaderboard', () => {
     state.isFetching = false;
     state.isLoading = false;
     state.account = { address: '0x2222222222222222222222222222222222222222' };
+    refreshMocks.current.mockReset().mockResolvedValue({ error: null });
+    refreshMocks.wallet.mockReset().mockResolvedValue({ error: null });
   });
   afterEach(cleanup);
 
@@ -61,7 +66,7 @@ describe('Leaderboard', () => {
     expect(screen.queryByText('LIVE MINERAL SCORE')).not.toBeInTheDocument();
     expect(screen.queryByText('LIVE · GENERATED AT + BASE RATE')).not.toBeInTheDocument();
     expect(screen.queryByText(/As of Aug 12/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Last refresh: Aug 12/)).toBeInTheDocument();
+    expect(screen.getByText(/Last refresh: .* ago/)).toBeInTheDocument();
     expect(container.querySelectorAll('.count-up-text')).toHaveLength(10);
     expect(screen.getByText('Your rank')).toBeInTheDocument();
     expect(screen.getByText(/to next rank/)).toBeInTheDocument();
@@ -87,6 +92,24 @@ describe('Leaderboard', () => {
     expect(refreshButton).toBeDisabled();
     expect(refreshButton).toHaveAttribute('aria-busy', 'true');
     expect(screen.getByText('Refreshing…')).toBeInTheDocument();
+  });
+
+  it('refreshes both standings and wallet data when Refresh is clicked', async () => {
+    const user = userEvent.setup();
+    let resolveCurrent: ((value: { error: null }) => void) | undefined;
+    refreshMocks.current.mockImplementation(() => new Promise((resolve) => {
+      resolveCurrent = resolve;
+    }));
+
+    render(<Leaderboard />);
+    await user.click(screen.getByRole('button', { name: 'Refresh' }));
+
+    expect(await screen.findByRole('button', { name: 'Refreshing leaderboard' })).toBeDisabled();
+    expect(refreshMocks.current).toHaveBeenCalledTimes(1);
+    expect(refreshMocks.wallet).toHaveBeenCalledTimes(1);
+
+    resolveCurrent?.({ error: null });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled());
   });
 
   it('offers a retryable backend error instead of the placeholder page', () => {
