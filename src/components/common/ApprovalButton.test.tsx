@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { maxUint256 } from 'viem';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApprovalButton } from './ApprovalButton';
 
@@ -72,7 +71,7 @@ describe('ApprovalButton', () => {
     expect(screen.queryByRole('button', { name: /approve/i })).not.toBeInTheDocument();
   });
 
-  it('approves the route-specific spender once when allowance is insufficient', async () => {
+  it('approves the route-specific spender for the exact purchase amount', async () => {
     const user = userEvent.setup();
     render(
       <ApprovalButton spender={spender} amount={1_000_000n}>
@@ -84,8 +83,29 @@ describe('ApprovalButton', () => {
 
     expect(state.writeContract).toHaveBeenCalledWith(expect.objectContaining({
       functionName: 'approve',
-      args: [spender, maxUint256],
+      args: [spender, 1_000_000n],
     }));
+  });
+
+  it('does not offer approval again after the refreshed allowance covers the amount', async () => {
+    state.allowance = 0n;
+    state.txHash = `0x${'ef'.repeat(32)}`;
+    state.receipt = { status: 'success' };
+
+    const renderApproval = () => (
+      <ApprovalButton spender={spender} amount={1_000_000n}>
+        <button type="button">Explore</button>
+      </ApprovalButton>
+    );
+    const { rerender } = render(renderApproval());
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Approve USDC' })).toBeInTheDocument());
+    expect(state.refetch).toHaveBeenCalledOnce();
+    state.allowance = 1_000_000n;
+    rerender(renderApproval());
+
+    expect(screen.getByRole('button', { name: 'Explore' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve USDC' })).not.toBeInTheDocument();
   });
 
   it('does not treat a reverted approval receipt as successful', () => {

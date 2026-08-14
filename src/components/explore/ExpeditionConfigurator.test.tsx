@@ -5,8 +5,17 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ExpeditionConfigurator } from './ExpeditionConfigurator';
 
+const openConnectModal = vi.hoisted(() => vi.fn());
+
+vi.mock('@rainbow-me/rainbowkit', () => ({
+  useConnectModal: () => ({ openConnectModal }),
+}));
+
 describe('ExpeditionConfigurator', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    openConnectModal.mockReset();
+  });
 
   const props = {
     quantity: 3,
@@ -15,6 +24,7 @@ describe('ExpeditionConfigurator', () => {
     manuallyEditedTickets: [],
     automaticQuickPick: true,
     disabled: false,
+    isConnected: true,
     onQuantityChange: vi.fn(),
     onAutomaticQuickPickChange: vi.fn(),
     onTicketsChange: vi.fn(),
@@ -39,6 +49,18 @@ describe('ExpeditionConfigurator', () => {
     });
   });
 
+  it('opens the wallet modal instead of offering Explore when disconnected', async () => {
+    const user = userEvent.setup();
+    render(<ExpeditionConfigurator {...props} isConnected={false} />);
+
+    const connect = screen.getByRole('button', { name: 'Connect wallet' });
+    expect(connect).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /^Explore 3/ })).not.toBeInTheDocument();
+
+    await user.click(connect);
+    expect(openConnectModal).toHaveBeenCalledOnce();
+  });
+
   it('shows a single selected planet in the static depth stack', () => {
     render(
       <ExpeditionConfigurator
@@ -48,6 +70,7 @@ describe('ExpeditionConfigurator', () => {
         manuallyEditedTickets={[]}
         automaticQuickPick
         disabled={false}
+        isConnected
         onQuantityChange={vi.fn()}
         onAutomaticQuickPickChange={vi.fn()}
         onTicketsChange={vi.fn()}
@@ -107,6 +130,7 @@ describe('ExpeditionConfigurator', () => {
         manuallyEditedTickets={[]}
         automaticQuickPick
         disabled={false}
+        isConnected
         onQuantityChange={vi.fn()}
         onAutomaticQuickPickChange={vi.fn()}
         onTicketsChange={vi.fn()}

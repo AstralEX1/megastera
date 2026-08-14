@@ -7,8 +7,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   buy: vi.fn(),
   generate: vi.fn(),
+  openConnectModal: vi.fn(),
   account: { address: '0x0000000000000000000000000000000000000001', isConnected: true },
   directTickets: [] as Array<Record<string, unknown>>,
+}));
+
+vi.mock('@rainbow-me/rainbowkit', () => ({
+  useConnectModal: () => ({ openConnectModal: mocks.openConnectModal }),
 }));
 
 vi.mock('wagmi', () => ({
@@ -94,16 +99,23 @@ describe('Play backend generation flow', () => {
     cleanup();
     mocks.buy.mockReset();
     mocks.generate.mockReset();
+    mocks.openConnectModal.mockReset();
     mocks.directTickets = [];
     mocks.account.isConnected = true;
   });
 
-  it('does not render a duplicate wallet notice inside checkout', () => {
+  it('offers wallet connection instead of Explore when disconnected', async () => {
     mocks.account.isConnected = false;
+    const user = userEvent.setup();
 
     render(<Play />);
 
+    expect(screen.getByRole('button', { name: 'Connect wallet' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Explore 3/ })).not.toBeInTheDocument();
     expect(screen.queryByText('Connect your wallet to buy tickets.')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Connect wallet' }));
+    expect(mocks.openConnectModal).toHaveBeenCalledOnce();
   });
 
   it('starts Megapot purchase from Explore', async () => {

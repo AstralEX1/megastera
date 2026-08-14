@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { UsdcAmount } from '@/components/common/UsdcAmount';
 
 export function ExploreButton({
@@ -7,13 +8,30 @@ export function ExploreButton({
   disabled,
   onClick,
   label,
+  connectWallet = false,
 }: {
   quantity: number;
   total: bigint;
   disabled: boolean;
   onClick: () => void;
   label?: ReactNode;
+  connectWallet?: boolean;
 }) {
+  const { openConnectModal } = useConnectModal();
+
+  if (connectWallet) {
+    return (
+      <button
+        type="button"
+        onClick={() => openConnectModal?.()}
+        disabled={openConnectModal === undefined}
+        className="min-h-14 w-full rounded-[14px] bg-[var(--primary)] px-5 font-hud text-sm font-bold uppercase tracking-[0.02em] text-[var(--primary-foreground)] transition-[scale,background-color] duration-150 ease-out active:not-disabled:scale-[0.96] hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:bg-[var(--text-disabled)] disabled:text-[var(--surface)]"
+      >
+        Connect wallet
+      </button>
+    );
+  }
+
   return (
     <button
       type="button"

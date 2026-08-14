@@ -43,9 +43,9 @@ export function Play() {
   const direct = useBuyTickets();
   const validStaticTickets = bounds !== null && staticTickets.every((ticket) => isValidTicket(ticket, bounds));
   const manualSelectionComplete = automaticQuickPick || staticTickets.length === count;
-  const directReady = !isBulk && bounds !== null && validStaticTickets && manualSelectionComplete && direct.isReady;
+  const directReady = isConnected && !isBulk && bounds !== null && validStaticTickets && manualSelectionComplete && direct.isReady;
   const meetsBulkMinimum = bulk.minimumTicketCount !== undefined && BigInt(count) >= bulk.minimumTicketCount;
-  const bulkReady = isBulk && meetsBulkMinimum && !bulk.hasActiveOrder && bulk.create.isReady;
+  const bulkReady = isConnected && isBulk && meetsBulkMinimum && !bulk.hasActiveOrder && bulk.create.isReady;
   const total = state ? totalCost({ ticketPriceUsdcRaw: state.ticketPrice, count }) : 0n;
   const purchase = isBulk ? bulk.create : direct;
   const approvalSpender = isBulk ? BATCH_PURCHASE_FACILITATOR_ADDRESS : JACKPOT_ADDRESS;
@@ -138,6 +138,7 @@ export function Play() {
       manuallyEditedTickets={staticTickets}
       automaticQuickPick={automaticQuickPick}
       disabled={flowActive ? true : checkoutDisabled}
+      isConnected={isConnected}
       exploreLabel={flowActive ? 'Generating planets…' : undefined}
       approvalSpender={approvalSpender}
       approvalAmount={approvalAmount}

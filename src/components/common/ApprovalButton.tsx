@@ -5,7 +5,7 @@
  *             works across Jackpot / BatchPurchaseFacilitator /
  *             JackpotAutoSubscription / JackpotLPManager. The gate compares
  *             allowance with the exact next purchase, while approval uses
- *             `maxUint256` for the documented "approve once" UX.
+ *             that exact amount rather than an unlimited allowance.
  *
  *             Children-passthrough pattern. Wrap the downstream submit
  *             button inside `<ApprovalButton>`; when allowance is
@@ -29,7 +29,7 @@
  */
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { erc20Abi, maxUint256 } from 'viem';
+import { erc20Abi } from 'viem';
 import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
 import { USDC_ADDRESS } from '@/config/contracts';
 import { useUsdcAllowance } from '@/hooks/useUsdcAllowance';
@@ -119,7 +119,7 @@ export function ApprovalButton({
       address: USDC_ADDRESS,
       abi: erc20Abi,
       functionName: 'approve',
-      args: [spender, maxUint256],
+      args: [spender, amount],
     });
 
   const busy = isPending || isLoading || isRefreshingAllowance;

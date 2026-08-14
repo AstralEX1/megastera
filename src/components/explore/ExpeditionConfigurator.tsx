@@ -24,6 +24,7 @@ export function ExpeditionConfigurator({
   manuallyEditedTickets,
   automaticQuickPick,
   disabled,
+  isConnected,
   exploreLabel,
   approvalSpender,
   approvalAmount,
@@ -42,6 +43,7 @@ export function ExpeditionConfigurator({
   manuallyEditedTickets: readonly CustomTicket[];
   automaticQuickPick: boolean;
   disabled: boolean;
+  isConnected: boolean;
   exploreLabel?: ReactNode;
   approvalSpender?: `0x${string}`;
   approvalAmount?: bigint;
@@ -122,6 +124,7 @@ export function ExpeditionConfigurator({
                       total={total}
                       disabled={checkoutDisabled}
                       label={exploreButtonLabel}
+                      connectWallet={!isConnected}
                       onClick={onExplore}
                     />
                   </ApprovalButton>
@@ -131,6 +134,7 @@ export function ExpeditionConfigurator({
                     total={total}
                     disabled={checkoutDisabled}
                     label={exploreButtonLabel}
+                    connectWallet={!isConnected}
                     onClick={onExplore}
                   />
                 )}
