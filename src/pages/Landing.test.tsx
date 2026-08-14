@@ -20,12 +20,21 @@ describe('Landing', () => {
   it('presents the Megastera message without the app wallet shell', () => {
     const { container } = render(<Landing />);
 
-    expect(screen.getByRole('heading', { name: /Explore Planets\.\s*Win prizes\./ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Explore\.\s*Mine\.\s*Win\./ })).toBeInTheDocument();
     expect(screen.getByText('Every ticket becomes a Planet and enters the draw.')).toBeInTheDocument();
-    expect(screen.getByText('powered by Megapot')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Powered by Megapot' })).toHaveAttribute('href', 'https://megapot.io/ecosystem');
     expect(container.textContent).not.toContain('A planet-first cosmic lottery game');
     expect(screen.queryByText(/connect wallet/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/MegaPlanets/i)).not.toBeInTheDocument();
+  });
+
+  it('uses the same text-only wordmark in the header and footer', () => {
+    const { container } = render(<Landing />);
+    const wordmarks = [...container.querySelectorAll('.landing-wordmark-name')];
+
+    expect(wordmarks).toHaveLength(2);
+    expect(wordmarks.every((wordmark) => wordmark.textContent === 'MEGASTERA')).toBe(true);
+    expect(container.querySelectorAll('.landing-wordmark-mark')).toHaveLength(0);
   });
 
   it('sends every Play CTA to the play experience', () => {
@@ -35,7 +44,11 @@ describe('Landing', () => {
     expect(ctas.length).toBeGreaterThanOrEqual(2);
     expect(ctas.every((cta) => cta.getAttribute('href') === '/play')).toBe(true);
     expect(screen.queryByText('Mint Planet')).not.toBeInTheDocument();
-    expect([...container.querySelectorAll('img')].every((image) => image.closest('.landing-planet-card'))).toBe(true);
+    expect(
+      [...container.querySelectorAll('img')]
+        .filter((image) => image.getAttribute('src')?.includes('/artifacts/'))
+        .every((image) => image.closest('.landing-planet-card')),
+    ).toBe(true);
   });
 
   it('explains the two linked mechanics in one compact block', () => {
@@ -94,7 +107,6 @@ describe('Landing', () => {
       '.landing-header .landing-wordmark .split-parent',
       '.landing-header .landing-button .split-parent',
       '.landing-hero-subtitle.split-parent',
-      '.landing-hero-powered-by.split-parent',
       '.landing-hero-actions .landing-button .split-parent',
       '.landing-live-jackpot-header .landing-kicker.split-parent',
       '.landing-live-jackpot-status.split-parent',

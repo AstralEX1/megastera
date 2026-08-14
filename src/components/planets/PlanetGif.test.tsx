@@ -36,6 +36,22 @@ describe('PlanetGif', () => {
     expect(screen.getByText('Static planet fallback')).toBeInTheDocument();
   });
 
+  it('marks the static preview as loading while GIF encoding is in flight', () => {
+    class FakeWorker {
+      onmessage: ((event: MessageEvent<{ requestId: string; gif: ArrayBuffer }>) => void) | null = null;
+      onerror: ((event: ErrorEvent) => void) | null = null;
+
+      postMessage() {}
+      terminate() {}
+    }
+
+    vi.stubGlobal('Worker', FakeWorker);
+    const { container } = render(<PlanetGif preview={preview} />);
+
+    expect(screen.getByText('Static planet fallback')).toBeInTheDocument();
+    expect(container.querySelector('.planet-gif-loading')).toBeInTheDocument();
+  });
+
   it('replaces the fallback with the generated animated GIF', async () => {
     class FakeWorker {
       onmessage: ((event: MessageEvent<{ requestId: string; gif: ArrayBuffer }>) => void) | null = null;
@@ -84,5 +100,43 @@ describe('PlanetGif', () => {
     });
     expect(workerCount).toBe(1);
     expect(screen.getByText('Static planet fallback')).toBeInTheDocument();
+  });
+
+  it('starts subsequent GIF generation immediately after the preview changes', () => {
+    vi.useFakeTimers();
+    let workerCount = 0;
+
+    class FakeWorker {
+      onmessage: ((event: MessageEvent<{ requestId: string; gif: ArrayBuffer }>) => void) | null = null;
+      onerror: ((event: ErrorEvent) => void) | null = null;
+
+      constructor() {
+        workerCount += 1;
+      }
+
+      postMessage() {}
+      terminate() {}
+    }
+
+    vi.stubGlobal('Worker', FakeWorker);
+    const { rerender } = render(<PlanetGif preview={preview} deferGeneration />);
+
+    act(() => {
+      vi.advanceTimersByTime(450);
+    });
+    expect(workerCount).toBe(1);
+
+    const nextPreview = {
+      ...preview,
+      descriptor: {
+        ...preview.descriptor,
+        seed: '0xnext-seed',
+        input: { ...preview.descriptor.input, ticketId: 25n },
+      },
+    } as unknown as PlanetPreview;
+
+    rerender(<PlanetGif preview={nextPreview} deferGeneration />);
+
+    expect(workerCount).toBe(2);
   });
 });

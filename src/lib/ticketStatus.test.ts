@@ -22,6 +22,10 @@ describe('deriveTicketStatus', () => {
     expect(deriveTicketStatus({ ...ticket, phase: 'settling' })).toEqual({ kind: 'drawing' });
   });
 
+  it('does not expose unavailable while the live drawing state is still loading', () => {
+    expect(deriveTicketStatus({ ...ticket, currentDrawingId: undefined, phase: 'open', drawingStateLoading: true })).toEqual({ kind: 'checking' });
+  });
+
   it('maps settled Data API rows to claimable, claimed, or drawn', () => {
     const settled = {
       matched_normals: 2,

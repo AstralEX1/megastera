@@ -1,5 +1,5 @@
 import { serializePlanetInput, type PlanetPreview } from '@megaplanets/planet-generator';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PlanetThumbnail } from './PlanetThumbnail';
 
 type GifState =
@@ -16,9 +16,12 @@ export function PlanetGif({
 }) {
   const [gif, setGif] = useState<GifState>({ status: 'loading', url: null });
   const [generationStarted, setGenerationStarted] = useState(!deferGeneration);
+  const initialRender = useRef(true);
 
   useEffect(() => {
     const requestId = `${preview.descriptor.seed}:${preview.descriptor.input.ticketId.toString()}`;
+    const shouldDefer = deferGeneration && initialRender.current;
+    initialRender.current = false;
     let worker: Worker | null = null;
     let objectUrl: string | null = null;
     let active = true;
@@ -49,8 +52,8 @@ export function PlanetGif({
       worker.postMessage({ requestId, input: serializePlanetInput(preview.descriptor.input) });
     };
 
-    const timer = deferGeneration ? window.setTimeout(startGeneration, 450) : null;
-    if (!deferGeneration) startGeneration();
+    const timer = shouldDefer ? window.setTimeout(startGeneration, 450) : null;
+    if (!shouldDefer) startGeneration();
 
     return () => {
       active = false;
@@ -63,7 +66,7 @@ export function PlanetGif({
   if (deferGeneration && !generationStarted) {
     return (
       <div
-        className="relative aspect-square w-full bg-[#050610]"
+        className="relative aspect-square w-full bg-[#050610] planet-gif-loading planet-gif-loading--deferred"
         role="img"
         aria-label={`Preparing animated planet ${preview.descriptor.traits.name}`}
       />
@@ -82,7 +85,7 @@ export function PlanetGif({
   }
 
   return (
-    <div className="relative">
+    <div className={`relative ${gif.status === 'loading' ? 'planet-gif-loading' : 'planet-gif-error'}`}>
       <PlanetThumbnail descriptor={preview.visual} />
       {gif.status === 'loading' ? <span className="sr-only">Encoding animated planet</span> : null}
     </div>

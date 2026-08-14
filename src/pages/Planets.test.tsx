@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -8,7 +8,29 @@ const mocks = vi.hoisted(() => ({
   planets: [] as unknown[] | undefined,
   planetsLoading: false,
   walletTickets: [] as unknown[],
-  jackpot: { drawingId: 12n, phase: 'open' as const, state: { drawingTime: 4_102_444_800n } },
+  mining: {
+    ownerAddress: '0x0000000000000000000000000000000000000001',
+    asOf: '2026-08-13T12:00:00.000Z',
+    ownedPlanetCount: 0,
+    earnedMicros: '123123000000',
+    effectiveMineralsPerDayMicros: '437000000',
+    planets: [] as Array<{
+      planetId: string;
+      planetType: string;
+      sameTypeCount: number;
+      collectionBonusBps: number;
+      baseMineralsPerDay: string;
+      effectiveMineralsPerDayMicros: string;
+      earnedMicros: string;
+      activeSince: string;
+    }>,
+  },
+  miningRefetch: vi.fn(),
+  planetsRefetch: vi.fn(),
+  ticketRefetch: vi.fn(),
+  roundRefetch: vi.fn(),
+  round: undefined as unknown,
+  jackpot: { drawingId: 12n, phase: 'open' as const, state: { drawingTime: 4_102_444_800n }, isLoading: false, refetch: vi.fn() },
   claim: {
     claim: vi.fn(),
     txHash: undefined,
@@ -23,9 +45,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('wagmi', () => ({ useAccount: () => mocks.account }));
 vi.mock('@/hooks/useBackendPlanets', () => ({
-  useBackendPlanets: () => ({ data: mocks.planets, isLoading: mocks.planetsLoading, isError: false, refetch: vi.fn() }),
+  useBackendPlanets: () => ({ data: mocks.planets, isLoading: mocks.planetsLoading, isFetching: false, isError: false, refetch: mocks.planetsRefetch }),
 }));
-vi.mock('@/hooks/useWalletMining', () => ({ useWalletMining: () => ({ data: { planets: [] } }) }));
+vi.mock('@/hooks/useWalletMining', () => ({ useWalletMining: () => ({ data: mocks.mining, isFetching: false, refetch: mocks.miningRefetch }) }));
+vi.mock('@/hooks/useRound', () => ({ useRound: () => ({ data: mocks.round, isFetching: false, refetch: mocks.roundRefetch }) }));
 vi.mock('@/hooks/useJackpotState', () => ({ useJackpotState: () => mocks.jackpot }));
 vi.mock('@/hooks/useWalletTickets', () => ({
   useWalletTickets: () => ({
@@ -37,7 +60,8 @@ vi.mock('@/hooks/useWalletTickets', () => ({
     isFetchingNextPage: false,
     isLoading: false,
     error: undefined,
-    refetch: vi.fn(),
+    refetch: mocks.ticketRefetch,
+    isFetching: false,
   }),
 }));
 vi.mock('@/hooks/useClaimWinnings', () => ({ useClaimWinnings: () => mocks.claim }));
@@ -81,6 +105,13 @@ describe('backend My Planets', () => {
     mocks.planets = [];
     mocks.planetsLoading = false;
     mocks.walletTickets = [];
+    mocks.mining.planets = [];
+    mocks.round = undefined;
+    mocks.planetsRefetch.mockReset();
+    mocks.ticketRefetch.mockReset();
+    mocks.miningRefetch.mockReset();
+    mocks.roundRefetch.mockReset();
+    mocks.jackpot.refetch.mockReset();
     mocks.claim.claim.mockReset();
     window.localStorage.clear();
   });
@@ -109,6 +140,126 @@ describe('backend My Planets', () => {
     expect(screen.getByAltText('Astraea animated GIF')).toHaveAttribute('src', '/api/planets/planet-1/gif');
     expect(screen.getAllByText('Nebula').length).toBeGreaterThan(0);
     expect(screen.queryByText(/Mint|Reveal|NFT BaseScan/)).not.toBeInTheDocument();
+  });
+
+  it('shows collection counts and mining totals in the requested label-above-value order', () => {
+    mocks.planets = [generatedRow(backendPlanet), generatedRow(secondBackendPlanet)];
+
+    render(<Planets onNavigate={vi.fn()} onViewPlanet={vi.fn()} />);
+
+    const summary = screen.getByTestId('collection-summary');
+    expect(summary).toHaveTextContent('Planets');
+    expect(summary).toHaveTextContent('Tickets');
+    expect(summary).toHaveTextContent('Mining Rate');
+    expect(summary).toHaveTextContent('Mined');
+    expect(within(summary).getByTestId('summary-planets')).toHaveTextContent('2');
+    expect(within(summary).getByTestId('summary-tickets')).toHaveTextContent('2');
+    expect(within(summary).getByTestId('summary-rate')).toHaveTextContent('437/day');
+    expect(within(summary).getByTestId('summary-mined')).toHaveTextContent('123,123');
+    expect(screen.queryByText(/Every Megastera purchase/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/COLLECTION \/\s*2/)).not.toBeInTheDocument();
+  });
+
+  it('keeps card content focused and anchors ticket status at the upper right overlay', () => {
+    mocks.planets = [generatedRow(backendPlanet)];
+
+    render(<Planets onNavigate={vi.fn()} onViewPlanet={vi.fn()} />);
+
+    const card = screen.getByTestId('backend-planet-card-planet-1');
+    expect(within(card).queryByText('Common planet')).not.toBeInTheDocument();
+    expect(within(card).queryByText('VIEW ↗')).not.toBeInTheDocument();
+    expect(within(card).queryByText('DRAWING #12')).not.toBeInTheDocument();
+    expect(within(card).queryByText('24/day')).not.toBeInTheDocument();
+    expect(within(card).queryByText('#456')).not.toBeInTheDocument();
+    const statusOverlay = within(card).getByTestId('planet-status-overlay');
+    expect(statusOverlay).toHaveClass('absolute', 'right-3', 'top-3');
+    expect(statusOverlay).toContainElement(within(card).getByTestId('planet-ticket-action'));
+  });
+
+  it('places mining metrics and the same-type bonus in the card body instead of the image overlay', () => {
+    mocks.planets = [generatedRow(backendPlanet)];
+    mocks.mining.planets = [{
+      planetId: backendPlanet.planetId,
+      planetType: backendPlanet.planetType,
+      sameTypeCount: 3,
+      collectionBonusBps: 500,
+      baseMineralsPerDay: backendPlanet.baseMineralsPerDay,
+      effectiveMineralsPerDayMicros: '25200000',
+      earnedMicros: '10100000',
+      activeSince: '2026-08-10T00:00:00.000Z',
+    }];
+
+    render(<Planets onNavigate={vi.fn()} onViewPlanet={vi.fn()} />);
+
+    const card = screen.getByTestId('backend-planet-card-planet-1');
+    const metrics = within(card).getByTestId('planet-mining-metrics');
+    expect(metrics).toHaveTextContent('25.2/day');
+    expect(metrics).toHaveTextContent('10.1 mined');
+    expect(metrics).toHaveTextContent('+5%');
+    expect(within(card).queryByTestId('planet-mining-overlay')).not.toBeInTheDocument();
+  });
+
+  it('uses rarity glow on the card and detail image without redundant detail headings', () => {
+    mocks.planets = [generatedRow({ ...backendPlanet, rarity: 'Epic' })];
+
+    render(<Planets onNavigate={vi.fn()} onViewPlanet={vi.fn()} />);
+
+    const card = screen.getByTestId('backend-planet-card-planet-1');
+    expect(card.className).toContain('shadow-[0_0_');
+    const detail = screen.getByRole('complementary', { name: 'Selected planet detail' });
+    expect(within(detail).queryByText('SELECTED PLANET')).not.toBeInTheDocument();
+    expect(within(detail).queryByText('#456')).not.toBeInTheDocument();
+    expect(within(detail).queryByText('MINING ACTIVE')).not.toBeInTheDocument();
+    expect(within(detail).queryByText(/Generated /)).not.toBeInTheDocument();
+    expect(within(detail).getByTestId('planet-detail-image')).toHaveClass('border-2');
+    expect(within(detail).getByTestId('planet-detail-image').className).toContain('shadow-[0_0_');
+  });
+
+  it('shows winning numbers in details after the Megapot drawing is settled', () => {
+    mocks.planets = [generatedRow(backendPlanet)];
+    mocks.round = {
+      status: 'settled',
+      winning_numbers: { normals: [11, 22, 33, 44, 55], bonusball: 7 },
+    };
+
+    render(<Planets onNavigate={vi.fn()} onViewPlanet={vi.fn()} />);
+
+    const winningNumbers = within(screen.getByRole('complementary', { name: 'Selected planet detail' })).getByTestId('winning-numbers');
+    expect(winningNumbers).toHaveTextContent('Winning numbers');
+    for (const number of ['11', '22', '33', '44', '55', '7']) {
+      expect(within(winningNumbers).getByText(number)).toBeInTheDocument();
+    }
+  });
+
+  it('keeps winning numbers hidden while the Data API round is active', () => {
+    mocks.planets = [generatedRow(backendPlanet)];
+    mocks.round = {
+      status: 'active',
+      winning_numbers: { normals: [11, 22, 33, 44, 55], bonusball: 7 },
+    };
+
+    render(<Planets onNavigate={vi.fn()} onViewPlanet={vi.fn()} />);
+
+    expect(screen.queryByTestId('winning-numbers')).not.toBeInTheDocument();
+  });
+
+  it('refreshes all My Planets data sources with a visible pending state', async () => {
+    mocks.planets = [generatedRow(backendPlanet)];
+
+    render(<Planets onNavigate={vi.fn()} onViewPlanet={vi.fn()} />);
+
+    const refresh = screen.getByRole('button', { name: 'Refresh' });
+    fireEvent.click(refresh);
+
+    expect(await screen.findByRole('button', { name: 'Refreshing My Planets' })).toBeDisabled();
+    await waitFor(() => {
+      expect(mocks.planetsRefetch).toHaveBeenCalledOnce();
+      expect(mocks.ticketRefetch).toHaveBeenCalledOnce();
+      expect(mocks.miningRefetch).toHaveBeenCalledOnce();
+      expect(mocks.roundRefetch).toHaveBeenCalledOnce();
+      expect(mocks.jackpot.refetch).toHaveBeenCalledOnce();
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled(), { timeout: 1_000 });
   });
 
   it('opens the selected planet in the adjacent detail panel', () => {

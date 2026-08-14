@@ -105,9 +105,8 @@ export function useJackpotState() {
 
   const { refetch: refetchDrawingId } = drawingIdQuery;
   const { refetch: refetchState } = stateQuery;
-  const refetchAll = useCallback(() => {
-    refetchDrawingId();
-    refetchState();
+  const refetchAll = useCallback(async () => {
+    await Promise.all([refetchDrawingId(), refetchState()]);
   }, [refetchDrawingId, refetchState]);
 
   useEffect(() => {

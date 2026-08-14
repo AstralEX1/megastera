@@ -4,6 +4,7 @@ import type { RoundStatus, Ticket } from '@/lib/api';
 export type TicketStatus =
   | { kind: 'countdown'; time: string }
   | { kind: 'drawing' }
+  | { kind: 'checking' }
   | { kind: 'claimable'; amount: bigint; ticketId: bigint }
   | { kind: 'claimed'; amount: bigint }
   | { kind: 'drawn' }
@@ -14,6 +15,7 @@ export type TicketStatusInput = {
   drawingId: string | bigint;
   currentDrawingId?: bigint;
   phase?: LifecyclePhase;
+  drawingStateLoading?: boolean;
   drawingTime?: bigint;
   nowMs: number;
   drawingStatus?: RoundStatus;
@@ -33,6 +35,7 @@ export function deriveTicketStatus({
   drawingId,
   currentDrawingId,
   phase,
+  drawingStateLoading = false,
   drawingTime,
   nowMs,
   drawingStatus,
@@ -47,6 +50,8 @@ export function deriveTicketStatus({
     }
     return { kind: 'drawn' };
   }
+
+  if (drawingStateLoading) return { kind: 'checking' };
 
   const isCurrent = currentDrawingId !== undefined && BigInt(drawingId) === currentDrawingId;
   if (isCurrent && phase === 'open' && drawingTime !== undefined) {

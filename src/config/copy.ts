@@ -18,10 +18,8 @@ export const COPY = {
   // App shell
   /** Wallet-connect modal title — falls back here when VITE_APP_NAME is empty. */
   appName: 'Megastera',
-  /** Header brand block — short prefix shown on mobile. */
-  brandShort: 'Mega',
-  /** Header brand block — suffix shown on `sm+` only. */
-  brandSuffix: 'stera',
+  /** Visible text-only brand used by the application shell and Landing page. */
+  brandName: 'MEGASTERA',
 
   // Play page
   connectToBuy: 'Connect your wallet to buy tickets.',

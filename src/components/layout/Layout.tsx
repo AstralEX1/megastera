@@ -9,12 +9,10 @@
  *             below md. The final spacer keeps page content clear of the
  *             fixed mobile bottom navigation.
  *
- *             Swap your logo by editing `BrandMark.tsx`.
  * ---
  */
 import type { ReactNode } from 'react';
 import { COPY } from '@/config/copy';
-import { BrandMark } from './BrandMark';
 import { MobileWalletBar } from './MobileWalletBar';
 import { MobileBottomNav, Nav, type NavKey } from './Nav';
 import { ProfileCard } from './ProfileCard';
@@ -36,11 +34,7 @@ export function Layout({
             href="/"
             className="flex items-center gap-2 whitespace-nowrap font-semibold tracking-[0.08em] text-[#e8f7ff]"
           >
-            <BrandMark />
-            <span>
-              {COPY.brandShort}
-              <span className="hidden sm:inline">{COPY.brandSuffix}</span>
-            </span>
+            <span>{COPY.brandName}</span>
           </a>
           <Nav active={active} onSelect={onSelect} />
           <ProfileCard />

@@ -165,6 +165,7 @@ export function useWalletTickets(
     visibleGroupedByRound: visibleTicketHistoryRounds(groupedByRound, visibleRoundCount),
     fetchNextPage: loadOlderRounds,
     hasNextPage: hasOlderRounds,
+    isFetching: query.isFetching,
     isFetchingNextPage: query.isFetchingNextPage,
     isLoading: query.isLoading,
     error: query.error,

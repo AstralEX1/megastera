@@ -21,13 +21,16 @@ function ClockIcon() {
 }
 
 const BASE = 'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide';
+const COMPACT_BASE = 'inline-flex min-h-8 items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-wide';
 
-export function TicketStatusBadge({ status }: { status: TicketStatus }) {
+export function TicketStatusBadge({ status, appearance = 'default' }: { status: TicketStatus; appearance?: 'default' | 'compact' }) {
+  const base = appearance === 'compact' ? COMPACT_BASE : BASE;
+
   if (status.kind === 'countdown') {
     return (
       <span
         data-testid="ticket-status-countdown"
-        className={`${BASE} border-cyan-300 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-300`}
+        className={`${base} ${appearance === 'compact' ? 'border-amber-400 bg-amber-950/40 text-amber-200' : 'border-cyan-300 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-300'}`}
       >
         <ClockIcon />
         Drawing in {status.time}
@@ -39,9 +42,20 @@ export function TicketStatusBadge({ status }: { status: TicketStatus }) {
     return (
       <span
         data-testid="ticket-status-drawing"
-        className={`${BASE} border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300`}
+        className={`${base} ${appearance === 'compact' ? 'border-amber-400 bg-amber-950/40 text-amber-200' : 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300'}`}
       >
         Drawing…
+      </span>
+    );
+  }
+
+  if (status.kind === 'checking') {
+    return (
+      <span
+        data-testid="ticket-status-checking"
+        className={`${base} border-zinc-700 bg-zinc-800 text-zinc-300`}
+      >
+        Checking…
       </span>
     );
   }
@@ -61,7 +75,7 @@ export function TicketStatusBadge({ status }: { status: TicketStatus }) {
     return (
       <span
         data-testid="ticket-status-claimed"
-        className={`${BASE} border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300`}
+        className={`${base} ${appearance === 'compact' ? 'border-zinc-700 bg-zinc-800 text-zinc-300' : 'border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'}`}
       >
         Claimed <UsdcAmount value={status.amount} precision={2} unit={false} /> USDC
       </span>
@@ -72,7 +86,7 @@ export function TicketStatusBadge({ status }: { status: TicketStatus }) {
     return (
       <span
         data-testid="ticket-status-drawn"
-        className={`${BASE} border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300`}
+        className={`${base} ${appearance === 'compact' ? 'border-zinc-700 bg-zinc-800 text-zinc-300' : 'border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300'}`}
       >
         Drawn
       </span>
@@ -82,7 +96,7 @@ export function TicketStatusBadge({ status }: { status: TicketStatus }) {
   return (
     <span
       data-testid="ticket-status-unavailable"
-      className={`${BASE} border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400`}
+      className={`${base} border-zinc-700 bg-zinc-800 text-zinc-300`}
     >
       Unavailable
     </span>

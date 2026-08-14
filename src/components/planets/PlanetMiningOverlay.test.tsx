@@ -58,7 +58,7 @@ describe('PlanetMiningOverlay', () => {
     expect(overlay).toHaveClass('inset-x-2', 'bottom-2');
     expect(overlay.querySelector(':scope > div')).toHaveClass('p-2');
     expect(screen.getByRole('img', { name: 'Minerals' })).toHaveClass('h-4', 'w-4');
-    expect(screen.getByRole('img', { name: 'Mined' })).toHaveClass('h-4', 'w-4');
+    expect(screen.getByRole('img', { name: 'Mined' })).toHaveClass('h-4', 'w-4', 'bg-white');
     expect(screen.getByText('25.2')).toHaveClass('text-sm', 'text-[var(--rare)]');
   });
 });

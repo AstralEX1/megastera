@@ -2,18 +2,20 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { Button } from '@/components/common/Button';
 import { FadeArc } from '@/components/common/FadeArc';
+import { Ball } from '@/components/lottery/Ball';
 import { BackendPlanetPreview } from '@/components/planets/BackendPlanetPreview';
-import { PlanetMiningOverlay } from '@/components/planets/PlanetMiningOverlay';
+import { PlanetMiningMetrics, PlanetMiningOverlay } from '@/components/planets/PlanetMiningOverlay';
 import { PlanetTicketAction } from '@/components/planets/PlanetTicketAction';
 import { useClaimWinnings } from '@/hooks/useClaimWinnings';
 import { useBackendPlanets } from '@/hooks/useBackendPlanets';
 import { useJackpotState } from '@/hooks/useJackpotState';
+import { useRound } from '@/hooks/useRound';
 import { useWalletMining } from '@/hooks/useWalletMining';
 import type { PlanetMiningSnapshot } from '@/hooks/useWalletMining';
 import { useWalletTickets } from '@/hooks/useWalletTickets';
 import { requestBackendPlanetGeneration, type BackendPlanet, type BackendPlanetCollectionRow } from '@/lib/backendApi';
 import { mergeMegasteraCollection, type MegasteraCollectionItem } from '@/lib/megasteraCollection';
-import type { Ticket } from '@/lib/api';
+import type { Round, Ticket, WinningNumbers as MegapotWinningNumbers } from '@/lib/api';
 import { PURCHASED_TICKETS_UPDATED_EVENT, readPersistedPurchasedTickets, type PurchasedTicket } from '@/lib/purchaseReceipt';
 import { deriveTicketStatus } from '@/lib/ticketStatus';
 import type { TicketStatus } from '@/lib/ticketStatus';
@@ -27,15 +29,47 @@ type PlanetsProps = {
 
 const RARITY_CLASSES: Record<string, string> = {
   Common: 'border-zinc-500/80 shadow-[0_18px_42px_rgba(0,0,0,0.45)]',
-  Uncommon: 'border-emerald-400/80 shadow-[0_18px_42px_rgba(16,185,129,0.12)]',
-  Epic: 'border-violet-400/80 shadow-[0_18px_42px_rgba(167,139,250,0.16)]',
-  Legendary: 'border-amber-300/90 shadow-[0_18px_42px_rgba(252,211,77,0.16)]',
+  Uncommon: 'border-emerald-400/90 shadow-[0_0_18px_rgba(52,211,153,0.35),0_18px_42px_rgba(16,185,129,0.12)]',
+  Epic: 'border-violet-400/90 shadow-[0_0_22px_rgba(167,139,250,0.45),0_18px_42px_rgba(167,139,250,0.16)]',
+  Legendary: 'border-amber-300/95 shadow-[0_0_26px_rgba(252,211,77,0.5),0_18px_42px_rgba(252,211,77,0.16)]',
 };
 
 const UNAVAILABLE_TICKET_STATUS: TicketStatus = { kind: 'unavailable' };
 
 function rarityClass(rarity: string) {
   return RARITY_CLASSES[rarity] ?? 'border-[var(--border-strong)] shadow-[0_18px_42px_rgba(0,0,0,0.45)]';
+}
+
+function CollectionSummary({
+  planetCount,
+  ticketCount,
+  miningRate,
+  mined,
+}: {
+  planetCount: number;
+  ticketCount: number;
+  miningRate: string;
+  mined: string;
+}) {
+  const metrics = [
+    { label: 'Planets', value: planetCount, testId: 'summary-planets' },
+    { label: 'Tickets', value: ticketCount, testId: 'summary-tickets' },
+    { label: 'Mining Rate', value: miningRate, testId: 'summary-rate', accent: true },
+    { label: 'Mined', value: mined, testId: 'summary-mined', accent: true },
+  ];
+
+  return (
+    <dl data-testid="collection-summary" className="grid grid-cols-2 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-raised)] sm:grid-cols-4">
+      {metrics.map((metric, index) => (
+        <div key={metric.label} className={`min-w-0 px-4 py-3.5 ${index % 2 === 0 ? 'border-r border-[var(--border)]' : ''} ${index < 2 ? 'border-b border-[var(--border)]' : ''} sm:border-b-0 sm:border-r sm:last:border-r-0`}>
+          <dt className="telemetry truncate text-[var(--text-secondary)]">{metric.label}</dt>
+          <dd data-testid={metric.testId} className={`mt-1 truncate font-hud text-xl font-bold tabular-nums tracking-[-0.03em] ${metric.accent ? 'text-[var(--rare)]' : 'text-[var(--text-primary)]'}`}>
+            {metric.value}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
 }
 
 function BackendPlanetCard({
@@ -59,6 +93,7 @@ function BackendPlanetCard({
 }) {
   return (
     <article
+      data-testid={`backend-planet-card-${planet.planetId}`}
       data-selected={selected ? 'true' : 'false'}
       data-rarity={planet.rarity}
       className={`group relative overflow-hidden rounded-2xl border-2 bg-[var(--surface-raised)] transition-[transform,background-color,box-shadow] duration-200 ${rarityClass(planet.rarity)} ${selected ? 'ring-2 ring-white ring-offset-2 ring-offset-[var(--background)]' : 'hover:-translate-y-1 hover:bg-[var(--surface-hover)]'}`}
@@ -71,37 +106,29 @@ function BackendPlanetCard({
       >
         <div className="relative aspect-square overflow-hidden border-b border-[var(--border)] bg-[#050610]">
           <BackendPlanetPreview planet={planet} />
-          <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex items-start justify-between gap-2">
-            <span className="rounded-full border border-white/15 bg-[#080914]/80 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-white/75 backdrop-blur-sm">
+          <div className="pointer-events-none absolute inset-x-3 top-3 z-10 flex items-start gap-2">
+            <span className="min-w-0 max-w-[80%] truncate rounded-full border border-white/15 bg-[#080914]/80 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-white/75 backdrop-blur-sm">
               {planet.planetType}
             </span>
-            <span className="rounded-full border border-white/15 bg-[#080914]/80 px-2 py-1 font-mono text-[10px] text-white/65 backdrop-blur-sm">
-              #{planet.ticketId}
-            </span>
           </div>
-          <PlanetMiningOverlay mining={mining} miningAsOf={mining?.activeSince} variant="compact" />
         </div>
-        <div className="space-y-3 p-3.5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="telemetry text-[var(--text-secondary)]">{planet.rarity} planet</p>
-              <h2 className="mt-1 truncate font-hud text-lg font-bold tracking-[-0.03em] text-[var(--text-primary)]">{planet.name}</h2>
-            </div>
-            <span className="mt-1 shrink-0 font-mono text-[10px] text-[var(--text-secondary)]">VIEW ↗</span>
-          </div>
-          <div className="flex items-center justify-between gap-3 border-t border-[var(--border)] pt-2.5 text-[11px] text-[var(--text-secondary)]">
-            <span className="font-mono">DRAWING #{planet.ticket.drawingId}</span>
-            <span className="font-semibold text-[var(--text-primary)]">{planet.baseMineralsPerDay}/day</span>
+        <div className="p-3.5">
+          <h2 className="truncate font-hud text-lg font-bold tracking-[-0.03em] text-[var(--text-primary)]">{planet.name}</h2>
+          <div className="mt-3">
+            <PlanetMiningMetrics mining={mining} miningAsOf={mining?.activeSince} />
           </div>
         </div>
       </button>
-      <div className="border-t border-[var(--border)] p-3">
-        <PlanetTicketAction
-          status={ticketStatus}
-          onClaim={onClaim}
-          isClaimPending={isClaimPending}
-          claimError={claimError}
-        />
+      <div data-testid="planet-status-overlay" className="pointer-events-none absolute right-3 top-3 z-20">
+        <div className="pointer-events-auto">
+          <PlanetTicketAction
+            status={ticketStatus}
+            onClaim={onClaim}
+            isClaimPending={isClaimPending}
+            claimError={claimError}
+            compact
+          />
+        </div>
       </div>
     </article>
   );
@@ -126,6 +153,21 @@ function TicketCoordinates({ ticket }: { ticket: TicketCoordinatesValue }) {
         <span className="grid h-8 w-8 place-items-center rounded-full bg-[var(--rare)] font-mono text-[11px] font-bold text-black" title="Bonus number">
           {ticket.bonusBall}
         </span>
+      </div>
+    </section>
+  );
+}
+
+function WinningNumbers({ winningNumbers }: { winningNumbers: MegapotWinningNumbers }) {
+  return (
+    <section data-testid="winning-numbers" aria-label="Winning numbers" className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+      <p className="telemetry text-[var(--text-secondary)]">Winning numbers</p>
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        {winningNumbers.normals.map((number) => (
+          <Ball key={number} n={number} selected size="md" />
+        ))}
+        <span aria-hidden className="mx-1 h-6 w-px bg-[var(--border-strong)]" />
+        <Ball n={winningNumbers.bonusball} variant="bonus" selected size="md" title="Bonus number" />
       </div>
     </section>
   );
@@ -222,6 +264,7 @@ function PlanetDetail({
   mining,
   onBack,
   ticketStatus,
+  round,
   onClaim,
   isClaimPending,
   claimError,
@@ -230,24 +273,22 @@ function PlanetDetail({
   mining?: PlanetMiningSnapshot;
   onBack?: () => void;
   ticketStatus: TicketStatus;
+  round?: Round;
   onClaim: () => void;
   isClaimPending: boolean;
   claimError?: Error | null;
 }) {
-  const generatedAt = new Date(planet.generatedAt);
+  const winningNumbers = round?.status === 'settled' ? round.winning_numbers : null;
   return (
     <section data-testid="planet-detail-panel" className="overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-raised)] shadow-[0_22px_60px_rgba(0,0,0,0.42)]">
-      <div className="border-b border-[var(--border)] px-4 py-3.5">
-        <div className="flex items-center justify-between gap-3">
-          {onBack ? (
-            <button type="button" onClick={onBack} className="min-h-10 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
-              ← Back to collection
-            </button>
-          ) : <span className="telemetry text-[var(--success)]">SELECTED PLANET</span>}
-          <span className="font-mono text-[10px] text-[var(--text-secondary)]">#{planet.ticketId}</span>
+      {onBack ? (
+        <div className="px-4 pt-3.5">
+          <button type="button" onClick={onBack} className="min-h-10 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+            ← Back to collection
+          </button>
         </div>
-      </div>
-      <div className="relative mx-auto mt-4 aspect-square w-[min(100%-2rem,24rem)] overflow-hidden rounded-xl border border-[var(--border)] bg-[#050610] sm:mt-5">
+      ) : null}
+      <div data-testid="planet-detail-image" className={`relative mx-auto mt-4 aspect-square w-[min(100%-2rem,24rem)] overflow-hidden rounded-xl border-2 bg-[#050610] sm:mt-5 ${rarityClass(planet.rarity)}`}>
         <img
           src={planet.gifUrl}
           alt={`${planet.name} animated GIF`}
@@ -259,11 +300,11 @@ function PlanetDetail({
       </div>
       <div className="space-y-4 p-4 sm:p-5">
         <div>
-          <p className="telemetry text-[var(--text-secondary)]">{planet.planetType} · {planet.rarity}</p>
+          <p className="telemetry text-[var(--text-secondary)]">{planet.planetType}</p>
           <h2 className="mt-1 font-hud text-2xl font-bold tracking-[-0.04em] text-[var(--text-primary)]">{planet.name}</h2>
-          <p className="mt-1 font-mono text-[11px] text-[var(--text-secondary)]">Backend Planet · generated {Number.isNaN(generatedAt.getTime()) ? 'recently' : generatedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
         </div>
         <TicketCoordinates ticket={planet.ticket} />
+        {winningNumbers ? <WinningNumbers winningNumbers={winningNumbers} /> : null}
         <PlanetTicketAction
           status={ticketStatus}
           onClaim={onClaim}
@@ -273,7 +314,6 @@ function PlanetDetail({
         <section aria-label="Planet details">
           <div className="mb-2 flex items-center justify-between gap-3">
             <h3 className="font-hud text-base font-bold text-[var(--text-primary)]">Details</h3>
-            <span className="telemetry text-[var(--success)]">MINING ACTIVE</span>
           </div>
           <dl className="grid grid-cols-2 gap-x-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 sm:grid-cols-3">
             <DetailValue label="Type" value={planet.planetType} />
@@ -305,6 +345,7 @@ export function Planets({ onNavigate, onViewPlanet, routePlanetId }: PlanetsProp
   const [retryingKey, setRetryingKey] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<Error | null>(null);
   const [locallyConfirmedTickets, setLocallyConfirmedTickets] = useState<readonly PurchasedTicket[]>([]);
+  const [manualRefreshing, setManualRefreshing] = useState(false);
   const siteRows = planets.data ?? [];
 
   useEffect(() => {
@@ -354,6 +395,8 @@ export function Planets({ onNavigate, onViewPlanet, routePlanetId }: PlanetsProp
     () => new Map(ticketHistory.tickets.map((ticket) => [ticket.user_ticket_id, ticket] as const)),
     [ticketHistory.tickets],
   );
+  const selectedPlanetForRound = generatedRows.find((row) => row.planet.planetId === selectedPlanetId)?.planet;
+  const selectedRound = useRound(selectedPlanetForRound?.ticket.drawingId, { pollUntilSettled: true });
   const ticketStatusByTicketId = useMemo(
     () => new Map(
       collection.map((item) => {
@@ -368,13 +411,14 @@ export function Planets({ onNavigate, onViewPlanet, routePlanetId }: PlanetsProp
           drawingId: ticket.drawingId,
           currentDrawingId: jackpot.drawingId,
           phase: jackpot.phase,
+          drawingStateLoading: jackpot.isLoading,
           drawingTime: jackpot.state?.drawingTime,
           nowMs,
           apiTicket: ticketsById.get(ticket.ticketId),
         })] as const;
       }),
     ),
-    [collection, jackpot.drawingId, jackpot.phase, jackpot.state?.drawingTime, nowMs, ticketsById],
+    [collection, jackpot.drawingId, jackpot.isLoading, jackpot.phase, jackpot.state?.drawingTime, nowMs, ticketsById],
   );
   const shouldTickCountdown = jackpot.phase === 'open' && jackpot.drawingId !== undefined && collection.some((item) => {
     const drawingId = item.kind === 'site' ? item.site.ticket.drawingId : item.apiTicket.round_id;
@@ -405,6 +449,31 @@ export function Planets({ onNavigate, onViewPlanet, routePlanetId }: PlanetsProp
     claim.reset();
   }, [claim.isSuccess, claim.reset, claimingTicketId, ticketHistory.refetch]);
 
+  const handleRefresh = async () => {
+    const startedAt = Date.now();
+    setManualRefreshing(true);
+
+    try {
+      await Promise.all([
+        planets.refetch(),
+        ticketHistory.refetch(),
+        mining.refetch(),
+        selectedPlanetForRound ? selectedRound.refetch() : Promise.resolve(),
+        jackpot.refetch(),
+      ]);
+
+      const remaining = 500 - (Date.now() - startedAt);
+      if (remaining > 0) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
+      }
+    } finally {
+      setManualRefreshing(false);
+      setNowMs(Date.now());
+    }
+  };
+
+  const refreshing = manualRefreshing || planets.isFetching || ticketHistory.isFetching || mining.isFetching || selectedRound.isFetching;
+
   if (!address) {
     return <EmptyState title="Connect your wallet" description="Your Megastera ticket and Planet inventory will appear here." action={<Button variant="primary" onClick={() => onNavigate('play')}>Explore</Button>} />;
   }
@@ -418,7 +487,7 @@ export function Planets({ onNavigate, onViewPlanet, routePlanetId }: PlanetsProp
     );
   }
   if (collection.length === 0 && (planets.isError || ticketHistory.error)) {
-    return <EmptyState title="My Planets temporarily unavailable" description="The site registry or Megapot ticket history could not be reached. Try again shortly." action={<Button variant="secondary" onClick={() => { void planets.refetch(); void ticketHistory.refetch(); }}>Refresh</Button>} role="alert" />;
+    return <EmptyState title="My Planets temporarily unavailable" description="The site registry or Megapot ticket history could not be reached. Try again shortly." action={<Button variant="secondary" onClick={() => void handleRefresh()}>Refresh</Button>} role="alert" />;
   }
   if (!collection.length) return <EmptyState title="No tickets yet" description="Buy a Megapot ticket through Megastera and its Planet will appear here after generation." action={<Button variant="primary" onClick={() => onNavigate('play')}>Explore</Button>} />;
 
@@ -461,33 +530,42 @@ export function Planets({ onNavigate, onViewPlanet, routePlanetId }: PlanetsProp
       planet={selected}
       mining={miningByPlanetId.get(selected.planetId)}
       onBack={routePlanetId ? clearRoute : undefined}
+      round={selectedRound.data}
       ticketStatus={selectedTicketStatus}
       onClaim={() => claimTicket(selected.ticket.ticketId)}
       isClaimPending={selected.ticket.ticketId === claimingTicketId && claim.isPending}
       claimError={selected.ticket.ticketId === claimingTicketId ? claim.error : null}
     />
   ) : null;
-  const totalRate = mining.data?.effectiveMineralsPerDayMicros ? formatMinerals(BigInt(mining.data.effectiveMineralsPerDayMicros)) : '—';
+  const totalRate = mining.data?.effectiveMineralsPerDayMicros ? `${formatMinerals(BigInt(mining.data.effectiveMineralsPerDayMicros))}/day` : '—';
+  const totalMined = mining.data?.earnedMicros ? formatMinerals(BigInt(mining.data.earnedMicros)) : '—';
   const generatedCount = generatedRows.length;
-  const pendingCount = collection.filter((item) => item.kind === 'site' && item.site.generationStatus === 'pending').length;
-  const ticketOnlyCount = collection.filter((item) => item.kind === 'ticket-only').length;
 
   return (
     <section className="mx-auto space-y-6 pb-10">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-[var(--border)] pb-5">
         <div>
-          <p className="telemetry text-[var(--success)]">MY INVENTORY · {generatedCount} PLANETS · {pendingCount} PENDING · {ticketOnlyCount} TICKETS</p>
-          <h1 className="mt-1 font-hud text-3xl font-bold tracking-[-0.05em] text-[var(--text-primary)] sm:text-4xl">My Planets</h1>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--text-secondary)]">Every Megastera purchase remains visible as a Planet or a retryable pending card. Other wallet tickets stay visible as tickets.</p>
+          <h1 className="font-hud text-3xl font-bold tracking-[-0.05em] text-[var(--text-primary)] sm:text-4xl">My Planets</h1>
         </div>
         <div className="flex items-center gap-3">
-          <div className="hidden border-l border-[var(--border)] pl-4 sm:block">
-            <p className="telemetry text-[var(--text-secondary)]">LIVE RATE</p>
-            <p className="mt-1 font-hud text-lg font-bold text-[var(--text-primary)]">{totalRate}<span className="ml-1 text-xs font-normal text-[var(--text-secondary)]">/day</span></p>
-          </div>
-          <Button variant="secondary" onClick={() => { void planets.refetch(); void ticketHistory.refetch(); }}>Refresh</Button>
+          <Button
+            variant="secondary"
+            disabled={refreshing}
+            aria-busy={refreshing}
+            aria-label={refreshing ? 'Refreshing My Planets' : 'Refresh'}
+            onClick={() => void handleRefresh()}
+          >
+            {refreshing ? (
+              <span className="inline-flex items-center gap-2">
+                <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                Refreshing…
+              </span>
+            ) : 'Refresh'}
+          </Button>
         </div>
       </header>
+
+      <CollectionSummary planetCount={generatedCount} ticketCount={collection.length} miningRate={totalRate} mined={totalMined} />
 
       {planets.isError ? <div role="status" className="rounded-xl border border-amber-700/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">The Megastera site registry is temporarily unavailable. Wallet tickets remain visible; refresh to retry Planet rows.</div> : null}
       {ticketHistory.error ? <div role="status" className="rounded-xl border border-amber-700/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">Megapot ticket statuses are temporarily unavailable. Site Planet rows remain visible.</div> : null}
@@ -496,10 +574,6 @@ export function Planets({ onNavigate, onViewPlanet, routePlanetId }: PlanetsProp
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(20rem,0.8fr)]">
         <section aria-label="Planet and ticket collection">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <p className="telemetry text-[var(--text-secondary)]">COLLECTION / {collection.length.toString().padStart(2, '0')}</p>
-            <p className="hidden text-xs text-[var(--text-secondary)] sm:block">Planet rows update automatically</p>
-          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {collection.map((item: MegasteraCollectionItem) => {
               if (item.kind === 'ticket-only') {

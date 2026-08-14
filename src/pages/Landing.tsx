@@ -1,5 +1,6 @@
 import './Landing.css';
 import { useEffect } from 'react';
+import { COPY } from '@/config/copy';
 import { LandingLiveJackpot } from '@/components/landing/LandingLiveJackpot';
 import { LandingHowItWorks } from '@/components/landing/LandingHowItWorks';
 import { LandingPlanetCard } from '@/components/landing/LandingPlanetCard';
@@ -26,8 +27,7 @@ export function Landing() {
       <a className="landing-skip-link" href="#landing-main">Skip to content</a>
       <header className="landing-header">
         <a className="landing-wordmark" href="/" aria-label="Megastera home">
-          <span className="landing-wordmark-mark" aria-hidden="true">M</span>
-          <LandingSplitText text="Megastera" className="landing-wordmark-name" />
+          <LandingSplitText text={COPY.brandName} className="landing-wordmark-name" />
         </a>
         <a className="landing-button landing-button-small" href="/play">
           <LandingSplitText text="Play" className="landing-button-label" />
@@ -41,7 +41,7 @@ export function Landing() {
               <LandingSplitText
                 tag="span"
                 className="landing-split-line"
-                text="Explore Planets."
+                text="Explore. Mine."
                 delay={34}
                 duration={0.78}
                 splitType="chars"
@@ -51,7 +51,7 @@ export function Landing() {
               <LandingSplitText
                 tag="span"
                 className="landing-split-line landing-split-line-accent"
-                text="Win prizes."
+                text="Win."
                 delay={46}
                 duration={0.86}
                 from={{ opacity: 0, y: 52, rotateX: -70, filter: 'blur(8px)' }}
@@ -67,13 +67,21 @@ export function Landing() {
               delay={72}
               duration={0.8}
             />
-            <LandingSplitText
-              tag="span"
+            <a
               className="landing-hero-powered-by"
-              text="powered by Megapot"
-              delay={86}
-              duration={0.64}
-            />
+              href="https://megapot.io/ecosystem"
+              target="_blank"
+              rel="noreferrer noopener"
+              aria-label="Powered by Megapot"
+            >
+              <img
+                src="/brand/powered-by-megapot.svg"
+                alt=""
+                width="150"
+                height="34"
+                draggable="false"
+              />
+            </a>
             <div className="landing-hero-actions">
               <a className="landing-button" href="/play">
                 <LandingSplitText text="Play" className="landing-button-label" />
@@ -189,8 +197,7 @@ export function Landing() {
 
       <footer className="landing-footer landing-container">
         <a className="landing-wordmark" href="/" aria-label="Megastera home">
-          <span className="landing-wordmark-mark" aria-hidden="true">M</span>
-          <LandingSplitText text="Megastera" className="landing-wordmark-name" />
+          <LandingSplitText text={COPY.brandName} className="landing-wordmark-name" />
         </a>
         <LandingSplitText tag="span" className="landing-footer-tagline" text="Explore Planets. Win prizes." />
         <LandingSplitText
