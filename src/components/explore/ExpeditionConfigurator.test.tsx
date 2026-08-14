@@ -124,7 +124,7 @@ describe('ExpeditionConfigurator', () => {
 
     const [toggle] = screen.getAllByRole('button', { name: 'Open coordinates' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(toggle).toHaveClass('transition-[left,background-color]');
+    expect(toggle).toHaveClass('transition-colors');
     expect(toggle).toHaveClass('h-60', 'w-20');
     expect(toggle).toHaveStyle({ left: 'calc(50% + 472px)' });
     expect(toggle.querySelector('.text-\\[1rem\\]')).toBeInTheDocument();
@@ -137,7 +137,7 @@ describe('ExpeditionConfigurator', () => {
 
     const [closeToggle] = screen.getAllByRole('button', { name: 'Close coordinates' });
     expect(closeToggle).toHaveStyle({
-      left: 'min(calc(50% + 392px), calc(50% + 50vw - 476px))',
+      left: 'calc(50% + 472px)',
     });
     await user.click(closeToggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
