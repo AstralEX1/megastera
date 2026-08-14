@@ -47,7 +47,20 @@ export function Leaderboard() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <span className="font-mono text-xs text-[var(--text-secondary)]">Last refresh: {asOfLabel(data.asOf)} UTC</span>
-          <Button variant="secondary" onClick={() => void current.refetch()}>Refresh</Button>
+          <Button
+            variant="secondary"
+            disabled={current.isFetching}
+            aria-busy={current.isFetching}
+            aria-label={current.isFetching ? 'Refreshing leaderboard' : 'Refresh'}
+            onClick={() => void current.refetch()}
+          >
+            {current.isFetching ? (
+              <span className="inline-flex items-center gap-2">
+                <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                Refreshing…
+              </span>
+            ) : 'Refresh'}
+          </Button>
         </div>
       </header>
 

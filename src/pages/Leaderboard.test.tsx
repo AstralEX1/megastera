@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({
   account: { address: '0x2222222222222222222222222222222222222222' as `0x${string}` | undefined },
   error: undefined as Error | undefined,
+  isFetching: false,
   isLoading: false,
 }));
 
@@ -23,7 +24,7 @@ const current = {
 
 vi.mock('wagmi', () => ({ useAccount: () => state.account }));
 vi.mock('@/hooks/useLeaderboard', () => ({
-  useCurrentLeaderboard: () => ({ data: current, isLoading: state.isLoading, error: state.error, refetch: vi.fn() }),
+  useCurrentLeaderboard: () => ({ data: current, isFetching: state.isFetching, isLoading: state.isLoading, error: state.error, refetch: vi.fn() }),
   useWalletLeaderboardPosition: () => ({ data: { period: current.period, asOf: current.asOf, row: current.rows[1], distanceToNextRankMicros: '6000000' }, isLoading: false }),
 }));
 
@@ -38,6 +39,7 @@ import { Leaderboard } from './Leaderboard';
 describe('Leaderboard', () => {
   beforeEach(() => {
     state.error = undefined;
+    state.isFetching = false;
     state.isLoading = false;
     state.account = { address: '0x2222222222222222222222222222222222222222' };
   });
@@ -60,7 +62,7 @@ describe('Leaderboard', () => {
     expect(screen.queryByText('LIVE · GENERATED AT + BASE RATE')).not.toBeInTheDocument();
     expect(screen.queryByText(/As of Aug 12/)).not.toBeInTheDocument();
     expect(screen.getByText(/Last refresh: Aug 12/)).toBeInTheDocument();
-    expect(container.querySelectorAll('.count-up-text')).toHaveLength(15);
+    expect(container.querySelectorAll('.count-up-text')).toHaveLength(10);
     expect(screen.getByText('Your rank')).toBeInTheDocument();
     expect(screen.getByText(/to next rank/)).toBeInTheDocument();
     expect(screen.queryByRole('progressbar', { name: 'Daily snapshot progress' })).not.toBeInTheDocument();
@@ -72,8 +74,19 @@ describe('Leaderboard', () => {
     state.account = { address: undefined };
     const { container } = render(<Leaderboard />);
 
-    expect(container.querySelectorAll('.count-up-text')).toHaveLength(12);
+    expect(container.querySelectorAll('.count-up-text')).toHaveLength(8);
     expect(screen.queryByText('Your rank')).not.toBeInTheDocument();
+  });
+
+  it('shows a visible refreshing state while the standings refetches', () => {
+    state.isFetching = true;
+
+    render(<Leaderboard />);
+
+    const refreshButton = screen.getByRole('button', { name: 'Refreshing leaderboard' });
+    expect(refreshButton).toBeDisabled();
+    expect(refreshButton).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByText('Refreshing…')).toBeInTheDocument();
   });
 
   it('offers a retryable backend error instead of the placeholder page', () => {
