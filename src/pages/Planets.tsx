@@ -37,6 +37,11 @@ const RARITY_CLASSES: Record<string, string> = {
 
 const UNAVAILABLE_TICKET_STATUS: TicketStatus = { kind: 'unavailable' };
 
+function formatTicketDisplayId(ticketId: string) {
+  const normalized = ticketId.trim();
+  return normalized.length > 14 ? `${normalized.slice(0, 6)}…${normalized.slice(-4)}` : normalized;
+}
+
 function rarityClass(rarity: string) {
   return RARITY_CLASSES[rarity] ?? 'border-[var(--border-strong)] shadow-[0_18px_42px_rgba(0,0,0,0.45)]';
 }
@@ -266,7 +271,7 @@ function TicketOnlyCard({
         <div className="relative flex items-start justify-between gap-4">
           <div>
             <p className="telemetry text-violet-200">TICKET</p>
-            <h2 className="mt-1 font-hud text-2xl font-bold tracking-[-0.04em] text-[var(--text-primary)]">#{ticket.user_ticket_id}</h2>
+            <h2 className="mt-1 font-hud text-2xl font-bold tracking-[-0.04em] text-[var(--text-primary)]">#{formatTicketDisplayId(ticket.user_ticket_id)}</h2>
           </div>
           <div className="text-right">
             <p className="telemetry text-[var(--text-secondary)]">DRAWING</p>

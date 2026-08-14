@@ -365,7 +365,7 @@ describe('backend My Planets', () => {
       wallet: mocks.account.address,
       buyer: mocks.account.address,
       round_id: '12',
-      user_ticket_id: '999',
+      user_ticket_id: '5849491677011032179913940024995665367',
       normals: [3, 17, 42, 88, 201],
       bonusball: 9,
       matched_normals: null,
@@ -382,9 +382,9 @@ describe('backend My Planets', () => {
 
     const ticket = screen.getByTestId('wallet-ticket-card-api-ticket-999');
 
-    expect(ticket).toHaveAttribute('aria-label', 'Ticket #999');
+    expect(ticket).toHaveAttribute('aria-label', 'Ticket #5849491677011032179913940024995665367');
     expect(within(ticket).getByText('TICKET')).toBeInTheDocument();
-    expect(within(ticket).getByText('#999')).toBeInTheDocument();
+    expect(within(ticket).getByText('#584949…5367')).toBeInTheDocument();
     expect(within(ticket).getByText('DRAWING')).toBeInTheDocument();
     expect(within(ticket).getByText('#12')).toBeInTheDocument();
     expect(within(ticket).getByText('YOUR NUMBERS')).toBeInTheDocument();
