@@ -2,14 +2,17 @@
   "name": "megastera",
   "private": true,
   "version": "0.1.0",
+  "packageManager": "pnpm@10.28.0",
   "type": "module",
   "description": "Megastera MVP: backend-generated planets powered by Megapot tickets on Base.",
   "scripts": {
     "bootstrap": "pnpm install",
     "dev": "vite",
-    "build": "tsc -b && vite build && node scripts/prepare-site-worker.mjs",
-    "api:server": "node --import tsx/esm api/serverMain.ts",
-    "api:leaderboard-worker": "node --import tsx/esm api/leaderboardWorker.ts",
+    "generator:build": "pnpm --filter @megaplanets/planet-generator build",
+    "build": "pnpm generator:build && tsc -b && vite build",
+    "vercel-build": "pnpm db:generate && pnpm build",
+    "api:server": "node --import tsx/esm server/api/serverMain.ts",
+    "api:leaderboard-worker": "node --import tsx/esm server/api/leaderboardWorker.ts",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run --passWithNoTests",
@@ -17,7 +20,8 @@
     "format": "biome format --write",
     "check": "biome check",
     "db:generate": "prisma generate",
-    "db:validate": "prisma validate"
+    "db:validate": "prisma validate",
+    "db:deploy": "prisma migrate deploy"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -64,6 +68,6 @@
     "vitest": "^3.2.4"
   },
   "engines": {
-    "node": ">=22"
+    "node": "24.x"
   }
 }

@@ -38,4 +38,14 @@ describe('readWithRpcFallback', () => {
       }),
     ).rejects.toThrow('archive failed');
   });
+
+  it('bounds each provider attempt before falling back', async () => {
+    const result = await readWithRpcFallback(
+      ['slow', 'healthy'],
+      (url) => url === 'slow' ? new Promise<string>(() => undefined) : Promise.resolve('ok'),
+      5,
+    );
+
+    expect(result).toBe('ok');
+  });
 });

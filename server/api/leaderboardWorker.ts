@@ -1,6 +1,6 @@
-import { getPrismaClient } from './database';
-import { ensureOverdueLeaderboardPeriodsFinalized } from './leaderboardStore';
-import { loadBackendPlanetConfig } from './backendConfig';
+import { getPrismaClient } from './database.js';
+import { ensureOverdueLeaderboardPeriodsFinalized } from './leaderboardStore.js';
+import { loadBackendPlanetConfig } from './backendConfig.js';
 
 /** Explicit worker entry point for the mutating daily leaderboard finalization. */
 export async function runLeaderboardFinalization(

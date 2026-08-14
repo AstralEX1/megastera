@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 describe('frontend backend surface', () => {
   it('has no consumers of the removed wallet-authentication endpoints', async () => {
-    const sourceRoot = new URL('../src/', import.meta.url);
+    const sourceRoot = new URL('../../src/', import.meta.url);
     const sourceFiles: URL[] = [];
     const visit = async (directory: URL): Promise<void> => {
       for (const entry of await readdir(directory, { withFileTypes: true })) {

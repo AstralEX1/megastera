@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { Readable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 import type { Hono } from 'hono';
-import { createApp } from './index';
+import { createApp } from './index.js';
 
 type FetchApp = Pick<Hono, 'fetch'>;
 

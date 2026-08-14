@@ -57,7 +57,7 @@ describe('PrismaBackendPlanetStore', () => {
     };
     const existingPlanet = {
       id: 'planet-row',
-      chainId: 84532,
+      chainId: 8453,
       ticketId: { toFixed: () => '1' },
       ownerAddress: proof.recipient,
       planetName: 'Existing Planet',

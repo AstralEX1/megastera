@@ -15,7 +15,7 @@ describe('expedition session', () => {
     writeExpeditionSession({
       version: 1,
       account,
-      chainId: 84532,
+      chainId: 8453,
       purchaseMode: 'direct',
       drawingId: '218',
       quantity: 2,
@@ -25,10 +25,10 @@ describe('expedition session', () => {
       bulkOrderReference: null,
       createdAt: 123,
     });
-    expect(readExpeditionSession(account, 84532)).toEqual({
+    expect(readExpeditionSession(account, 8453)).toEqual({
       version: 1,
       account,
-      chainId: 84532,
+      chainId: 8453,
       purchaseMode: 'direct',
       drawingId: '218',
       quantity: 2,
@@ -44,7 +44,7 @@ describe('expedition session', () => {
     writeExpeditionSession({
       version: 1,
       account,
-      chainId: 84532,
+      chainId: 8453,
       purchaseMode: 'bulk',
       drawingId: '218',
       quantity: 50,
@@ -54,17 +54,17 @@ describe('expedition session', () => {
       bulkOrderReference: `0x${'2'.repeat(64)}`,
       createdAt: 123,
     });
-    expect(readExpeditionSession('0x0000000000000000000000000000000000000002', 84532)).toBeNull();
-    expect(readExpeditionSession(account, 8453)).toBeNull();
-    clearExpeditionSession(account, 84532);
+    expect(readExpeditionSession('0x0000000000000000000000000000000000000002', 8453)).toBeNull();
     expect(readExpeditionSession(account, 84532)).toBeNull();
+    clearExpeditionSession(account, 8453);
+    expect(readExpeditionSession(account, 8453)).toBeNull();
   });
 
   it('rejects malformed local data instead of treating it as canonical progress', () => {
     localStorage.setItem(
-      `megaplanets:expedition:v1:84532:${account}`,
-      JSON.stringify({ version: 1, account, chainId: 84532, quantity: 99, ticketIds: ['1'] }),
+      `megaplanets:expedition:v1:8453:${account}`,
+      JSON.stringify({ version: 1, account, chainId: 8453, quantity: 99, ticketIds: ['1'] }),
     );
-    expect(readExpeditionSession(account, 84532)).toBeNull();
+    expect(readExpeditionSession(account, 8453)).toBeNull();
   });
 });

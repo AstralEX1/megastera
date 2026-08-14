@@ -1,108 +1,75 @@
 # Megastera architecture
 
-This document describes the active one-day MVP. Historical NFT/indexer plans remain in
-git history only; they are not runtime requirements.
+This document describes the active Base mainnet backend-Planet runtime. Historical NFT and
+testnet plans are not runtime requirements.
 
 ## Sources of truth
 
 | Concern | Source of truth | Active consumer |
 | --- | --- | --- |
-| Ticket purchase and drawing state | Megapot contract and Base Sepolia RPC | wagmi checkout |
-| Ticket eligibility | Finalized receipt containing canonical `MEGASTERA` `TicketPurchased` | `api/receiptVerification.ts` |
-| Historical ticket status and winnings | Base Sepolia Megapot Data API wallet ticket feed | `src/lib/api.ts` / `useWalletTickets` |
-| Planet identity and media | Shared deterministic generator plus `BackendPlanet` row | API and My Planets |
-| Planet ownership | `BackendPlanet.ownerAddress`, copied from the verified receipt recipient | API list/mining routes |
-| Planet mining | `baseMineralsPerDay` and `generatedAt` | `api/miningStore.ts` |
-| Leaderboard | Ready `BackendPlanet.generatedAt` + `baseMineralsPerDay` rows | Live read route with an approximately 60-second backend cache |
+| Ticket purchase and drawing state | Mainnet Megapot contracts + Base RPC | wagmi checkout |
+| Ticket eligibility | Finalized mainnet receipt containing canonical `MEGASTERA` `TicketPurchased` | `server/api/receiptVerification.ts` |
+| Historical status and winnings | Mainnet Megapot Data API via server proxy | `src/lib/api.ts` / `useWalletTickets` |
+| Planet identity and media | Deterministic generator + `BackendPlanet` row | API and My Planets |
+| Planet ownership | Verified receipt recipient persisted as `ownerAddress` | API list/mining routes |
+| Mining | `baseMineralsPerDay` and `generatedAt` | `server/api/miningStore.ts` |
+| Leaderboard | Ready BackendPlanet rows | Live route with an approximately 60-second process cache |
 
-## Runtime flow
+## Deployment topology
+
+```mermaid
+flowchart LR
+  Browser -->|"static app"| Vercel["Vercel project"]
+  Browser -->|"/api/*"| Function["api/index.ts"]
+  Function --> Hono["server/api Hono app"]
+  Hono -->|"pooled DATABASE_URL"| Supabase["new mainnet Supabase project"]
+  Hono -->|"BASE_RPC_URL"| Base["Base mainnet RPC"]
+  Hono -->|"MEGAPOT_API_KEY"| DataAPI["api.megapot.io/v1"]
+  Browser -->|"wallet reads/writes"| Base
+```
+
+`vercel.json` rewrites every `/api/:path*` request to one function and encodes the original
+path in `__path`. The entrypoint restores the public URL before handing it to Hono. The SPA
+fallback excludes `/api`, preventing API 404s from returning `index.html`.
+
+The Supabase runtime URL uses the transaction pooler. Each warm function instance creates
+at most one PostgreSQL connection. Prisma migrations use `DIRECT_URL`, never the transaction
+pooler. Supabase `anon` and `authenticated` roles are revoked from the backend schema by the
+latest migration; the browser does not connect directly to Supabase.
+The same migration also makes `ticket_purchases.normals` non-null, aligning a fresh
+database created from migration history with the required Prisma field.
+
+## Receipt-to-Planet flow
 
 ```text
-Megapot receipt
-  -> frontend receipt recovery and bounded generation retry
-  -> finality and canonical event verification
+Megapot execution receipt
+  -> frontend receipt recovery and bounded retry
+  -> Base chain ID + confirmation + canonical block verification
+  -> canonical mainnet Jackpot + MEGASTERA event validation
   -> immutable TicketPurchase persistence
-  -> deterministic BackendPlanet derivation
-  -> GIF bytes + hash in PostgreSQL
-  -> My Planets collection / mining / leaderboard
+  -> deterministic BackendPlanet + GIF persistence
+  -> collection / mining / leaderboard reads
 ```
 
-If generation fails after the receipt proof is saved, `GET /api/planets/collection` still
-returns a pending row. If the receipt is not final yet, the frontend keeps its canonical
-receipt in local storage and renders the same ticket as pending until the backend catch-up
-pass can persist and generate it.
+Direct purchases support one to ten tickets. Eleven to fifty all-random tickets use the
+mainnet batch facilitator. Each keeper execution receipt is processed separately; the
+order-creation transaction is never Planet provenance. `originTxHash:logIndex` is the
+idempotency key.
 
-Direct purchases use one to ten tickets. Eleven to fifty all-random tickets use the
-Megapot keeper facilitator. For bulk orders, each execution receipt is processed; the
-order-creation transaction is never used as Planet provenance. Every ticket remains tied
-to its immutable `originTxHash:logIndex` key.
+There is deliberately no deployment boundary block: any canonical Base mainnet
+`MEGASTERA` purchase is eligible. Incorrect chain, jackpot, source, event fields, receipt
+block, or optional recipient fails closed.
 
-The source tag is always `MEGASTERA`. It is a Megapot attribution value and does not
-refer to a Planet NFT deployment.
+## Runtime surfaces
 
-## Backend API
+`server/api/index.ts` mounts backend Planet generation/collection/GIF/mining, leaderboard,
+health/metrics, and the mainnet Megapot Data API proxy. `api/index.ts` is only the Vercel
+adapter. `vite.config.ts` mounts the same Hono app in local development.
 
-`api/index.ts` mounts only:
+The frontend reads the current drawing dynamically from the Jackpot contract. It does not
+hardcode ticket price, drawing ID, ball limits, referral rates, or lifecycle state. Claims
+use `Jackpot.claimWinnings` after simulation. No active module signs vouchers, pins media,
+reads a Planet contract, projects NFT events, or maintains an accrual ledger.
 
-- backend Planet generation, collection, GIF, and mining routes;
-- live leaderboard routes; and
-- liveness/metrics routes.
-
-`api/receiptVerification.ts` performs the complete verification sequence against bounded
-RPC fallbacks: Base Sepolia chain ID, receipt event fields, optional recipient, finalized
-block depth, canonical block hash, and block timestamp.
-
-`api/prismaTicketPurchase.ts` persists only the immutable ticket row required by backend
-generation. `api/backendPlanet.ts` derives the deterministic traits and GIF and upserts
-one row per ticket purchase. Existing ready rows are returned unchanged; conflicting
-proof fields fail closed. Collection queries filter by Base Sepolia, the active jackpot,
-and the `MEGASTERA` source tag.
-
-No active module signs vouchers, pins media, reads a Planet contract, projects Planet
-events, scans all tickets continuously, or writes transfer/accrual ledgers.
-
-## Frontend boundaries
-
-`src/pages/Play.tsx` owns checkout and, after canonical receipt recovery in the purchase
-hooks, requests backend generation with bounded finality retries. The active UI has two
-stages: Buy tickets and Explore planets. On success it shows the generated cards full
-screen with only `Explore again` and `My planets` actions.
-
-`src/pages/Planets.tsx` merges the backend collection with locally confirmed site receipts
-and the complete paginated wallet ticket feed. Site tickets are always represented as a
-Planet or pending card; unmatched wallet tickets are plain ticket cards. It does not derive
-inventory from chain holdings or expose mint/reveal controls. `src/hooks/useWalletMining.ts`
-reads the backend wallet snapshot and locally interpolates no persistent state. The
-`/tickets` surface uses `useJackpotState` for current-drawing status/countdown and the
-testnet Data API for wallet ticket/win rows; claims call `Jackpot.claimWinnings` directly
-after simulation.
-
-The Lab and landing hero may still render deterministic previews for product exploration;
-those previews are not the authority for a purchased Planet.
-
-## Persistence
-
-The new `BackendPlanet` model is linked one-to-one to `TicketPurchase` and stores:
-
-- immutable ticket owner and seed/traits hash;
-- generator version and deterministic display traits;
-- base mining rate and generation timestamp;
-- GIF bytes and content hash; and
-- ready/failed status plus bounded generation error text.
-
-Legacy Prisma tables and migrations are retained only for database compatibility. No
-active code writes the legacy Planet, voucher, artifact, projector, or accrual paths.
-
-## Verification map
-
-Run the repository gate from the root:
-
-```text
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm db:generate
-pnpm db:validate
-pnpm --filter @megaplanets/planet-generator golden
-```
+Legacy Prisma tables and migrations remain for database compatibility but are not imported
+by active API/frontend paths.

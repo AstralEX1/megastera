@@ -1,8 +1,8 @@
-import type { PrismaClient } from './generated/prisma/client';
+import type { PrismaClient } from './generated/prisma/client.js';
 import {
   calculateCollectionMining,
   type CollectionMiningPlanet,
-} from './collectionMining';
+} from './collectionMining.js';
 
 type BackendMiningPlanetRow = CollectionMiningPlanet;
 

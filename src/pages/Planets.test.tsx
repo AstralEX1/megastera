@@ -74,7 +74,7 @@ vi.mock('@/components/planets/BackendPlanetPreview', () => ({
 import { Planets } from './Planets';
 
 const backendPlanet = {
-  planetId: 'planet-1', chainId: 84532, ticketId: '456', ownerAddress: mocks.account.address,
+  planetId: 'planet-1', chainId: 8453, ticketId: '456', ownerAddress: mocks.account.address,
   name: 'Astraea', seed: `0x${'11'.repeat(32)}`, traitsHash: `0x${'22'.repeat(32)}`,
   generatorVersion: 3, planetType: 'Nebula', terrain: 'simplex', rarity: 'Common',
   satelliteCount: 1, hasRing: false, baseMineralsPerDay: '24', generatedAt: '2026-08-13T12:00:00.000Z',
@@ -140,6 +140,10 @@ describe('backend My Planets', () => {
     expect(screen.getByAltText('Astraea animated GIF')).toHaveAttribute('src', '/api/planets/planet-1/gif');
     expect(screen.getAllByText('Nebula').length).toBeGreaterThan(0);
     expect(screen.queryByText(/Mint|Reveal|NFT BaseScan/)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /View source ticket receipt/ })).toHaveAttribute(
+      'href',
+      `https://basescan.org/tx/${backendPlanet.ticket.originTxHash}`,
+    );
   });
 
   it('shows collection counts and mining totals in the requested label-above-value order', () => {

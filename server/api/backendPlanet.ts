@@ -6,9 +6,9 @@ import {
   GENERATOR_VERSION,
   renderPlanetGif,
 } from '@megaplanets/planet-generator';
-import type { PrismaClient } from './generated/prisma/client';
-import { BASE_SEPOLIA_JACKPOT, normalizeMegasteraProof, type MegasteraProof } from './eligibility';
-import { BASE_SEPOLIA_CHAIN_ID as CONFIGURED_CHAIN_ID, MEGASTERA_SOURCE } from './config';
+import type { PrismaClient } from './generated/prisma/client.js';
+import { MAINNET_JACKPOT, normalizeMegasteraProof, type MegasteraProof } from './eligibility.js';
+import { BASE_CHAIN_ID as CONFIGURED_CHAIN_ID, MEGASTERA_SOURCE } from './config.js';
 
 export type BackendPlanetStatus = 'READY' | 'FAILED';
 
@@ -323,7 +323,7 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
     const rows = await this.prisma.ticketPurchase.findMany({
       where: {
         chainId: CONFIGURED_CHAIN_ID,
-        jackpotAddress: BASE_SEPOLIA_JACKPOT.toLowerCase(),
+        jackpotAddress: MAINNET_JACKPOT.toLowerCase(),
         source: stringToHex(MEGASTERA_SOURCE, { size: 32 }),
         recipient: getAddress(ownerAddress).toLowerCase(),
       },

@@ -4,11 +4,11 @@ import {
   deriveTypePalette,
   deriveTypeSatellites,
   deriveTypeTerrain,
-} from './generator';
-import { deepFreeze } from './immutable';
-import type { PlanetInput, PlanetPreview, PlanetConfig } from './types';
-import { derivePlanetVisualForType } from './visual-traits';
-import { isPlanetType, type PlanetTypeId } from './visual-types';
+} from './generator.js';
+import { deepFreeze } from './immutable.js';
+import type { PlanetInput, PlanetPreview, PlanetConfig } from './types.js';
+import { derivePlanetVisualForType } from './visual-traits.js';
+import { isPlanetType, type PlanetTypeId } from './visual-types.js';
 
 function derivePreview(
   input: PlanetInput,

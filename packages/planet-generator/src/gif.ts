@@ -1,7 +1,7 @@
 import * as gifencModule from 'gifenc';
-import { createPlanetScene, hexColorToRgb, renderPlanetSceneFrame } from './render';
-import { GENERATOR_CONFIG } from './render-config';
-import type { HexColor, PlanetRenderDescriptor } from './visual-types';
+import { createPlanetScene, hexColorToRgb, renderPlanetSceneFrame } from './render.js';
+import { GENERATOR_CONFIG } from './render-config.js';
+import type { HexColor, PlanetRenderDescriptor } from './visual-types.js';
 
 type GifPalette = readonly (readonly [number, number, number])[];
 type GifencApi = Pick<typeof gifencModule, 'GIFEncoder' | 'applyPalette'>;

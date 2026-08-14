@@ -1,0 +1,10 @@
+.env
+.env.*
+.vercel
+.git
+.superpowers
+.claude
+docs
+contracts
+**/*.test.*
+scripts/setup-mainnet-env.ps1

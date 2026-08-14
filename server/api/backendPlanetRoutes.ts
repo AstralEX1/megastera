@@ -1,19 +1,19 @@
-import { Hono } from 'hono';
+import { type Context, Hono } from 'hono';
 import { getAddress, isAddress } from 'viem';
 import { z } from 'zod';
-import { getPrismaClient } from './database';
-import { loadBackendPlanetConfig, type BackendPlanetConfig } from './backendConfig';
+import { getPrismaClient } from './database.js';
+import { loadBackendPlanetConfig, type BackendPlanetConfig } from './backendConfig.js';
 import {
   type BackendPlanetCollectionRecord,
   type BackendPlanetRecord,
   type BackendPlanetStore,
   PrismaBackendPlanetStore,
-} from './backendPlanet';
-import type { MegasteraProof } from './eligibility';
-import { readBoundedJson } from './http';
-import { getBackendPlanetMiningSnapshot, getBackendWalletMiningSnapshot } from './miningStore';
-import { findTicketFromReceipt, parseReceiptReference, type ReceiptReference } from './receiptVerification';
-import { saveMegasteraProof } from './prismaTicketPurchase';
+} from './backendPlanet.js';
+import type { MegasteraProof } from './eligibility.js';
+import { readBoundedJson } from './http.js';
+import { getBackendPlanetMiningSnapshot, getBackendWalletMiningSnapshot } from './miningStore.js';
+import { findTicketFromReceipt, parseReceiptReference, type ReceiptReference } from './receiptVerification.js';
+import { saveMegasteraProof } from './prismaTicketPurchase.js';
 
 export type BackendPlanetReference = ReceiptReference;
 
@@ -22,7 +22,7 @@ export type BackendPlanetRouteDependencies = {
   findTicket: (config: BackendPlanetConfig, reference: BackendPlanetReference) => Promise<MegasteraProof>;
   saveProof: (config: BackendPlanetConfig, proof: MegasteraProof) => Promise<void>;
   getStore: (config: BackendPlanetConfig) => BackendPlanetStore;
-  allows: (key: string) => boolean;
+  allows: (key: string, cost?: number) => boolean;
   now: () => Date;
 };
 
@@ -70,19 +70,34 @@ function defaultDependencies(): BackendPlanetRouteDependencies {
   };
 }
 
-export function createRateLimiter(limit = 120, windowMs = 60_000, now = () => Date.now()) {
+export function createRateLimiter(limit = 60, windowMs = 60_000, now = () => Date.now()) {
   const counts = new Map<string, { count: number; resetsAt: number }>();
-  return (key: string) => {
+  return (key: string, cost = 1) => {
+    if (!Number.isSafeInteger(cost) || cost < 1 || cost > limit) return false;
     const timestamp = now();
     const current = counts.get(key);
     if (!current || current.resetsAt <= timestamp) {
-      counts.set(key, { count: 1, resetsAt: timestamp + windowMs });
+      counts.set(key, { count: cost, resetsAt: timestamp + windowMs });
       return true;
     }
-    if (current.count >= limit) return false;
-    current.count += 1;
+    if (current.count + cost > limit) return false;
+    current.count += cost;
     return true;
   };
+}
+
+function requestClientId(headers: Headers): string {
+  return (
+    headers.get('x-vercel-forwarded-for') ??
+    headers.get('x-forwarded-for') ??
+    'unknown'
+  ).split(',')[0].trim();
+}
+
+function rateLimitedResponse(c: Context) {
+  return c.json({ error: 'Planet generation is rate limited.' }, 429, {
+    'Retry-After': '60',
+  });
 }
 
 export function createBackendPlanetRoutes(
@@ -98,7 +113,6 @@ export function createBackendPlanetRoutes(
     if (current) return current;
     const operation = (async () => {
       const config = dependencies.loadConfig();
-      if (!dependencies.allows(key)) throw new Error('Planet generation is rate limited.');
       const proof = await dependencies.findTicket(config, reference);
       await dependencies.saveProof(config, proof);
       return dependencies.getStore(config).generatePlanet(proof);
@@ -121,6 +135,9 @@ export function createBackendPlanetRoutes(
         : undefined;
     if (!references || references.length < 1 || references.length > MAX_BATCH)
       return c.json({ error: `references must contain between 1 and ${MAX_BATCH} items.` }, 400);
+    if (!dependencies.allows(`client:${requestClientId(c.req.raw.headers)}`, references.length)) {
+      return rateLimitedResponse(c);
+    }
     const planets: unknown[] = [];
     for (const value of references) {
       const reference = parseReceiptReference(value);
@@ -143,10 +160,12 @@ export function createBackendPlanetRoutes(
     }
     const reference = parseReceiptReference(body);
     if (!reference) return c.json({ error: 'transactionHash and logIndex are required.' }, 400);
+    if (!dependencies.allows(`client:${requestClientId(c.req.raw.headers)}`)) {
+      return rateLimitedResponse(c);
+    }
     try {
       return c.json({ planet: serializePlanet(await generate(reference)) }, 201);
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('rate limited')) return c.json({ error: error.message }, 429);
+    } catch {
       return c.json({ error: 'Planet generation failed.' }, 422);
     }
   });
@@ -181,7 +200,9 @@ export function createBackendPlanetRoutes(
     try {
       const gif = await dependencies.getStore(dependencies.loadConfig()).getGif(parsed.data);
       if (!gif) return c.json({ error: 'Planet GIF not found.' }, 404);
-      return new Response(gif.bytes, {
+      const body = new ArrayBuffer(gif.bytes.byteLength);
+      new Uint8Array(body).set(gif.bytes);
+      return new Response(body, {
         status: 200,
         headers: {
           'content-type': 'image/gif',

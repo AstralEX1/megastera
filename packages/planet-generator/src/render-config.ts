@@ -1,5 +1,5 @@
-import { GENERATOR_VERSION } from './types';
-import type { NoiseMode, PaletteType } from './visual-types';
+import { GENERATOR_VERSION } from './types.js';
+import type { NoiseMode, PaletteType } from './visual-types.js';
 
 export const PALETTE_TYPES = [
   'analogous',

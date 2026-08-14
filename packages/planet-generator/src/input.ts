@@ -1,5 +1,5 @@
-import type { NormalizedPlanetInput, PlanetInput, SerializedPlanetInput } from './types';
-import type { Hex } from './visual-types';
+import type { NormalizedPlanetInput, PlanetInput, SerializedPlanetInput } from './types.js';
+import type { Hex } from './visual-types.js';
 
 const UINT256_MAX = (1n << 256n) - 1n;
 const BYTES32_PATTERN = /^0x[\da-fA-F]{64}$/;

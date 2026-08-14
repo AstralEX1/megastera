@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import webmWasmModule from 'webm-wasm/dist/webm-wasm.js';
-import { createPlanetScene, renderPlanetSceneFrame } from './render';
-import { GENERATOR_CONFIG, WEBM_CONFIG } from './render-config';
-import type { PlanetRenderDescriptor } from './visual-types';
+import { createPlanetScene, renderPlanetSceneFrame } from './render.js';
+import { GENERATOR_CONFIG, WEBM_CONFIG } from './render-config.js';
+import type { PlanetRenderDescriptor } from './visual-types.js';
 
 const webmWasmFactory = (
   typeof webmWasmModule === 'function'

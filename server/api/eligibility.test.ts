@@ -1,10 +1,10 @@
 import { encodeAbiParameters, encodeEventTopics, getAddress, stringToHex, type Log, type TransactionReceipt } from 'viem';
 import { describe, expect, it } from 'vitest';
-import { MEGAPLANETS_LAUNCH_BLOCK, MEGAPLANETS_TICKET_START_BLOCK, MEGASTERA_SOURCE } from './config';
+import { BASE_CHAIN_ID, MEGASTERA_SOURCE } from './config';
 import {
-  BASE_SEPOLIA_JACKPOT,
   decodeEligibleTicket,
   findEligibleTicket,
+  MAINNET_JACKPOT,
   MegasteraVerifier,
   normalizeMegasteraProof,
   TICKET_PURCHASED_ABI,
@@ -16,8 +16,8 @@ const transactionHash = `0x${'ab'.repeat(32)}` as const;
 function ticketLog(overrides: Partial<Log> = {}): Log {
   const source = stringToHex(MEGASTERA_SOURCE, { size: 32 });
   return {
-    address: BASE_SEPOLIA_JACKPOT,
-    blockNumber: MEGAPLANETS_LAUNCH_BLOCK,
+    address: MAINNET_JACKPOT,
+    blockNumber: 1n,
     transactionHash,
     logIndex: 4,
     topics: encodeEventTopics({
@@ -47,21 +47,13 @@ describe('Megastera eligibility', () => {
       normals: [2, 7, 14, 22, 29],
       bonusBall: 9,
       originTxHash: transactionHash,
-      blockNumber: MEGAPLANETS_LAUNCH_BLOCK,
+      blockNumber: 1n,
       logIndex: 4n,
     });
   });
 
-  it('rejects purchases before the canonical activation boundary', () => {
-    expect(() => decodeEligibleTicket(ticketLog({ blockNumber: MEGAPLANETS_TICKET_START_BLOCK - 1n }))).toThrow(
-      'outside the eligible Megastera range',
-    );
-  });
-
-  it('accepts the canonical activation boundary before the Planet launch block', () => {
-    expect(
-      decodeEligibleTicket(ticketLog({ blockNumber: MEGAPLANETS_TICKET_START_BLOCK })).ticketId,
-    ).toBe(456n);
+  it('accepts any canonical mainnet MEGASTERA receipt without a launch-block switch', () => {
+    expect(decodeEligibleTicket(ticketLog({ blockNumber: 1n })).ticketId).toBe(456n);
   });
   it('locates the requested log index before decoding it', () => {
     const otherLog = ticketLog({ logIndex: 3 });
@@ -73,14 +65,14 @@ describe('Megastera eligibility', () => {
     const source = stringToHex(MEGASTERA_SOURCE, { size: 32 });
     const proof = normalizeMegasteraProof({
       ...decodeEligibleTicket(ticketLog()),
-      chainId: 84_532,
-      jackpotAddress: BASE_SEPOLIA_JACKPOT.toLowerCase() as `0x${string}`,
+      chainId: BASE_CHAIN_ID,
+      jackpotAddress: MAINNET_JACKPOT.toLowerCase() as `0x${string}`,
       source,
     });
 
     expect(proof).toMatchObject({
-      chainId: 84_532,
-      jackpotAddress: BASE_SEPOLIA_JACKPOT,
+      chainId: BASE_CHAIN_ID,
+      jackpotAddress: MAINNET_JACKPOT,
       recipient: getAddress(recipient),
       source,
       ticketId: 456n,
@@ -93,7 +85,7 @@ describe('Megastera eligibility', () => {
       status: 'success',
       transactionHash,
       blockHash,
-      blockNumber: MEGAPLANETS_LAUNCH_BLOCK,
+      blockNumber: 1n,
       logs: [ticketLog({ blockHash, transactionHash })],
     } as unknown as TransactionReceipt;
     const verifier = new MegasteraVerifier();
@@ -123,7 +115,7 @@ describe('Megastera eligibility', () => {
       status: 'success',
       transactionHash,
       blockHash,
-      blockNumber: MEGAPLANETS_LAUNCH_BLOCK,
+      blockNumber: 1n,
       logs: [log],
     } as unknown as TransactionReceipt;
 

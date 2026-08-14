@@ -1,38 +1,27 @@
-import { CHAIN, type ChainName } from '@/config/contracts';
-
-const DEFAULT_API_BASE_URL: Record<ChainName, string> = {
-  testnet: 'https://api-testnet.megapot.io/v1',
-  mainnet: 'https://api.megapot.io/v1',
-};
+const DEFAULT_API_BASE_URL = '/api/megapot';
+const MAINNET_API_BASE_URL = 'https://api.megapot.io/v1';
+const RETIRED_TESTNET_API_BASE_URL = 'https://api-testnet.megapot.io/v1';
 
 function isSameOriginProxyUrl(value: string | undefined): boolean {
   return Boolean(value?.startsWith('/') && !value.startsWith('//'));
 }
 
 export function getApiBaseUrlEnvironmentMismatch(
-  chain: ChainName,
   apiBaseUrl: string | undefined,
 ): string | undefined {
   const baseUrl = apiBaseUrl?.trim().replace(/\/+$/, '');
   if (!baseUrl || isSameOriginProxyUrl(baseUrl)) return undefined;
-  const testnetHost = DEFAULT_API_BASE_URL.testnet;
-  const mainnetHost = DEFAULT_API_BASE_URL.mainnet;
-  if (chain === 'testnet' && baseUrl === mainnetHost) {
-    return `[megapot-api] ${mainnetHost} serves Base Mainnet; use ${testnetHost} for Base Sepolia.`;
+  if (baseUrl === RETIRED_TESTNET_API_BASE_URL) {
+    return `[megapot-api] ${RETIRED_TESTNET_API_BASE_URL} serves Base Sepolia; use the ${DEFAULT_API_BASE_URL} Base mainnet proxy.`;
   }
-  if (chain === 'mainnet' && baseUrl === testnetHost) {
-    return `[megapot-api] ${testnetHost} serves Base Sepolia; use ${mainnetHost} for Base Mainnet.`;
-  }
-  return undefined;
+  return `[megapot-api] Direct browser Data API access (${baseUrl}) is disabled; use the same-origin proxy at ${DEFAULT_API_BASE_URL}, which targets ${MAINNET_API_BASE_URL}.`;
 }
 
 /** Resolve a chain-compatible host; never silently read the other network. */
-export function resolveApiBaseUrl(chain: ChainName, explicitBaseUrl?: string): string {
+export function resolveApiBaseUrl(explicitBaseUrl?: string): string {
   const value = explicitBaseUrl?.trim();
-  if (!value) return DEFAULT_API_BASE_URL[chain];
-  return getApiBaseUrlEnvironmentMismatch(chain, value)
-    ? DEFAULT_API_BASE_URL[chain]
-    : value;
+  if (!value) return DEFAULT_API_BASE_URL;
+  return getApiBaseUrlEnvironmentMismatch(value) ? DEFAULT_API_BASE_URL : value;
 }
 
 /**
@@ -63,34 +52,22 @@ export function resolveApiBaseUrl(chain: ChainName, explicitBaseUrl?: string): s
  *             round-leaderboards, single-round detail, or cross-drawing
  *             wallet feeds without re-deriving the URL or response shape.
  *
- *             API key (`VITE_MEGAPOT_API_KEY`) is optional — without one, the
- *             request falls back to the anonymous tier (10/min, 500/day).
- *             With a key: 60/min, 10K/day. Mint one from
- *             https://megapot.io/dashboard. Because Vite SPAs ship env to
- *             the browser, treat the key as semi-public and rotate via the
- *             dashboard if it leaks. For a privileged server-side key,
- *             proxy the API through your own backend instead of fetching
- *             directly.
+ *             The browser always uses `/api/megapot`. The Vercel/Hono proxy
+ *             injects the server-only `MEGAPOT_API_KEY`; no API credential is
+ *             present in the Vite bundle.
  * ---
  */
 
 /**
  * Base URL for v1 of the Megapot Data API.
  *
- * Override via `VITE_API_BASE_URL` to switch tiers:
- *   1. Anonymous (default): leave unset. Browser hits the active chain host
- *      directly (`api-testnet.megapot.io` on Base Sepolia), anonymous tier
- *      (10/min, 500/day).
- *   2. Browser key: set `VITE_MEGAPOT_API_KEY`. Same default base URL,
- *      higher tier (60/min, 10K/day). Key ships to the browser bundle.
- *   3. Proxy: set `VITE_API_BASE_URL=/api/megapot` and deploy a
- *      separately managed server-side proxy with `MEGAPOT_API_KEY`
- *      (no VITE_ prefix). The key never reaches the browser.
+ * `VITE_API_BASE_URL` may select another same-origin path for a compatible
+ * deployment. Absolute URLs fail closed to `/api/megapot`, preserving the
+ * server-only credential boundary.
  *
  * Empty / whitespace-only env values fall back to the default URL.
  */
 export const API_BASE_URL = resolveApiBaseUrl(
-  CHAIN,
   import.meta.env.VITE_API_BASE_URL as string | undefined,
 );
 
@@ -113,26 +90,12 @@ export const QK = {
   round: 'round',
 } as const;
 
-/** Optional bearer key. When undefined, requests fall back to the anonymous tier. */
-const API_KEY = import.meta.env.VITE_MEGAPOT_API_KEY as string | undefined;
-
 const API_BASE_ENVIRONMENT_WARNING = getApiBaseUrlEnvironmentMismatch(
-  CHAIN,
   import.meta.env.VITE_API_BASE_URL as string | undefined,
 );
 if (API_BASE_ENVIRONMENT_WARNING) {
   // biome-ignore lint/suspicious/noConsole: deliberate configuration diagnostic
   console.warn(API_BASE_ENVIRONMENT_WARNING);
-}
-
-// `mpk_dev_*` keys target a separate environment from `mpk_live_*`; sending the
-// wrong tier returns `403 key_environment_mismatch`. Surface the mismatch at
-// boot so a forker doesn't chase a config bug through a 403 chain.
-if (import.meta.env.PROD && API_KEY?.startsWith('mpk_dev_')) {
-  // biome-ignore lint/suspicious/noConsole: deliberate diagnostic
-  console.warn(
-    '[megapot-api] VITE_MEGAPOT_API_KEY is a `mpk_dev_*` key in a production build — requests will 403 with `key_environment_mismatch`.',
-  );
 }
 
 // ─── Types — hand-mirrored from OpenAPI v1.5.0 ──────────────────────────────
@@ -346,7 +309,7 @@ export function formatApiError(e: unknown): string {
       case 'invalid_api_key':
       case 'revoked_api_key':
       case 'key_environment_mismatch':
-        return 'API key rejected. Check VITE_MEGAPOT_API_KEY.';
+        return 'Data API proxy authentication failed. Check the server-only MEGAPOT_API_KEY.';
       default:
         return e.message;
     }
@@ -356,24 +319,20 @@ export function formatApiError(e: unknown): string {
 
 // ─── Internals ───────────────────────────────────────────────────────────────
 
-function authHeaders(): HeadersInit {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  if (API_KEY) headers.Authorization = `Bearer ${API_KEY}`;
-  return headers;
-}
-
 async function get<T>(
   path: string,
   params?: Record<string, string | number | undefined>,
   options?: { signal?: AbortSignal },
 ): Promise<T> {
-  const url = new URL(`${API_BASE_URL}${path}`);
+  const isRelative = API_BASE_URL.startsWith('/');
+  const url = new URL(`${API_BASE_URL}${path}`, 'http://megastera.local');
   if (params) {
     for (const [k, v] of Object.entries(params)) {
       if (v !== undefined) url.searchParams.set(k, String(v));
     }
   }
-  const res = await fetch(url, { headers: authHeaders(), signal: options?.signal });
+  const requestUrl = isRelative ? `${url.pathname}${url.search}` : url.toString();
+  const res = await fetch(requestUrl, { headers: { Accept: 'application/json' }, signal: options?.signal });
   if (!res.ok) {
     // Pull the request id and retry-after from headers regardless of body
     // shape — a 5xx with a non-JSON body shouldn't strip them.

@@ -6,6 +6,7 @@ import { Ball } from '@/components/lottery/Ball';
 import { BackendPlanetPreview } from '@/components/planets/BackendPlanetPreview';
 import { PlanetMiningMetrics } from '@/components/planets/PlanetMiningOverlay';
 import { PlanetTicketAction } from '@/components/planets/PlanetTicketAction';
+import { EXPLORER_TX_URL } from '@/config/contracts';
 import { useClaimWinnings } from '@/hooks/useClaimWinnings';
 import { useBackendPlanets } from '@/hooks/useBackendPlanets';
 import { useJackpotState } from '@/hooks/useJackpotState';
@@ -195,7 +196,7 @@ function TicketBlock({
       <div className="mt-4 border-t border-[var(--border)] pt-3">
         <PlanetTicketAction status={status} onClaim={onClaim} isClaimPending={isClaimPending} claimError={claimError} />
       </div>
-      <a className="mt-3 block rounded-xl border border-[var(--border)] px-3 py-2.5 text-center text-sm text-[var(--rare)] transition-colors hover:bg-[var(--surface-hover)]" href={`https://sepolia.basescan.org/tx/${originTxHash}`} target="_blank" rel="noreferrer">
+      <a className="mt-3 block rounded-xl border border-[var(--border)] px-3 py-2.5 text-center text-sm text-[var(--rare)] transition-colors hover:bg-[var(--surface-hover)]" href={`${EXPLORER_TX_URL}${originTxHash}`} target="_blank" rel="noreferrer">
         View source ticket receipt ↗
       </a>
     </section>

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import { getAddress, stringToHex, type Hex } from 'viem';
-import { BASE_SEPOLIA_CHAIN_ID, MEGASTERA_SOURCE } from './config';
-import { BASE_SEPOLIA_JACKPOT, type MegasteraProof } from './eligibility';
+import { BASE_CHAIN_ID, MEGASTERA_SOURCE } from './config';
+import { MAINNET_JACKPOT, type MegasteraProof } from './eligibility';
 import { MemoryBackendPlanetStore } from './backendPlanet';
 import { createBackendPlanetRoutes } from './backendPlanetRoutes';
 
@@ -17,14 +17,14 @@ const proof: MegasteraProof = {
   logIndex: 4n,
   blockHash: `0x${'cd'.repeat(32)}` as Hex,
   purchasedAt: new Date('2026-08-13T12:00:00.000Z'),
-  chainId: BASE_SEPOLIA_CHAIN_ID,
-  jackpotAddress: BASE_SEPOLIA_JACKPOT,
+  chainId: BASE_CHAIN_ID,
+  jackpotAddress: MAINNET_JACKPOT,
   source: stringToHex(MEGASTERA_SOURCE, { size: 32 }),
 };
 
 function makeApp() {
   const store = new MemoryBackendPlanetStore();
-  const config = { chainId: BASE_SEPOLIA_CHAIN_ID, rpcUrl: 'https://rpc.example.test', databaseUrl: 'postgres://example', confirmations: 6n } as const;
+  const config = { chainId: BASE_CHAIN_ID, rpcUrl: 'https://rpc.example.test', databaseUrl: 'postgres://example', confirmations: 6n } as const;
   const app = new Hono();
   app.route('/api', createBackendPlanetRoutes({
     loadConfig: () => config,
@@ -74,5 +74,29 @@ describe('backend Planet routes', () => {
     expect(gif.status).toBe(200);
     expect(gif.headers.get('content-type')).toBe('image/gif');
     expect((await gif.arrayBuffer()).byteLength).toBeGreaterThan(6);
+  });
+
+  it('charges the full batch cost before making any RPC reads', async () => {
+    const findTicket = vi.fn(async () => proof);
+    const app = new Hono();
+    app.route('/api', createBackendPlanetRoutes({
+      loadConfig: () => ({ chainId: BASE_CHAIN_ID, rpcUrl: 'https://rpc.example.test', databaseUrl: 'postgres://example', confirmations: 6n }),
+      findTicket,
+      allows: (_key, cost) => cost !== 50,
+    }));
+    const references = Array.from({ length: 50 }, (_, logIndex) => ({
+      transactionHash: `0x${logIndex.toString(16).padStart(64, '0')}`,
+      logIndex,
+    }));
+
+    const response = await app.request('/api/planets/generate/batch', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ references }),
+    });
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('retry-after')).toBe('60');
+    expect(findTicket).not.toHaveBeenCalled();
   });
 });

@@ -1,91 +1,95 @@
-# Operations and deployment runbook
+# Mainnet operations and deployment
 
-This runbook covers the backend-only Megastera MVP on Base Sepolia. No Planet contract,
-NFT signer, Pinata credential, or indexer process is required.
+This runbook deploys the Base mainnet Vite frontend, Hono backend, and Megapot Data API
+proxy as one Vercel project backed by a new Supabase PostgreSQL project. It does not require
+a Planet contract, signer, private key, Pinata, or continuous indexer.
 
-## Required environment
+## Dependency matrix
 
-Server values:
+| Dependency | Mainnet value | Visibility |
+| --- | --- | --- |
+| Chain | Base `8453` | checked-in |
+| Jackpot | `0x3bAe643002069dBCbcd62B1A4eb4C4A397d042a2` | checked-in |
+| Batch facilitator | `0xBA343479D98a1Ed333899999D95a7343B808a76F` | checked-in |
+| USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | checked-in |
+| Payout calculator | `0x97a22361b6208aC8cd9afaea09D20feC47046CBD` | checked-in |
+| Referrer | `0x43904de0e226cc20DD72968954af6B439404743D` | checked-in |
+| Source | `MEGASTERA` padded to bytes32 | checked-in |
+| Data API | `https://api.megapot.io/v1` via `/api/megapot` | checked-in host, secret key |
+| Browser RPC | `VITE_RPC_URL` + optional fallbacks | public env |
+| Receipt RPC | `BASE_RPC_URL` + optional fallbacks | server env |
+| Database runtime | Supabase transaction pooler | server secret |
+| Database migrations | Supabase direct/session URL | operator secret |
 
-```text
-BASE_SEPOLIA_RPC_URL
-BASE_SEPOLIA_RPC_FALLBACK_URLS       # optional comma-separated URLs
-DATABASE_URL
-MEGAPLANETS_CONFIRMATIONS=6          # optional, non-negative integer
-MEGAPLANETS_ALLOWED_ORIGINS           # optional exact comma-separated origins
-```
+## 1. Create the new Supabase project
 
-Frontend values use `VITE_*` only for public configuration, including the wallet/RPC and
-optional `VITE_BACKEND_API_BASE_URL`. The Megapot Data API defaults to
-`https://api-testnet.megapot.io/v1` for Base Sepolia. If `VITE_API_BASE_URL=/api/megapot`
-is used, the Vite proxy must target the same testnet host. Never put `DATABASE_URL`,
-server tokens, or private keys in a Vite variable.
+Choose a Supabase region close to the intended Vercel Function region. Do not reuse or
+copy testnet rows into the new database.
 
-## Start and health checks
+Collect two connection strings from Supabase:
 
-```sh
+- `DATABASE_URL`: transaction pooler, port `6543`, with
+  `pgbouncer=true&sslmode=require&uselibpqcompat=true`; used by Vercel runtime. The runtime
+  also adds `uselibpqcompat=true` when an older saved URL contains only `sslmode=require`.
+- `DIRECT_URL`: direct connection or session pooler, normally port `5432`, with
+  `sslmode=require`; used only by Prisma migration commands.
+
+Keep both URLs out of git. From a trusted operator environment, set them temporarily and
+apply the full migration history:
+
+```bash
 pnpm db:generate
 pnpm db:validate
-pnpm api:server
-pnpm dev --host 127.0.0.1
+pnpm db:deploy
 ```
 
-Check:
+The final migration revokes table, sequence, and function access from Supabase `anon` and
+`authenticated` roles. The application does not use Supabase browser keys; all database
+access is server-side. Confirm that `ticket_purchases` and `backend_planets` exist and are
+empty before launch.
 
-- `GET /api/planets/health` for liveness;
-- `GET /api/planets/metrics` for process-local HTTP counters; and
-- `GET /api/planets/collection?owner=...` after a confirmed receipt generation.
+## 2. Configure one Vercel project
 
-There is intentionally no readiness route that probes a Planet contract and no
-indexer process to start.
+Import the repository as a Vite project. Keep the repository root as the project root.
+`vercel.json` generates Prisma Client, builds the app, selects the static output directory,
+one API Function, API
+catch-all rewrite, and SPA fallback.
 
-## Purchase and generation troubleshooting
-
-The frontend must send the execution transaction hash and exact `TicketPurchased` log
-index. The API then checks receipt status, Base Sepolia, canonical jackpot, `MEGASTERA`
-source tag, ticket fields, confirmation depth, canonical block hash, and optional
-recipient. The Play screen retries the same reference while the receipt reaches finality;
-the backend persists the proof before rendering the GIF, so a generation/storage failure
-leaves a retryable pending collection row.
-
-If generation returns `422`, inspect server logs for the request and RPC stage; do not
-retry with a different log index unless the receipt actually contains another canonical
-ticket event. Repeating the same valid request is safe: the key is
-`originTxHash:logIndex`, and an existing ready row is returned. If the receipt is not yet
-final, My Planets keeps the browser-confirmed receipt as a pending card and the catch-up
-pass retries it later.
-
-If the database already contains a conflicting ticket or Planet row, preserve it and
-investigate the immutable provenance mismatch. Do not delete production data as a first
-response.
-
-GIFs are stored in PostgreSQL and served with an immutable content hash. A missing GIF is
-a failed generation/storage issue, not a reason to fall back to browser-generated media.
-
-## Mining and leaderboard
-
-Mining and leaderboard reads are lazy/live:
+Set these variables for Production. Preview and Development are also mainnet-only; use
+appropriate isolated credentials without changing the chain.
 
 ```text
-baseMineralsPerDay × elapsed milliseconds × 1_000_000 / 86_400_000
+# Public browser values
+VITE_RPC_URL=<dedicated Base mainnet HTTPS RPC>
+VITE_RPC_FALLBACK_URLS=<optional comma-separated Base mainnet HTTPS RPCs>
+VITE_WALLETCONNECT_PROJECT_ID=<public WalletConnect project ID>
+VITE_API_BASE_URL=/api/megapot
+VITE_BACKEND_API_BASE_URL=
+
+# Server-only values
+BASE_RPC_URL=<dedicated Base mainnet HTTPS RPC>
+BASE_RPC_FALLBACK_URLS=<optional comma-separated Base mainnet HTTPS RPCs>
+DATABASE_URL=<Supabase transaction pooler URL>
+MEGAPOT_API_KEY=<mpk_live_* key>
+MEGAPLANETS_CONFIRMATIONS=6
 ```
 
-The start time is the backend generation timestamp for the MVP. The browser never writes
-accrual or ledger rows. Public leaderboard routes calculate current rows from ready
-backend Planet `generatedAt` and `baseMineralsPerDay` values and use an in-process cache
-for approximately 60 seconds. Daily snapshot tables/migrations remain for database
-compatibility, but daily workers/finalize routes are not active.
+Do not add `DIRECT_URL` to Vercel unless migrations will deliberately run there. Never add
+`DATABASE_URL`, RPC provider secrets, or `MEGAPOT_API_KEY` with a `VITE_*` prefix. The
+referrer, contracts, chain, and Data API host are deliberately checked-in mainnet constants.
 
-Ticket status uses `useJackpotState` for the live drawing countdown/phase and the Base
-Sepolia Megapot Data API for wallet ticket/win history. The wallet ticket list follows
-opaque cursors to completion for My Planets and stops on API errors without showing a false
-empty collection. `Claim winnings` remains an on-chain `Jackpot.claimWinnings(uint256[])`
-call after simulation, capped at 50 IDs per batch; confirmed receipts invalidate the
-wallet ticket/win queries.
+For a same-origin deployment, leave `MEGAPLANETS_ALLOWED_ORIGINS` unset. If an external
+frontend is introduced later, set an exact comma-separated HTTPS origin allowlist.
 
-## Release gate
+Before promotion, add Vercel Firewall rate-limit rules for `/api/megapot/*` and the two
+`POST /api/planets/generate*` paths. The application also applies per-instance client
+limits and charges batch generation by receipt count, but serverless instances do not
+provide a deployment-wide quota by themselves. The proxy accepts only the documented
+read-only `GET` paths and never relays arbitrary methods or upstream routes.
 
-```sh
+## 3. Pre-deploy gate
+
+```bash
 pnpm lint
 pnpm typecheck
 pnpm test
@@ -95,5 +99,42 @@ pnpm db:validate
 pnpm --filter @megaplanets/planet-generator golden
 ```
 
-Live funded purchases, production database checks, and browser smoke require a separately
-approved environment. Local green tests do not claim live RPC or deployment readiness.
+Run `pnpm db:deploy` separately against the new Supabase project before promoting the
+application. Migrations are intentionally not part of the Vercel build to avoid concurrent
+Preview and Production migration attempts.
+
+## 4. Post-deploy checks
+
+Perform read-only checks first:
+
+1. Load `/` and confirm the wallet requests Base chain ID `8453`.
+2. `GET /api/planets/health` returns JSON with status `200`.
+3. `GET /api/planets/metrics` returns JSON rather than the SPA document.
+4. `GET /api/megapot/rounds?limit=1` returns the production Data API response.
+5. `GET /api/planets/collection?owner=<checksummed-wallet>` reaches Supabase and returns
+   an empty collection or existing mainnet rows.
+6. Check Vercel Function logs for RPC, database, proxy, CORS, or timeout errors.
+7. Confirm no `mpk_live_*`, database password, or provider credential appears in browser
+   source, network request headers, or build output.
+
+Only after these pass should a separately approved funded-wallet smoke test buy a minimal
+ticket quantity, wait for configured confirmations, generate its Planet, verify its GIF,
+and optionally test claiming. A successful local build is not evidence of a live purchase.
+
+## Runtime notes
+
+- Each warm function instance limits Prisma to one pooled PostgreSQL connection.
+- Health does not query the database; use a collection request for database verification.
+- HTTP metrics, leaderboard cache, and application rate limiting are process-local in
+  serverless. Vercel Firewall is the deployment-wide abuse-control boundary.
+- Generation persists the ticket proof before rendering. A storage/render failure leaves a
+  retryable pending row; do not delete production provenance to clear it.
+- Receipt verification checks Base mainnet, status, confirmations, canonical block hash,
+  Jackpot address, `MEGASTERA`, event fields, and optional recipient.
+- The Data API is historical/read-only; live drawing state and all transactions use RPC.
+
+## Rollback
+
+Roll back the Vercel deployment without rolling back immutable database provenance. Do not
+reverse or delete applied production migrations. If a mainnet configuration is wrong, stop
+promotion, correct environment values or code, rerun the gate, and deploy a new version.

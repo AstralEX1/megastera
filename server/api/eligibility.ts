@@ -1,8 +1,8 @@
 import { decodeEventLog, getAddress, isHash, stringToHex, type Address, type Hex, type Log, type TransactionReceipt } from 'viem';
-import { BASE_SEPOLIA_CHAIN_ID, MEGAPLANETS_TICKET_START_BLOCK, MEGASTERA_SOURCE } from './config';
-import { validateTicketPurchasedFields } from '../shared/ticketValidation';
+import { BASE_CHAIN_ID, MEGASTERA_SOURCE } from './config.js';
+import { validateTicketPurchasedFields } from '../../shared/ticketValidation.js';
 
-export const BASE_SEPOLIA_JACKPOT = getAddress('0x465dA3c859f193A3807386387bEE941B2A4c3279');
+export const MAINNET_JACKPOT = getAddress('0x3bAe643002069dBCbcd62B1A4eb4C4A397d042a2');
 export const TICKET_PURCHASED_ABI = [{ type: 'event', name: 'TicketPurchased', inputs: [
   { indexed: true, name: 'recipient', type: 'address' }, { indexed: true, name: 'currentDrawingId', type: 'uint256' },
   { indexed: true, name: 'source', type: 'bytes32' }, { indexed: false, name: 'userTicketId', type: 'uint256' },
@@ -32,6 +32,18 @@ export type MegasteraProofReference = {
 
 const CANONICAL_SOURCE = stringToHex(MEGASTERA_SOURCE, { size: 32 });
 
+type TicketPurchasedEvent = {
+  eventName: 'TicketPurchased';
+  args: {
+    recipient: Address;
+    currentDrawingId: bigint;
+    source: Hex;
+    userTicketId: bigint;
+    normals: readonly number[];
+    bonusball: number;
+  };
+};
+
 function asBigInt(value: unknown, label: string): bigint {
   try {
     const result = typeof value === 'bigint' ? value : BigInt(String(value));
@@ -50,10 +62,10 @@ export function normalizeMegasteraProof(value: MegasteraProof | Record<string, u
   if (typeof originTxHash !== 'string' || !isHash(originTxHash)) throw new Error('Megastera proof transaction hash is invalid.');
   const blockHash = candidate.blockHash;
   if (blockHash !== undefined && (typeof blockHash !== 'string' || !isHash(blockHash))) throw new Error('Megastera proof block hash is invalid.');
-  const chainId = candidate.chainId ?? BASE_SEPOLIA_CHAIN_ID;
-  if (chainId !== BASE_SEPOLIA_CHAIN_ID) throw new Error('Megastera proof chain is not Base Sepolia.');
-  const jackpotAddress = candidate.jackpotAddress === undefined ? BASE_SEPOLIA_JACKPOT : getAddress(candidate.jackpotAddress);
-  if (jackpotAddress !== BASE_SEPOLIA_JACKPOT) throw new Error('Megastera proof jackpot is not canonical.');
+  const chainId = candidate.chainId ?? BASE_CHAIN_ID;
+  if (chainId !== BASE_CHAIN_ID) throw new Error('Megastera proof chain is not Base mainnet.');
+  const jackpotAddress = candidate.jackpotAddress === undefined ? MAINNET_JACKPOT : getAddress(candidate.jackpotAddress);
+  if (jackpotAddress !== MAINNET_JACKPOT) throw new Error('Megastera proof jackpot is not canonical.');
   const source = candidate.source ?? CANONICAL_SOURCE;
   if (typeof source !== 'string' || source.toLowerCase() !== CANONICAL_SOURCE.toLowerCase()) throw new Error('Ticket was not purchased through MEGASTERA.');
   const validated = validateTicketPurchasedFields({
@@ -64,7 +76,6 @@ export function normalizeMegasteraProof(value: MegasteraProof | Record<string, u
     logIndex: asBigInt(candidate.logIndex, 'log index'),
   });
   const blockNumber = asBigInt(candidate.blockNumber, 'block number');
-  if (blockNumber < MEGAPLANETS_TICKET_START_BLOCK) throw new Error('Megastera proof block is outside the eligible range.');
   return {
     ...candidate,
     recipient: getAddress(candidate.recipient as Address),
@@ -80,8 +91,14 @@ export function normalizeMegasteraProof(value: MegasteraProof | Record<string, u
 
 /** Decodes only a canonical Megastera purchase log; all other logs fail closed. */
 export function decodeEligibleTicket(log: Log): EligibleTicket {
-  if (getAddress(log.address) !== BASE_SEPOLIA_JACKPOT || !log.blockNumber || log.blockNumber < MEGAPLANETS_TICKET_START_BLOCK || !log.transactionHash) throw new Error('Ticket log is outside the eligible Megastera range.');
-  const event = decodeEventLog({ abi: TICKET_PURCHASED_ABI, data: log.data, topics: log.topics });
+  if (getAddress(log.address) !== MAINNET_JACKPOT || !log.blockNumber || !log.transactionHash) {
+    throw new Error('Ticket log is not a canonical Base mainnet Megastera purchase.');
+  }
+  const event = decodeEventLog({
+    abi: TICKET_PURCHASED_ABI,
+    data: log.data,
+    topics: log.topics,
+  }) as TicketPurchasedEvent;
   if (event.eventName !== 'TicketPurchased' || event.args.source !== stringToHex(MEGASTERA_SOURCE, { size: 32 })) throw new Error('Ticket was not purchased through MEGASTERA.');
   const { recipient } = event.args;
   if (!recipient) throw new Error('Malformed TicketPurchased event.');
@@ -105,21 +122,18 @@ export function findEligibleTicket(logs: readonly Log[], logIndex: number): Elig
 export type MegasteraVerifierOptions = {
   chainId?: number;
   jackpotAddress?: Address;
-  minimumBlock?: bigint;
 };
 
 /** Verifies receipt finality and event provenance before producing a MegasteraProof. */
 export class MegasteraVerifier {
   private readonly chainId: number;
   private readonly jackpotAddress: Address;
-  private readonly minimumBlock: bigint;
 
   public constructor(options: MegasteraVerifierOptions = {}) {
-    this.chainId = options.chainId ?? BASE_SEPOLIA_CHAIN_ID;
-    this.jackpotAddress = options.jackpotAddress ? getAddress(options.jackpotAddress) : BASE_SEPOLIA_JACKPOT;
-    this.minimumBlock = options.minimumBlock ?? MEGAPLANETS_TICKET_START_BLOCK;
-    if (this.chainId !== BASE_SEPOLIA_CHAIN_ID || this.jackpotAddress !== BASE_SEPOLIA_JACKPOT) {
-      throw new Error('Megastera verifier is configured for Base Sepolia Megastera only.');
+    this.chainId = options.chainId ?? BASE_CHAIN_ID;
+    this.jackpotAddress = options.jackpotAddress ? getAddress(options.jackpotAddress) : MAINNET_JACKPOT;
+    if (this.chainId !== BASE_CHAIN_ID || this.jackpotAddress !== MAINNET_JACKPOT) {
+      throw new Error('Megastera verifier is configured for Base mainnet Megastera only.');
     }
   }
 
@@ -154,7 +168,6 @@ export class MegasteraVerifier {
       throw new Error('TicketPurchased recipient does not match the requested wallet.');
     }
     const ticket = decodeEligibleTicket({ ...log, blockNumber: receipt.blockNumber });
-    if (ticket.blockNumber < this.minimumBlock) throw new Error('Megastera proof block is outside the eligible range.');
     return normalizeMegasteraProof({
       ...ticket,
       chainId: this.chainId,

@@ -21,7 +21,7 @@ dist-ssr
 
 # local API state and generated client
 .data/
-api/generated/
+server/api/generated/
 
 # editor
 .vscode/*
@@ -59,3 +59,5 @@ packages/planet-generator/generated-*/
 
 # Claude Code workspace state (settings, launch configs, hooks)
 .claude/
+.vercel
+.env*

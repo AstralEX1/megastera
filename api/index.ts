@@ -1,39 +1,24 @@
-import { Hono } from 'hono';
-import { createCorsMiddleware } from './cors';
-import {
-  createBackendPlanetRoutes,
-  type BackendPlanetRouteDependencies,
-} from './backendPlanetRoutes';
-import { createLeaderboardRoutes } from './leaderboardRoutes';
-import { createOperationalState } from './operations';
+import app from '../server/api/index.js';
 
-/**
- * The active API surface is deliberately small for the hackathon MVP:
- * receipt verification and backend Planet generation, mining, and leaderboard
- * reads. Planet NFT vouchers, contract holdings, and continuous indexers are
- * not mounted here.
- */
-export function createApp(
-  backendPlanetOverrides: Partial<BackendPlanetRouteDependencies> = {},
-) {
-  const operations = createOperationalState();
-  const app = new Hono();
+const REWRITE_PARAMETER = '__path';
 
-  app.use('*', createCorsMiddleware());
-  app.use('*', async (c, next) => {
-    await next();
-    operations.recordHttpRequest(c.res.status);
-    return c.res;
-  });
+/** Restores the public path encoded by the catch-all rewrite in vercel.json. */
+export function restoreApiRequest(request: Request): Request {
+  const host = request.headers.get('host') ?? 'localhost';
+  const url = new URL(request.url, `https://${host}`);
+  const rewrittenPath = url.searchParams.get(REWRITE_PARAMETER);
+  if (rewrittenPath === null) return request;
 
-  app.get('/api/planets/health', (c) => c.json({ ok: true, service: 'backend-planets' }));
-  app.get('/api/planets/metrics', (c) =>
-    c.json({ ok: true, service: 'api', operations: operations.snapshot() }),
-  );
-  app.route('/api', createBackendPlanetRoutes(backendPlanetOverrides));
-  app.route('/api/leaderboard', createLeaderboardRoutes());
-
-  return app;
+  url.searchParams.delete(REWRITE_PARAMETER);
+  url.searchParams.delete('path');
+  const safePath = rewrittenPath.replace(/^\/+/, '');
+  url.pathname = safePath ? `/api/${safePath}` : '/api';
+  return new Request(url, request);
 }
 
-export default createApp();
+export function handleRequest(request: Request): Response | Promise<Response> {
+  return app.fetch(restoreApiRequest(request));
+}
+
+/** Opts into Vercel's Web-standard Request/Response function interface. */
+export default { fetch: handleRequest };

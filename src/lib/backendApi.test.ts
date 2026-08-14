@@ -5,7 +5,7 @@ const ADDRESS = '0x0000000000000000000000000000000000000001' as const;
 const TX = `0x${'a'.repeat(64)}` as const;
 const planet = {
   planetId: 'planet-1',
-  chainId: 84532,
+  chainId: 8453,
   ticketId: '7',
   ownerAddress: ADDRESS,
   name: 'Astraea',

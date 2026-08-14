@@ -1,0 +1,3 @@
+export const BASE_CHAIN_ID = 8_453;
+export const MEGASTERA_SOURCE = 'MEGASTERA';
+export const DEFAULT_RECEIPT_CONFIRMATIONS = 6n;

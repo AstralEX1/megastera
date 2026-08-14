@@ -1,62 +1,36 @@
 # Megastera status
 
-Updated: 2026-08-13
+Updated: 2026-08-14
+
+## Mainnet preparation
+
+The repository runtime is configured for Base mainnet only:
+
+- canonical mainnet Megapot, batch facilitator, payout calculator, and USDC addresses;
+- approved Megastera referrer and unchanged `MEGASTERA` source;
+- mainnet-only receipt verification and BaseScan links;
+- production Megapot Data API through a server-only same-origin proxy;
+- a single Vercel project for the Vite SPA and Hono Function;
+- Supabase transaction-pooler runtime configuration, direct migration URL, and API-role
+  lockdown migration.
+
+Preview and Development Vercel environments are also mainnet-only. They must use separate
+or deliberately selected credentials, but must not restore Base Sepolia constants.
 
 ## Active product
 
-Megastera is a Base Sepolia MVP. Users buy Megapot tickets with the `MEGASTERA`
-source tag; no Planet NFT is minted. A finalized, receipt-verified ticket is persisted
-in PostgreSQL and deterministically produces one backend Planet plus an immutable GIF
-artifact.
+A finalized, receipt-verified ticket is persisted in PostgreSQL and deterministically
+produces one backend Planet plus a stored GIF. My Planets includes generated and retryable
+pending site tickets. Mining remains read-only from `generatedAt`; the leaderboard remains
+a live backend read with its existing short process cache.
 
-## Current user flow
+## External actions still required
 
-- Play has two stages: Buy tickets and Explore planets.
-- After the receipt is recovered, Play shows `Exploring planets…` and retries backend
-  generation while the receipt reaches the configured confirmation depth.
-- A successful generation fills the screen with Planet cards and the only next actions are
-  `Explore again` and `My planets`.
-- My Planets reads the backend collection and shows every site ticket as a generated Planet
-  or a pending card with retry. Locally confirmed site receipts remain visible before the
-  backend catch-up completes.
-- Unmatched wallet tickets may appear as plain ticket cards from the paginated Megapot
-  Data API.
-- Ticket status/winnings/claimed data uses the Base Sepolia Data API. Live drawing state,
-  purchases, and claims use RPC/on-chain writes.
-- Mining remains a read-only calculation from backend Planet `generatedAt` and the base
-  rate. Leaderboard remains a live backend read with its existing cache behavior.
+- Create the new Supabase mainnet project and run `pnpm db:deploy` against its `DIRECT_URL`.
+- Add the documented Production/Preview/Development environment variables in Vercel.
+- Link/import the repository into one Vercel project and deploy it.
+- Run post-deploy health, Data API proxy, database, and browser checks.
+- Perform a funded mainnet purchase/claim smoke test only with explicit transaction approval.
 
-## Backend surface
-
-- `POST /api/planets/generate` and `/api/planets/generate/batch`
-- `GET /api/planets/collection?owner=...`
-- `GET /api/planets?owner=...`
-- Planet GIF/detail/mining routes
-- Wallet mining and leaderboard routes
-
-The collection query is limited to Base Sepolia, the configured jackpot, and `MEGASTERA`.
-It does not discover or import legacy `MEGAPLANETS_V1` tickets.
-
-## Verification checkpoint
-
-The focused Play, My Planets, success-screen, collection-merge, and Data API host tests
-pass. The complete repository gate also passes: lint, typecheck, all tests, production
-build, Prisma generation/validation, and the planet-generator golden suite. The local
-runtime smoke check returns `health=200`, `collection=200`, generated Planet rows, and
-GIF bytes with `image/gif` content type.
-
-Required gate:
-
-```text
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm db:generate
-pnpm db:validate
-pnpm --filter @megaplanets/planet-generator golden
-```
-
-Live generation additionally requires `DATABASE_URL`, a Base Sepolia RPC URL, and a
-funded test wallet. The browser can verify public Data API reads without exposing server
-secrets. The local dev runtime loads these values from the ignored `.env.local` file.
+No database or Vercel deployment and no funded wallet transaction is claimed by the
+checked-in preparation alone.

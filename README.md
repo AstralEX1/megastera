@@ -1,11 +1,11 @@
 # Megastera
 
-Megastera is a one-day hackathon MVP built around Megapot tickets on Base Sepolia.
-Planets are deliberately backend records, not on-chain NFTs: a confirmed ticket receipt
-creates one database row, the server renders a deterministic GIF, and My Planets displays
-that row. Mining remains a read-only lifetime calculation.
+Megastera is a backend-Planet game powered by Megapot tickets on Base mainnet.
+Planets are database records rather than NFTs: a finalized canonical ticket receipt creates
+one immutable proof, the server renders a deterministic GIF, and My Planets displays the
+stored result. Mining is a read-only lifetime calculation.
 
-## The demo loop
+## Product loop
 
 ```mermaid
 flowchart LR
@@ -20,73 +20,57 @@ flowchart LR
   F --> G["Live leaderboard · 60s cache"]
 ```
 
-1. Connect a wallet to Base Sepolia.
+1. Connect a wallet to Base mainnet.
 2. Buy one to ten direct tickets or create an eleven-to-fifty keeper order.
-3. After the receipt is confirmed, the Play screen shows `Exploring planets…` and retries
-   backend generation while the receipt reaches the configured finality depth.
-4. The backend verifies the canonical `MEGASTERA` `TicketPurchased` event, persists
-   immutable ticket provenance before generation, derives deterministic traits, and stores
-   GIF bytes. Repeating the same request is idempotent.
-5. My Planets reads the backend collection: ready Planets, compact retryable pending cards,
-   and optionally unmatched wallet tickets from the paginated testnet Data API. The same
-   ready rows power lazy mining and the live leaderboard; `/tickets` exposes protocol
-   status and claimable wins.
+3. The backend waits for the configured confirmation depth, verifies the canonical mainnet
+   `MEGASTERA` `TicketPurchased` event, and persists its immutable provenance.
+4. Deterministic traits and GIF bytes are stored idempotently in PostgreSQL.
+5. My Planets displays generated and retryable pending records; ticket status and winnings
+   come from the mainnet Megapot Data API through the same-origin server proxy.
 
-There is no Planet contract call, mint button, voucher, Pinata/IPFS artifact, direct
-ERC721A holdings read, or continuous indexer in the active MVP.
+There is no Planet contract call, mint button, voucher signer, Pinata/IPFS upload, direct
+ERC-721 holdings read, or continuous ticket indexer in the active runtime.
 
-## Product rules
+## Mainnet invariants
 
-- Base Sepolia (`chainId 84532`) only.
-- `MEGASTERA` is the Megapot source tag.
-- Direct checkout supports one to ten tickets; bulk checkout supports eleven to fifty.
-- Backend generation is idempotent on `originTxHash:logIndex` and rejects conflicting
-  persisted provenance.
-- The collection API is restricted to Base Sepolia `MEGASTERA` ticket proofs; legacy
-  `MEGAPLANETS_V1` rows are not eligible.
-- Historical ticket status, winnings, and claimed state come from the Megapot testnet
-  Data API (`https://api-testnet.megapot.io/v1`). Live drawing state and writes remain
-  on RPC.
-- Planet traits use the shared deterministic generator. GIF bytes and their hash are stored
-  in `BackendPlanet`.
-- Mining is `baseMineralsPerDay × elapsed time` with fixed-point integer arithmetic. The
-  browser never writes mineral state.
-- Public reads require no application auth; server secrets stay outside Vite env variables.
+- Base mainnet only (`chainId 8453`).
+- Jackpot: `0x3bAe643002069dBCbcd62B1A4eb4C4A397d042a2`.
+- Batch facilitator: `0xBA343479D98a1Ed333899999D95a7343B808a76F`.
+- USDC: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`.
+- Approved referrer: `0x43904de0e226cc20DD72968954af6B439404743D`.
+- `MEGASTERA` remains the source tag for direct and bulk purchases.
+- Any canonical Base mainnet receipt with the correct jackpot and source is eligible; no
+  deploy-time launch-block cutoff is applied.
+- Browser RPC and contract writes remain on-chain. Historical ticket data uses
+  `https://api.megapot.io/v1` through `/api/megapot`.
+- Secrets never use a `VITE_*` name.
 
 ## Runtime boundaries
 
 | Boundary | Responsibility |
 | --- | --- |
-| Megapot + Base RPC | Ticket purchase, receipt finality, and canonical event verification |
-| Frontend | Wallet checkout, generation progress, backend collection, mining display |
-| API + PostgreSQL | Ticket provenance, BackendPlanet rows, GIF bytes, mining, leaderboard |
-| Planet generator | DOM-free deterministic traits and server/browser rendering support |
+| Megapot + Base RPC | Ticket purchase, live drawing state, claims, receipt finality |
+| Vite frontend | Wallet checkout, progress, collection, mining display |
+| Vercel Function + Supabase | Data API proxy, proof verification, Planet rows/GIFs, leaderboard |
+| Planet generator | DOM-free deterministic traits and GIF rendering |
 
-## API
-
-See [`api/README.md`](api/README.md) for the full route surface. The important paths are:
-
-- `POST /api/planets/generate` and `/generate/batch`
-- `GET /api/planets/collection?owner=...` (ready and pending site tickets)
-- `GET /api/planets?owner=...` and `/planets/:planetId/gif`
-- `GET /api/wallets/:address/mining`
-- `GET /api/leaderboard/current`
+The Vercel entrypoint is [`api/index.ts`](api/index.ts). Internal backend modules live in
+[`server/api`](server/api), so Vercel does not expose each support file as a function.
 
 ## Local development
 
-Requirements: Node.js 22+, pnpm, and a Base Sepolia RPC URL for live receipt reads.
+Requirements: Node.js 22+, pnpm, a Base mainnet RPC, and PostgreSQL for live generation.
 
 ```bash
 pnpm install
 pnpm db:generate
 pnpm db:validate
 pnpm dev
-pnpm api:server
 ```
 
-Backend generation requires `BASE_SEPOLIA_RPC_URL` and `DATABASE_URL`; optional RPC
-failover uses `BASE_SEPOLIA_RPC_FALLBACK_URLS`. Keep `.env.local` and server secrets out
-of git.
+Copy `.env.example` to the ignored `.env.local`. The Vite dev server mounts the same Hono
+application as Vercel, including `/api/megapot`. See
+[`docs/OPERATIONS.md`](docs/OPERATIONS.md) for Supabase migration and Vercel deployment.
 
 ## Verification
 

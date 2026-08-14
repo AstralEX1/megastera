@@ -69,7 +69,7 @@ const ticket = (ticketId: bigint, logIndex = 0n) => ({
 
 const planet = (ticketId: string) => ({
   planetId: `planet-${ticketId}`,
-  chainId: 84532,
+  chainId: 8453,
   ticketId,
   ownerAddress: mocks.account.address,
   name: `Planet ${ticketId}`,

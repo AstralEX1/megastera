@@ -12,10 +12,9 @@
  * ---
  */
 import type { HTMLAttributes } from 'react';
-import { CHAIN } from '@/config/contracts';
 
 /** Public Data API landing page. Swap on rebrand if proxied through a different host. */
-const DATA_API_URL = CHAIN === 'testnet' ? 'https://api-testnet.megapot.io' : 'https://api.megapot.io';
+const DATA_API_URL = 'https://api.megapot.io';
 
 type Props = HTMLAttributes<HTMLAnchorElement> & {
   /** Override the visible label (default: `via Megapot Data API`). */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertReceiptFinality } from './receiptVerification';
+import { assertReceiptFinality, findTicketFromReceipt } from './receiptVerification';
 
 describe('receipt verification', () => {
   it('requires confirmation depth and canonical block hash', () => {
@@ -12,5 +12,22 @@ describe('receipt verification', () => {
       { blockNumber: 100n, blockHash: '0xaaa' },
       { latestBlock: 106n, canonicalBlockHash: '0xbbb', confirmations: 6n },
     )).toThrow(/canonical/i);
+  });
+
+  it('rejects a Base Sepolia RPC before reading a receipt', async () => {
+    const makeClient = () => ({ getChainId: async () => 84_532 }) as never;
+    await expect(
+      findTicketFromReceipt(
+        {
+          rpcUrl: 'https://rpc.example',
+          confirmations: 6n,
+        },
+        {
+          transactionHash: `0x${'ab'.repeat(32)}`,
+          logIndex: 0,
+        },
+        makeClient,
+      ),
+    ).rejects.toThrow('Receipt RPC is not Base mainnet.');
   });
 });

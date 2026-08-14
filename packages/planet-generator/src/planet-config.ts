@@ -1,4 +1,4 @@
-import { deepFreeze } from './immutable';
+import { deepFreeze } from './immutable.js';
 import type {
   RarityConfig,
   SatelliteDistribution,
@@ -7,8 +7,8 @@ import type {
   TypeConfig,
   TypePalette,
   TypeWeightProfile,
-} from './types';
-import type { HexColor } from './visual-types';
+} from './types.js';
+import type { HexColor } from './visual-types.js';
 
 function palette(
   colors: readonly [HexColor, HexColor, HexColor, ...HexColor[]],

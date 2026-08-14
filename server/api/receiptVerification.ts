@@ -1,9 +1,9 @@
 import { type Address, createPublicClient, getAddress, type Hex, http, isAddress, isHash } from 'viem';
-import { baseSepolia } from 'viem/chains';
-import { BASE_SEPOLIA_CHAIN_ID, DEFAULT_RECEIPT_CONFIRMATIONS } from './config';
-import type { BackendPlanetConfig } from './backendConfig';
-import { type MegasteraProof, MegasteraVerifier } from './eligibility';
-import { readWithRpcFallback } from './rpc';
+import { base } from 'viem/chains';
+import { BASE_CHAIN_ID, DEFAULT_RECEIPT_CONFIRMATIONS } from './config.js';
+import type { BackendPlanetConfig } from './backendConfig.js';
+import { type MegasteraProof, MegasteraVerifier } from './eligibility.js';
+import { readWithRpcFallback } from './rpc.js';
 
 export type ReceiptReference = { transactionHash: Hex; logIndex: number; recipient?: Address };
 
@@ -43,12 +43,12 @@ export async function findTicketFromReceipt(
   config: Pick<BackendPlanetConfig, 'rpcUrl' | 'rpcFallbackUrls' | 'confirmations'>,
   request: ReceiptReference,
   makeClient: RpcClientFactory = (rpcUrl) =>
-    createPublicClient({ chain: baseSepolia, transport: http(rpcUrl) }) as unknown as ReceiptRpcClient,
+    createPublicClient({ chain: base, transport: http(rpcUrl) }) as unknown as ReceiptRpcClient,
 ): Promise<MegasteraProof> {
   return readWithRpcFallback(rpcEndpoints(config), async (rpcUrl) => {
     const client = makeClient(rpcUrl);
     const chainId = await client.getChainId();
-    if (chainId !== BASE_SEPOLIA_CHAIN_ID) throw new Error('Receipt RPC is not Base Sepolia.');
+    if (chainId !== BASE_CHAIN_ID) throw new Error('Receipt RPC is not Base mainnet.');
     const receipt = await client.getTransactionReceipt({ hash: request.transactionHash });
     const ticket = new MegasteraVerifier({ chainId }).verifyReceipt(receipt, {
       transactionHash: request.transactionHash,
@@ -84,10 +84,15 @@ export function parseReceiptReference(value: unknown): ReceiptReference | undefi
     !Number.isSafeInteger(candidate.logIndex) ||
     candidate.logIndex < 0
   ) return undefined;
-  if (candidate.recipient !== undefined && (typeof candidate.recipient !== 'string' || !isAddress(candidate.recipient))) return undefined;
+  const recipient = candidate.recipient;
+  let normalizedRecipient: Address | undefined;
+  if (recipient !== undefined) {
+    if (typeof recipient !== 'string' || !isAddress(recipient)) return undefined;
+    normalizedRecipient = getAddress(recipient);
+  }
   return {
     transactionHash: candidate.transactionHash,
     logIndex: candidate.logIndex,
-    recipient: candidate.recipient === undefined ? undefined : getAddress(candidate.recipient),
+    recipient: normalizedRecipient,
   };
 }

@@ -1,13 +1,13 @@
-import type { PrismaClient } from './generated/prisma/client';
-import { calculateCollectionMining, type CollectionMiningPlanet } from './collectionMining';
+import type { PrismaClient } from './generated/prisma/client.js';
+import { calculateCollectionMining, type CollectionMiningPlanet } from './collectionMining.js';
 import {
   getDistanceToNextRank,
   getLeaderboardPeriod,
   type LeaderboardPeriodBounds,
   type RankedLeaderboardRow,
   rankLeaderboardRows,
-} from './leaderboard';
-import { calculateLifetimeMinerals, MINERAL_SCALE } from './mining';
+} from './leaderboard.js';
+import { calculateLifetimeMinerals, MINERAL_SCALE } from './mining.js';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 

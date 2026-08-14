@@ -21,7 +21,7 @@
 - Read `.agents/skills/megapot/SKILL.md` before changing Megapot contract calls,
   addresses, event decoding, drawing lifecycle behavior, or Data API usage.
 - Treat `https://llms.megapot.io/` as the protocol source of truth.
-- Target Base Sepolia until a later stage explicitly authorizes mainnet work.
+- Target Base mainnet only; this stage explicitly authorized the mainnet migration.
 - Read ticket price, drawing ID, ball limits, fees, and lifecycle state dynamically.
 - Keep `TICKET_SOURCE` equal to `MEGASTERA`.
 - Never deploy with the dead referrer address.

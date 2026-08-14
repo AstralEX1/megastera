@@ -1,6 +1,6 @@
 generator client {
   provider     = "prisma-client"
-  output       = "../api/generated/prisma"
+  output       = "../server/api/generated/prisma"
   moduleFormat = "esm"
 }
 

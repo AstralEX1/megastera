@@ -2,7 +2,7 @@
  * ---
  * @customize  Dev-mode boot diagnostics.
  *
- *             Houses two unrelated boot-time concerns:
+ *             Houses two boot-time concerns:
  *               1. `BigInt.prototype.toJSON` polyfill — global, runs in all
  *                  environments. Megapot reads return uint256 → bigint
  *                  everywhere; the polyfill catches any rogue
@@ -10,9 +10,7 @@
  *                  reporters, or observer notify paths.
  *               2. Placeholder + config warnings — gated on
  *                  `import.meta.env.DEV` so production stays silent.
- *                  Catches the three most common hurried-forker footguns:
- *                  shipping with the unchanged REFERRER_ADDRESS, the
- *                  unchanged TICKET_SOURCE, or a missing
+ *                  Catches an invalid TICKET_SOURCE or a missing
  *                  VITE_WALLETCONNECT_PROJECT_ID (which silently degrades
  *                  the wallet picker — see `src/config/wagmi.ts`).
  *
@@ -20,7 +18,7 @@
  * ---
  */
 import { stringToHex } from 'viem';
-import { DEFAULT_REFERRER_ADDRESS, REFERRER_ADDRESS, TICKET_SOURCE } from './contracts';
+import { TICKET_SOURCE } from './contracts';
 
 // Belt + suspenders for bigint JSON serialization. See `main.tsx` for the
 // rationale — keep alongside `hashFn` from wagmi/query so nothing in the
@@ -31,12 +29,6 @@ import { DEFAULT_REFERRER_ADDRESS, REFERRER_ADDRESS, TICKET_SOURCE } from './con
 };
 
 if (import.meta.env.DEV) {
-  if (REFERRER_ADDRESS.toLowerCase() !== DEFAULT_REFERRER_ADDRESS.toLowerCase()) {
-    // biome-ignore lint/suspicious/noConsole: deliberate dev-mode diagnostic
-    console.warn(
-      '[megastera] VITE_REFERRER_ADDRESS overrides the approved project referrer. Confirm this is intentional before testing ticket purchases.',
-    );
-  }
   const REQUIRED_SOURCE = stringToHex('MEGASTERA', { size: 32 });
   if (TICKET_SOURCE !== REQUIRED_SOURCE) {
     // biome-ignore lint/suspicious/noConsole: deliberate dev-mode diagnostic

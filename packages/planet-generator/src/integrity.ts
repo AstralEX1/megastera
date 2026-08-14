@@ -1,5 +1,5 @@
-import { derivePlanet } from './generator';
-import type { PlanetConfig, PlanetDescriptor } from './types';
+import { derivePlanet } from './generator.js';
+import type { PlanetConfig, PlanetDescriptor } from './types.js';
 
 /** Re-derives a descriptor and rejects any substituted seed, trait, or integrity hash. */
 export function verifyPlanetDescriptor(

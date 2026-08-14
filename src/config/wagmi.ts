@@ -6,7 +6,7 @@
  * ---
  *
  * wagmi v2 + RainbowKit config. Reads chain + RPC URL from .env so a fork
- * can switch mainnet ↔ testnet without code changes.
+ * can use a production provider without code changes.
  *
  * `VITE_WALLETCONNECT_PROJECT_ID` is optional but recommended:
  *   - Set: full RainbowKit modal (WalletConnect QR, Rainbow, MetaMask mobile,
@@ -27,7 +27,7 @@
 import { connectorsForWallets, getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { coinbaseWallet, injectedWallet } from '@rainbow-me/rainbowkit/wallets';
 import { fallback, http } from 'viem';
-import { base, baseSepolia } from 'viem/chains';
+import { base } from 'viem/chains';
 import { createConfig } from 'wagmi';
 import { VIEM_CHAIN } from './contracts';
 
@@ -49,14 +49,8 @@ const transport = fallback([
   ...RPC_FALLBACK_URLS.map((url) => http(url, { batch: { batchSize: 100, wait: 16 } })),
 ]);
 
-// Transports keyed by both possible chain IDs. wagmi's `createConfig`
-// types `chains: [VIEM_CHAIN]` as `[Base | BaseSepolia]` (the union of
-// what `VIEM_CHAIN` could resolve to at runtime), so it demands transport
-// entries for both keys even though only one chain is actually selected.
-// The unused entry is dead but free.
 const transports = {
   [base.id]: transport,
-  [baseSepolia.id]: transport,
 };
 
 // Default poll cadence for wagmi/viem watchers (block height, contract

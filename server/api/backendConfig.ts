@@ -1,7 +1,7 @@
-import { BASE_SEPOLIA_CHAIN_ID, DEFAULT_RECEIPT_CONFIRMATIONS } from './config';
+import { BASE_CHAIN_ID, DEFAULT_RECEIPT_CONFIRMATIONS } from './config.js';
 
 export type BackendPlanetConfig = {
-  chainId: typeof BASE_SEPOLIA_CHAIN_ID;
+  chainId: typeof BASE_CHAIN_ID;
   rpcUrl: string;
   rpcFallbackUrls?: readonly string[];
   databaseUrl: string;
@@ -17,7 +17,7 @@ function required(env: Record<string, string | undefined>, name: string): string
 export function loadBackendPlanetConfig(
   env: Record<string, string | undefined> = process.env,
 ): BackendPlanetConfig {
-  const rpcUrl = required(env, 'BASE_SEPOLIA_RPC_URL');
+  const rpcUrl = required(env, 'BASE_RPC_URL');
   const databaseUrl = required(env, 'DATABASE_URL');
   const confirmationsRaw = env.MEGAPLANETS_CONFIRMATIONS?.trim();
   let confirmations = DEFAULT_RECEIPT_CONFIRMATIONS;
@@ -29,11 +29,11 @@ export function loadBackendPlanetConfig(
     }
   }
   if (confirmations < 0n) throw new Error('MEGAPLANETS_CONFIRMATIONS must be a non-negative integer.');
-  const rpcFallbackUrls = (env.BASE_SEPOLIA_RPC_FALLBACK_URLS ?? '')
+  const rpcFallbackUrls = (env.BASE_RPC_FALLBACK_URLS ?? '')
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean)
     .filter((value, index, values) => value !== rpcUrl && values.indexOf(value) === index)
     .slice(0, 3);
-  return { chainId: BASE_SEPOLIA_CHAIN_ID, rpcUrl, rpcFallbackUrls, databaseUrl, confirmations };
+  return { chainId: BASE_CHAIN_ID, rpcUrl, rpcFallbackUrls, databaseUrl, confirmations };
 }

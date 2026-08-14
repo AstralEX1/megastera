@@ -12,12 +12,13 @@ export type AdaptiveLogOptions = {
 export async function readWithRpcFallback<T>(
   endpoints: readonly string[],
   read: (endpoint: string) => Promise<T>,
+  timeoutMs = 12_000,
 ): Promise<T> {
   if (endpoints.length === 0) throw new Error('At least one RPC endpoint is required.');
   let lastError: unknown;
   for (const endpoint of endpoints) {
     try {
-      return await read(endpoint);
+      return await withTimeout(read(endpoint), timeoutMs, `RPC endpoint ${endpoint}`);
     } catch (error) {
       lastError = error;
     }
@@ -52,3 +53,4 @@ export async function getLogsAdaptive<T>(
   }
   return logs;
 }
+import { withTimeout } from './http.js';
