@@ -78,16 +78,16 @@ export function ExpeditionConfigurator({
                     text={`Win up to $${formatJackpot(jackpotAmount)}`}
                     faceColor="#f8fafc"
                     depthColor="#7c3aed"
-                    layers={28}
-                    depth={1.5}
+                    layers={32}
+                    depth={4}
                     tilt={10.5}
                     smoothing={0.3}
                     perspective={1_500}
                     orbitSpeed={0.1}
                     pointerTracking={false}
                     autoOrbit
-                    fontSize="clamp(2rem, 4vw, 3.4rem)"
-                    fontWeight={950}
+                    fontSize="clamp(3.45rem, 5.6vw, 5.3rem)"
+                    fontWeight={800}
                     shadow
                   />
                 ) : (
@@ -143,16 +143,16 @@ export function ExpeditionConfigurator({
           aria-label={coordinatesLabel}
           aria-expanded={coordinatesOpen}
           onClick={() => setCoordinatesOpen((open) => !open)}
-          className="absolute top-1/2 z-40 hidden h-40 w-[52px] -translate-y-1/2 items-center justify-center border-x border-[var(--border)] bg-[var(--background)] text-[var(--text-primary)] transition-[left,background-color] duration-300 ease-out hover:bg-[var(--surface-raised)] xl:flex"
+          className="absolute top-1/2 z-40 hidden h-80 w-[104px] -translate-y-1/2 items-center justify-center border-x border-[var(--border)] bg-[var(--background)] text-[var(--text-primary)] transition-[left,background-color] duration-300 ease-out hover:bg-[var(--surface-raised)] xl:flex"
           style={{
             left: coordinatesOpen
-              ? 'min(calc(50% + 420px), calc(50% + 50vw - 448px))'
-              : 'calc(50% + 420px)',
+              ? 'min(calc(50% + 368px), calc(50% + 50vw - 500px))'
+              : 'calc(50% + 368px)',
           }}
         >
           <span className="flex -rotate-90 items-center gap-2 whitespace-nowrap telemetry font-bold" aria-hidden>
-            <span className="text-2xl leading-none">{coordinatesOpen ? '‹' : '›'}</span>
-            <span>Coordinates</span>
+            <span className="text-[3rem] leading-none">{coordinatesOpen ? '‹' : '›'}</span>
+            <span className="text-[1.36rem]">Coordinates</span>
           </span>
         </button>
         <div
