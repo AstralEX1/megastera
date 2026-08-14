@@ -359,7 +359,7 @@ describe('backend My Planets', () => {
     expect(screen.getByRole('button', { name: 'Retry generation' })).toBeInTheDocument();
   });
 
-  it('renders unmatched wallet tickets as tickets without pretending they are Planets', () => {
+  it('renders unmatched wallet tickets as clean ticket cards with their details', () => {
     mocks.walletTickets = [{
       id: 'api-ticket-999',
       wallet: mocks.account.address,
@@ -380,7 +380,17 @@ describe('backend My Planets', () => {
 
     render(<Planets onNavigate={vi.fn()} onViewPlanet={vi.fn()} />);
 
-    expect(screen.getByRole('heading', { name: 'No Megastera planet attached' })).toBeInTheDocument();
-    expect(screen.getByText('MEGAPOT TICKET')).toBeInTheDocument();
+    const ticket = screen.getByTestId('wallet-ticket-card-api-ticket-999');
+
+    expect(ticket).toHaveAttribute('aria-label', 'Ticket #999');
+    expect(within(ticket).getByText('TICKET')).toBeInTheDocument();
+    expect(within(ticket).getByText('#999')).toBeInTheDocument();
+    expect(within(ticket).getByText('DRAWING')).toBeInTheDocument();
+    expect(within(ticket).getByText('#12')).toBeInTheDocument();
+    expect(within(ticket).getByText('YOUR NUMBERS')).toBeInTheDocument();
+    expect(within(ticket).getByText('3')).toBeInTheDocument();
+    expect(within(ticket).getByText('201')).toBeInTheDocument();
+    expect(within(ticket).getByText('9')).toBeInTheDocument();
+    expect(within(ticket).queryByText(/No Megastera|planet attached|not purchased through|MEGAPOT TICKET/i)).not.toBeInTheDocument();
   });
 });

@@ -118,12 +118,13 @@ function BackendPlanetCard({
 
 type TicketCoordinatesValue = Pick<BackendPlanet['ticket'], 'ticketId' | 'drawingId' | 'normals' | 'bonusBall'>;
 
-function TicketCoordinates({ ticket }: { ticket: TicketCoordinatesValue }) {
+function TicketCoordinates({ ticket, variant = 'panel' }: { ticket: TicketCoordinatesValue; variant?: 'panel' | 'stub' }) {
+  const isStub = variant === 'stub';
   return (
-    <section aria-label="Ticket coordinates" className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+    <section aria-label={isStub ? 'Ticket numbers' : 'Ticket coordinates'} className={isStub ? '' : 'rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3'}>
       <div className="flex items-center justify-between gap-3">
-        <p className="telemetry text-[var(--text-secondary)]">Ticket coordinates</p>
-        <span className="font-mono text-[10px] text-[var(--text-secondary)]">DRAWING #{ticket.drawingId}</span>
+        <p className="telemetry text-[var(--text-secondary)]">{isStub ? 'YOUR NUMBERS' : 'Ticket coordinates'}</p>
+        {!isStub ? <span className="font-mono text-[10px] text-[var(--text-secondary)]">DRAWING #{ticket.drawingId}</span> : null}
       </div>
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
         {ticket.normals.map((coordinate) => (
@@ -259,21 +260,24 @@ function TicketOnlyCard({
   claimError?: Error | null;
 }) {
   return (
-    <article className="overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-raised)]">
-      <div className="grid aspect-square place-items-center border-b border-[var(--border)] bg-[radial-gradient(circle_at_center,rgba(124,58,237,0.16),transparent_62%),#050610] px-8 text-center">
-        <div>
-          <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-violet-300/40 text-2xl text-violet-200">TKT</div>
-          <p className="mt-5 telemetry text-violet-200">MEGAPOT TICKET</p>
-          <h2 className="mt-2 font-hud text-xl font-bold text-[var(--text-primary)]">No Megastera planet attached</h2>
-          <p className="mt-2 text-xs leading-5 text-[var(--text-secondary)]">This wallet ticket was not purchased through the Megastera site.</p>
+    <article data-testid={`wallet-ticket-card-${ticket.id}`} aria-label={`Ticket #${ticket.user_ticket_id}`} className="overflow-hidden rounded-2xl border border-[var(--border-strong)] bg-[var(--surface-raised)] shadow-[0_18px_40px_rgba(0,0,0,0.16)] transition-[border-color,box-shadow] duration-200 hover:border-violet-300/50 hover:shadow-[0_20px_46px_rgba(124,58,237,0.12)]">
+      <div className="relative overflow-hidden bg-[radial-gradient(circle_at_85%_0%,rgba(167,139,250,0.2),transparent_42%),linear-gradient(135deg,#0b0b18,#111125)] px-4 pb-5 pt-4 sm:px-5">
+        <div aria-hidden className="pointer-events-none absolute -right-8 -top-12 h-36 w-36 rounded-full bg-violet-400/10 blur-3xl" />
+        <div className="relative flex items-start justify-between gap-4">
+          <div>
+            <p className="telemetry text-violet-200">TICKET</p>
+            <h2 className="mt-1 font-hud text-2xl font-bold tracking-[-0.04em] text-[var(--text-primary)]">#{ticket.user_ticket_id}</h2>
+          </div>
+          <div className="text-right">
+            <p className="telemetry text-[var(--text-secondary)]">DRAWING</p>
+            <p className="mt-1 font-mono text-sm font-semibold tabular-nums text-[var(--text-primary)]">#{ticket.round_id}</p>
+          </div>
         </div>
       </div>
-      <div className="space-y-3 p-3.5">
-        <div className="flex items-center justify-between gap-3">
-          <span className="telemetry text-[var(--text-secondary)]">TICKET #{ticket.user_ticket_id}</span>
-          <span className="font-mono text-[10px] text-[var(--text-secondary)]">DRAWING #{ticket.round_id}</span>
-        </div>
-        <TicketCoordinates ticket={{ ticketId: ticket.user_ticket_id, drawingId: ticket.round_id, normals: ticket.normals, bonusBall: ticket.bonusball }} />
+      <div className="relative space-y-3 border-t border-dashed border-[var(--border-strong)] px-4 py-4 sm:px-5">
+        <span aria-hidden className="pointer-events-none absolute -left-2.5 -top-2.5 h-5 w-5 rounded-full bg-[var(--surface)]" />
+        <span aria-hidden className="pointer-events-none absolute -right-2.5 -top-2.5 h-5 w-5 rounded-full bg-[var(--surface)]" />
+        <TicketCoordinates variant="stub" ticket={{ ticketId: ticket.user_ticket_id, drawingId: ticket.round_id, normals: ticket.normals, bonusBall: ticket.bonusball }} />
         <PlanetTicketAction status={status} onClaim={onClaim} isClaimPending={isClaimPending} claimError={claimError} />
       </div>
     </article>
