@@ -125,10 +125,10 @@ describe('ExpeditionConfigurator', () => {
     const [toggle] = screen.getAllByRole('button', { name: 'Open coordinates' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(toggle).toHaveClass('transition-[left,background-color]');
-    expect(toggle).toHaveClass('h-80', 'w-[104px]');
-    expect(toggle).toHaveStyle({ left: 'calc(50% + 368px)' });
-    expect(toggle.querySelector('.text-\\[1\\.36rem\\]')).toBeInTheDocument();
-    expect(toggle.querySelector('.text-\\[3rem\\]')).toBeInTheDocument();
+    expect(toggle).toHaveClass('h-60', 'w-20');
+    expect(toggle).toHaveStyle({ left: 'calc(50% + 472px)' });
+    expect(toggle.querySelector('.text-\\[1rem\\]')).toBeInTheDocument();
+    expect(toggle.querySelector('.text-\\[2\\.25rem\\]')).toBeInTheDocument();
 
     await user.click(toggle);
     expect(screen.getAllByRole('region', { name: 'Coordinates' })).toHaveLength(2);
@@ -137,7 +137,7 @@ describe('ExpeditionConfigurator', () => {
 
     const [closeToggle] = screen.getAllByRole('button', { name: 'Close coordinates' });
     expect(closeToggle).toHaveStyle({
-      left: 'min(calc(50% + 368px), calc(50% + 50vw - 500px))',
+      left: 'min(calc(50% + 392px), calc(50% + 50vw - 476px))',
     });
     await user.click(closeToggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'false');

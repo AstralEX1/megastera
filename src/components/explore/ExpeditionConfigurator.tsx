@@ -143,16 +143,16 @@ export function ExpeditionConfigurator({
           aria-label={coordinatesLabel}
           aria-expanded={coordinatesOpen}
           onClick={() => setCoordinatesOpen((open) => !open)}
-          className="absolute top-1/2 z-40 hidden h-80 w-[104px] -translate-y-1/2 items-center justify-center border-x border-[var(--border)] bg-[var(--background)] text-[var(--text-primary)] transition-[left,background-color] duration-300 ease-out hover:bg-[var(--surface-raised)] xl:flex"
+          className="absolute top-1/2 z-40 hidden h-60 w-20 -translate-y-1/2 items-center justify-center border-x border-[var(--border)] bg-[var(--background)] text-[var(--text-primary)] transition-[left,background-color] duration-300 ease-out hover:bg-[var(--surface-raised)] xl:flex"
           style={{
             left: coordinatesOpen
-              ? 'min(calc(50% + 368px), calc(50% + 50vw - 500px))'
-              : 'calc(50% + 368px)',
+              ? 'min(calc(50% + 392px), calc(50% + 50vw - 476px))'
+              : 'calc(50% + 472px)',
           }}
         >
           <span className="flex -rotate-90 items-center gap-2 whitespace-nowrap telemetry font-bold" aria-hidden>
-            <span className="text-[3rem] leading-none">{coordinatesOpen ? '‹' : '›'}</span>
-            <span className="text-[1.36rem]">Coordinates</span>
+            <span className="text-[2.25rem] leading-none">{coordinatesOpen ? '‹' : '›'}</span>
+            <span className="text-[1rem]">Coordinates</span>
           </span>
         </button>
         <div
