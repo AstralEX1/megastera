@@ -14,6 +14,14 @@ vi.mock('@/hooks/useJackpotState', () => ({
   }),
 }));
 
+vi.mock('@/hooks/useLeaderboard', () => ({
+  useCurrentLeaderboard: () => ({
+    data: undefined,
+    error: null,
+    isLoading: false,
+  }),
+}));
+
 describe('Landing', () => {
   afterEach(cleanup);
 
@@ -46,13 +54,13 @@ describe('Landing', () => {
     const ctas = screen.getAllByRole('link', { name: 'Play' });
     expect(ctas.length).toBeGreaterThanOrEqual(2);
     expect(ctas.every((cta) => cta.getAttribute('href') === '/play')).toBe(true);
-    expect(ctas.every((cta) => !cta.textContent?.includes('↗'))).toBe(true);
+    expect(container.querySelectorAll('.landing-button > span[aria-hidden="true"]')).toHaveLength(0);
     expect(container.querySelector('.landing-hero-actions .landing-button')).toHaveClass('landing-button-primary');
     expect(screen.queryByText('Mint Planet')).not.toBeInTheDocument();
     expect(
-      [...container.querySelectorAll('img')]
+        [...container.querySelectorAll('img')]
         .filter((image) => image.getAttribute('src')?.includes('/artifacts/'))
-        .every((image) => image.closest('.landing-planet-card')),
+        .every((image) => image.closest('.landing-planet-card, .landing-mining-planet')),
     ).toBe(true);
   });
 
@@ -60,13 +68,18 @@ describe('Landing', () => {
     const { container } = render(<Landing />);
     const landing = within(container);
 
-    expect(container.querySelectorAll('.landing > main > section')).toHaveLength(3);
+    expect(container.querySelectorAll('.landing > main > section')).toHaveLength(4);
     expect(landing.getByRole('region', { name: /One ticket\.\s*One Planet\./ })).toBeInTheDocument();
     expect(landing.getByRole('heading', { name: /One ticket\.\s*One Planet\./ })).toBeInTheDocument();
-    expect(landing.getByRole('heading', { name: 'Megapot Ticket' })).toBeInTheDocument();
-    expect(landing.getByRole('heading', { name: 'Planet' })).toBeInTheDocument();
+    expect(landing.getByRole('heading', { name: 'Megapot Tickets' })).toBeInTheDocument();
+    expect(landing.getByRole('heading', { name: 'Planets' })).toBeInTheDocument();
+    expect(landing.getByRole('region', { name: /Keep mining\.\s*Climb higher\./ })).toBeInTheDocument();
+    expect(landing.getByRole('heading', { name: /Keep mining\.\s*Climb higher\./ })).toBeInTheDocument();
+    expect(landing.getByText(/ticket numbers become the coordinates that generate your Planet/i)).toBeInTheDocument();
+    expect(landing.getByText(/Every Planet is unique and keeps mining minerals after the draw/i)).toBeInTheDocument();
     expect(landing.getByText(/enters the Megapot draw and can win the jackpot/i)).toBeInTheDocument();
-    expect(landing.getByText(/tied to that ticket, mines minerals and competes on the leaderboard/i)).toBeInTheDocument();
+    expect(landing.queryByText(/tied to that ticket, mines minerals and competes on the leaderboard/i)).not.toBeInTheDocument();
+    expect(landing.queryByText('PLANET COORDINATES')).not.toBeInTheDocument();
     expect(container.textContent).not.toContain('01 / MEGAPOT TICKET');
     expect(container.textContent).not.toContain('ONE TICKET');
     expect(container.textContent).not.toContain('ONE PLANET');
@@ -81,14 +94,18 @@ describe('Landing', () => {
     expect(generatePlanetButton).not.toHaveAttribute('title');
     expect(generatePlanetButton.closest('.landing-live-generator-art')).toBeTruthy();
     expect(container.querySelector('.landing-megapot-ticket')).toBeInTheDocument();
-    expect(container.querySelectorAll('.landing-ticket-ball')).toHaveLength(6);
-    expect(container.querySelectorAll('.landing-ticket-ball-bonus')).toHaveLength(1);
+    expect(container.querySelectorAll('.landing-megapot-ticket')).toHaveLength(3);
+    expect(container.querySelectorAll('.landing-ticket-ball')).toHaveLength(18);
+    expect(container.querySelectorAll('.landing-ticket-ball-bonus')).toHaveLength(3);
     expect(container.querySelectorAll('.landing-my-planet-card')).toHaveLength(3);
     expect(container.querySelector('.landing-my-planet-card')).toHaveAttribute('data-rarity', 'Common');
     expect(container.querySelectorAll('.landing-my-planet-card-media')).toHaveLength(3);
     expect(container.querySelectorAll('.landing-my-planet-card-minerals')).toHaveLength(3);
     expect(landing.getByText('Draheunia')).toBeInTheDocument();
     expect(landing.getByText('Ticket #5001')).toBeInTheDocument();
+    expect(landing.getByText('TICKET / 5001')).toBeInTheDocument();
+    expect(landing.getByText('TICKET / 5005')).toBeInTheDocument();
+    expect(landing.getByText('TICKET / 5009')).toBeInTheDocument();
     expect(landing.getByText('25')).toBeInTheDocument();
     expect(landing.getByRole('region', { name: /How it works/i })).toBeInTheDocument();
     expect(container.querySelectorAll('.landing-how-it-works details')).toHaveLength(8);
@@ -127,10 +144,9 @@ describe('Landing', () => {
       '.landing-ticket-mechanic h3 .split-parent',
       '.landing-ticket-mechanic > p.split-parent',
       '.landing-planet-mechanic h3 .split-parent',
-      '.landing-planet-mechanic > p.split-parent',
-      '.landing-mechanics-proof .landing-micro-label.split-parent',
-      '.landing-mechanics-proof > .landing-proof-copy.split-parent',
-      '.landing-mechanics-proof .landing-button .split-parent',
+      '.landing-planet-mechanic .landing-planet-coordinates-kicker.split-parent',
+      '.landing-planet-mechanic .landing-planet-coordinates-copy.split-parent',
+      '.landing-planet-mechanic .landing-button .split-parent',
       '.landing-how-it-works .landing-kicker.split-parent',
       '.landing-how-it-works h2 .split-parent',
       '.landing-how-it-works .landing-how-it-works-intro.split-parent',

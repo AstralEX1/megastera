@@ -527,15 +527,23 @@
 
 .landing-ticket-visual {
   display: grid;
-  min-height: 270px;
+  min-height: 330px;
   margin-block: 48px 34px;
-  padding: 28px;
+  padding: 20px;
   border: 1px solid rgb(174 185 255 / 0.35);
   background:
     linear-gradient(135deg, transparent 0 49.8%, rgb(174 185 255 / 0.15) 50%, transparent 50.2%),
     var(--landing-graphite);
   place-items: center;
   transform: rotate(-2deg);
+}
+
+.landing-ticket-visual-stack {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
 }
 
 .landing-megapot-ticket {
@@ -620,6 +628,49 @@
   color: var(--landing-haze);
 }
 
+.landing-ticket-visual-stack .landing-megapot-ticket {
+  min-height: 0;
+  gap: 12px;
+  padding: 14px 12px 12px;
+  transform: none;
+}
+
+.landing-ticket-visual-stack .landing-ticket-visual-top,
+.landing-ticket-visual-stack .landing-ticket-visual-bottom,
+.landing-ticket-visual-stack .landing-megapot-ticket-price,
+.landing-ticket-visual-stack .landing-megapot-ticket-id {
+  overflow: hidden;
+  font-size: 0.42rem;
+  letter-spacing: 0.07em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.landing-ticket-visual-stack .landing-ticket-visual-title {
+  font-size: clamp(1.45rem, 3.2vw, 2.8rem);
+}
+
+.landing-ticket-visual-stack .landing-ticket-balls {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+.landing-ticket-visual-stack .landing-ticket-ball {
+  width: clamp(18px, 1.8vw, 28px);
+  height: clamp(18px, 1.8vw, 28px);
+  flex: 0 0 auto;
+  font-size: 0.48rem;
+}
+
+.landing-ticket-visual-stack .landing-ticket-ball-bonus {
+  margin-left: 0;
+}
+
+.landing-ticket-visual-stack .landing-megapot-ticket-foot {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
 .landing-mechanic h3 {
   margin-bottom: 12px;
   color: var(--landing-dust);
@@ -631,6 +682,27 @@
 .landing-mechanic > p {
   max-width: 390px;
   margin-bottom: 0;
+}
+
+.landing-planet-coordinates-kicker {
+  display: block;
+  max-width: 440px;
+  margin-bottom: 9px;
+  color: var(--landing-dust);
+  font-size: clamp(1rem, 1.55vw, 1.25rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.landing-planet-coordinates-copy {
+  max-width: 440px;
+  font-size: clamp(0.88rem, 1.25vw, 1.05rem);
+  line-height: 1.55;
+}
+
+.landing-planet-cta {
+  margin-top: 22px;
 }
 
 .landing-mechanic-planet-stack {
@@ -782,17 +854,190 @@
   transform: translateY(-16px);
 }
 
-.landing-mechanics-proof {
-  display: flex;
+.landing-mining-leaderboard {
+  display: grid;
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
   align-items: center;
-  gap: 18px;
-  padding-top: 22px;
-  color: var(--landing-haze);
-  font-size: 0.76rem;
+  gap: clamp(34px, 7vw, 104px);
+  border-top: 1px solid rgb(244 247 255 / 0.13);
 }
 
-.landing-mechanics-proof .landing-button {
-  margin-left: auto;
+.landing-mining-copy {
+  max-width: 430px;
+}
+
+.landing-mining-copy h2 {
+  margin-block: 20px 24px;
+}
+
+.landing-mining-title-line {
+  display: block;
+}
+
+.landing-mining-title-line.landing-split-line-accent {
+  color: var(--landing-mineral);
+  font-family: Bitram, Sora, sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.045em;
+}
+
+.landing-mining-copy p {
+  max-width: 390px;
+  margin-bottom: 0;
+}
+
+.landing-mining-copy .landing-mining-bonus-note {
+  max-width: 420px;
+  margin-top: 16px;
+  padding-left: 14px;
+  border-left: 2px solid var(--landing-mineral);
+  color: var(--landing-dust);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.landing-mining-cta {
+  margin-top: 28px;
+}
+
+.landing-mining-stage {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.76fr) minmax(0, 1.24fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.landing-mining-planet,
+.landing-mining-standings {
+  min-width: 0;
+  border: 1px solid rgb(244 247 255 / 0.16);
+  background: var(--landing-graphite);
+}
+
+.landing-mining-planet {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: #050610;
+}
+
+.landing-mining-planet::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 48%, rgb(3 3 7 / 0.9) 100%);
+  content: "";
+  pointer-events: none;
+}
+
+.landing-mining-planet > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.landing-mining-planet-label {
+  position: absolute;
+  right: 14px;
+  bottom: 13px;
+  left: 14px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--landing-dust);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.56rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.landing-mining-planet-label img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  filter: invert(1);
+}
+
+.landing-mining-standings {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.landing-mining-standings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgb(244 247 255 / 0.16);
+  color: var(--landing-mineral);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.landing-mining-standings-header span:last-child {
+  color: var(--landing-haze);
+}
+
+.landing-mining-standings-list {
+  display: grid;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-mining-standings-list li {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 17px 18px;
+  border-bottom: 1px solid rgb(244 247 255 / 0.12);
+}
+
+.landing-mining-standings-list li:last-child {
+  border-bottom: 0;
+}
+
+.landing-mining-rank {
+  color: var(--landing-mineral);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.68rem;
+}
+
+.landing-mining-wallet {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--landing-haze);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.landing-mining-standings-list strong {
+  color: var(--landing-dust);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.landing-mining-standings-empty {
+  display: grid;
+  min-height: 180px;
+  margin: 0;
+  padding: 24px;
+  color: var(--landing-haze);
+  place-items: center;
+  text-align: center;
 }
 
 .landing-how-it-works {
@@ -959,6 +1204,15 @@
     grid-template-columns: 1fr;
   }
 
+  .landing-mining-leaderboard {
+    grid-template-columns: 1fr;
+    gap: 42px;
+  }
+
+  .landing-mining-copy {
+    max-width: 560px;
+  }
+
   .landing-mechanic {
     min-height: 0;
     border-right: 0;
@@ -1052,10 +1306,18 @@
     padding: 20px 18px 24px;
   }
 
-  .landing-ticket-visual,
+  .landing-ticket-visual {
+    min-height: 340px;
+    margin-block: 36px 28px;
+  }
+
   .landing-mechanic-planet-stack {
     min-height: 220px;
     margin-block: 36px 28px;
+  }
+
+  .landing-mining-stage {
+    grid-template-columns: minmax(120px, 0.76fr) minmax(0, 1.24fr);
   }
 
   .landing-faq-summary {
@@ -1068,14 +1330,17 @@
     margin-right: 36px;
   }
 
-  .landing-mechanics-proof {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 13px;
+  .landing-ticket-visual-stack,
+  .landing-mechanic-planet-stack {
+    grid-template-columns: 1fr;
   }
 
-  .landing-mechanics-proof .landing-button {
-    margin-left: 0;
+  .landing-mining-stage {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-mining-planet {
+    max-width: 320px;
   }
 
   .landing-footer {

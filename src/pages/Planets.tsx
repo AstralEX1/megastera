@@ -4,7 +4,7 @@ import { Button } from '@/components/common/Button';
 import { FadeArc } from '@/components/common/FadeArc';
 import { Ball } from '@/components/lottery/Ball';
 import { BackendPlanetPreview } from '@/components/planets/BackendPlanetPreview';
-import { PlanetMiningMetrics, PlanetMiningOverlay } from '@/components/planets/PlanetMiningOverlay';
+import { PlanetMiningMetrics } from '@/components/planets/PlanetMiningOverlay';
 import { PlanetTicketAction } from '@/components/planets/PlanetTicketAction';
 import { useClaimWinnings } from '@/hooks/useClaimWinnings';
 import { useBackendPlanets } from '@/hooks/useBackendPlanets';
@@ -108,7 +108,7 @@ function BackendPlanetCard({
           <h2 className="truncate font-hud text-lg font-bold tracking-[-0.03em] text-[var(--text-primary)]">{planet.name}</h2>
         </div>
       </button>
-      <div className="border-t border-[var(--border)] p-3.5">
+      <div className="p-3.5">
         <PlanetMiningMetrics mining={mining} miningAsOf={mining?.activeSince} />
       </div>
     </article>
@@ -141,7 +141,7 @@ function TicketCoordinates({ ticket }: { ticket: TicketCoordinatesValue }) {
 
 function WinningNumbers({ winningNumbers }: { winningNumbers: MegapotWinningNumbers }) {
   return (
-    <section data-testid="winning-numbers" aria-label="Winning numbers" className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+    <section data-testid="winning-numbers" aria-label="Winning numbers" className="mt-4 border-t border-[var(--border)] pt-3">
       <p className="telemetry text-[var(--text-secondary)]">Winning numbers</p>
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
         {winningNumbers.normals.map((number) => (
@@ -150,6 +150,54 @@ function WinningNumbers({ winningNumbers }: { winningNumbers: MegapotWinningNumb
         <span aria-hidden className="mx-1 h-6 w-px bg-[var(--border-strong)]" />
         <Ball n={winningNumbers.bonusball} variant="bonus" selected size="md" title="Bonus number" />
       </div>
+    </section>
+  );
+}
+
+function TicketBlock({
+  ticket,
+  winningNumbers,
+  status,
+  onClaim,
+  isClaimPending,
+  claimError,
+  originTxHash,
+}: {
+  ticket: TicketCoordinatesValue;
+  winningNumbers: MegapotWinningNumbers | null;
+  status: TicketStatus;
+  onClaim: () => void;
+  isClaimPending: boolean;
+  claimError?: Error | null;
+  originTxHash: string;
+}) {
+  return (
+    <section data-testid="ticket-block" aria-label="Ticket" className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="font-hud text-base font-bold text-[var(--text-primary)]">Ticket</h3>
+        <span className="font-mono text-[10px] text-[var(--text-secondary)]">DRAWING #{ticket.drawingId}</span>
+      </div>
+      <div className="mt-3">
+        <p className="telemetry text-[var(--text-secondary)]">Your numbers</p>
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          {ticket.normals.map((coordinate) => (
+            <span key={coordinate} className="grid h-7 w-7 place-items-center rounded-full border border-[var(--border-strong)] bg-[var(--surface-raised)] font-mono text-[11px] font-bold text-[var(--text-primary)]">
+              {coordinate}
+            </span>
+          ))}
+          <span aria-hidden className="mx-1 h-6 w-px bg-[var(--border-strong)]" />
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-[var(--rare)] font-mono text-[11px] font-bold text-black" title="Bonus number">
+            {ticket.bonusBall}
+          </span>
+        </div>
+      </div>
+      {winningNumbers ? <WinningNumbers winningNumbers={winningNumbers} /> : null}
+      <div className="mt-4 border-t border-[var(--border)] pt-3">
+        <PlanetTicketAction status={status} onClaim={onClaim} isClaimPending={isClaimPending} claimError={claimError} />
+      </div>
+      <a className="mt-3 block rounded-xl border border-[var(--border)] px-3 py-2.5 text-center text-sm text-[var(--rare)] transition-colors hover:bg-[var(--surface-hover)]" href={`https://sepolia.basescan.org/tx/${originTxHash}`} target="_blank" rel="noreferrer">
+        View source ticket receipt ↗
+      </a>
     </section>
   );
 }
@@ -277,37 +325,36 @@ function PlanetDetail({
           loading="eager"
           style={{ imageRendering: 'pixelated' }}
         />
-        <PlanetMiningOverlay mining={mining} miningAsOf={mining?.activeSince} />
       </div>
       <div className="space-y-4 p-4 sm:p-5">
-        <div>
-          <p className="telemetry text-[var(--text-secondary)]">{planet.planetType}</p>
-          <h2 className="mt-1 font-hud text-2xl font-bold tracking-[-0.04em] text-[var(--text-primary)]">{planet.name}</h2>
+        <div data-testid="planet-detail-title">
+          <h2 className="font-hud text-2xl font-bold tracking-[-0.04em] text-[var(--text-primary)]">{planet.name}</h2>
         </div>
-        <TicketCoordinates ticket={planet.ticket} />
-        {winningNumbers ? <WinningNumbers winningNumbers={winningNumbers} /> : null}
-        <PlanetTicketAction
+        <section data-testid="planet-detail-info" aria-label="Planet info" className="space-y-4">
+          <section data-testid="planet-detail-mining" aria-label="Mining" className="min-w-0">
+            <PlanetMiningMetrics mining={mining} miningAsOf={mining?.activeSince} />
+          </section>
+          <section data-testid="planet-detail-details" aria-label="Planet details" className="mt-4 border-t border-[var(--border)] pt-4">
+            <h3 className="mb-2 font-hud text-sm font-bold text-[var(--text-secondary)]">Details</h3>
+            <dl className="grid grid-cols-2 gap-x-4 sm:grid-cols-3">
+              <DetailValue label="Type" value={planet.planetType} />
+              <DetailValue label="Terrain" value={planet.terrain} />
+              <DetailValue label="Rarity" value={planet.rarity} />
+              <DetailValue label="Satellites" value={planet.satelliteCount} />
+              <DetailValue label="Ring" value={planet.hasRing ? 'Yes' : 'No'} />
+              <DetailValue label="Base rate" value={`${planet.baseMineralsPerDay}/day`} />
+            </dl>
+          </section>
+        </section>
+        <TicketBlock
+          ticket={planet.ticket}
+          winningNumbers={winningNumbers}
           status={ticketStatus}
           onClaim={onClaim}
           isClaimPending={isClaimPending}
           claimError={claimError}
+          originTxHash={planet.ticket.originTxHash}
         />
-        <section aria-label="Planet details">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <h3 className="font-hud text-base font-bold text-[var(--text-primary)]">Details</h3>
-          </div>
-          <dl className="grid grid-cols-2 gap-x-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 sm:grid-cols-3">
-            <DetailValue label="Type" value={planet.planetType} />
-            <DetailValue label="Terrain" value={planet.terrain} />
-            <DetailValue label="Rarity" value={planet.rarity} />
-            <DetailValue label="Satellites" value={planet.satelliteCount} />
-            <DetailValue label="Ring" value={planet.hasRing ? 'Yes' : 'No'} />
-            <DetailValue label="Base rate" value={`${planet.baseMineralsPerDay}/day`} />
-          </dl>
-        </section>
-        <a className="block rounded-xl border border-[var(--border)] px-3 py-2.5 text-center text-sm text-[var(--rare)] transition-colors hover:bg-[var(--surface-hover)]" href={`https://sepolia.basescan.org/tx/${planet.ticket.originTxHash}`} target="_blank" rel="noreferrer">
-          View source ticket receipt ↗
-        </a>
       </div>
     </section>
   );

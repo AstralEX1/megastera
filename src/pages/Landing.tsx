@@ -3,14 +3,15 @@ import { useEffect } from 'react';
 import { COPY } from '@/config/copy';
 import { LandingLiveJackpot } from '@/components/landing/LandingLiveJackpot';
 import { LandingHowItWorks } from '@/components/landing/LandingHowItWorks';
+import { LandingMiningLeaderboard } from '@/components/landing/LandingMiningLeaderboard';
 import { LandingPlanetCard } from '@/components/landing/LandingPlanetCard';
 import { LandingSplitText } from '@/components/landing/LandingSplitText';
 import { PlanetGeneratorHero } from '@/components/landing/PlanetGeneratorHero';
 
 const generatedPlanetAssets = [
-  { image: '/artifacts/megastera-generated/planet-01.gif', name: 'Draheunia', rarity: 'Common', ticketId: '5001', minerals: 25 },
-  { image: '/artifacts/megastera-generated/planet-05.gif', name: 'Wheuagawa III', rarity: 'Uncommon', ticketId: '5005', minerals: 75 },
-  { image: '/artifacts/megastera-generated/planet-09.gif', name: 'Auclagua-94', rarity: 'Common', ticketId: '5009', minerals: 10 },
+  { image: '/artifacts/megastera-generated/planet-01.gif', name: 'Draheunia', rarity: 'Common', ticketId: '5001', minerals: 25, numbers: [7, 14, 18, 23, 29], bonus: 3 },
+  { image: '/artifacts/megastera-generated/planet-05.gif', name: 'Wheuagawa III', rarity: 'Uncommon', ticketId: '5005', minerals: 75, numbers: [4, 11, 19, 27, 36], bonus: 8 },
+  { image: '/artifacts/megastera-generated/planet-09.gif', name: 'Auclagua-94', rarity: 'Common', ticketId: '5009', minerals: 10, numbers: [2, 13, 21, 30, 37], bonus: 6 },
 ] as const;
 
 export function Landing() {
@@ -111,26 +112,36 @@ export function Landing() {
           <div className="landing-mechanics-grid">
             <article className="landing-mechanic landing-ticket-mechanic">
               <div className="landing-ticket-visual">
-                <div className="landing-megapot-ticket" role="img" aria-label="Megapot Ticket preview with five numbers and one bonus ball">
-                  <div className="landing-megapot-ticket-head">
-                    <LandingSplitText tag="span" className="landing-ticket-visual-top" text="MEGAPOT / DAILY DRAW" delay={24} />
-                    <LandingSplitText tag="span" className="landing-megapot-ticket-price" text="$1 USDC" delay={28} />
-                  </div>
-                  <LandingSplitText tag="strong" className="landing-ticket-visual-title" text="TICKET" splitType="chars" delay={42} />
-                  <div className="landing-ticket-balls" aria-hidden="true">
-                    {[7, 14, 18, 23, 29].map((number) => <span className="landing-ticket-ball" key={number}>{number}</span>)}
-                    <span className="landing-ticket-ball landing-ticket-ball-bonus">3</span>
-                  </div>
-                  <div className="landing-megapot-ticket-foot">
-                    <LandingSplitText tag="span" className="landing-ticket-visual-bottom" text="5 NUMBERS + BONUS" delay={24} />
-                    <LandingSplitText tag="span" className="landing-megapot-ticket-id" text="TICKET / 5001" delay={28} />
-                  </div>
+                <div className="landing-ticket-visual-stack">
+                  {generatedPlanetAssets.map((ticket) => (
+                    <div
+                      className="landing-megapot-ticket"
+                      data-ticket-id={ticket.ticketId}
+                      key={ticket.ticketId}
+                      role="img"
+                      aria-label={`Megapot Ticket ${ticket.ticketId} preview with five numbers and one bonus ball`}
+                    >
+                      <div className="landing-megapot-ticket-head">
+                        <LandingSplitText tag="span" className="landing-ticket-visual-top" text="MEGAPOT / DAILY DRAW" delay={24} />
+                        <LandingSplitText tag="span" className="landing-megapot-ticket-price" text="$1 USDC" delay={28} />
+                      </div>
+                      <LandingSplitText tag="strong" className="landing-ticket-visual-title" text="TICKET" splitType="chars" delay={42} />
+                      <div className="landing-ticket-balls" aria-hidden="true">
+                        {ticket.numbers.map((number) => <span className="landing-ticket-ball" key={number}>{number}</span>)}
+                        <span className="landing-ticket-ball landing-ticket-ball-bonus">{ticket.bonus}</span>
+                      </div>
+                      <div className="landing-megapot-ticket-foot">
+                        <LandingSplitText tag="span" className="landing-ticket-visual-bottom" text="5 NUMBERS + BONUS" delay={24} />
+                        <LandingSplitText tag="span" className="landing-megapot-ticket-id" text={`TICKET / ${ticket.ticketId}`} delay={28} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-              <h3><LandingSplitText tag="span" text="Megapot Ticket" /></h3>
+              <h3><LandingSplitText tag="span" text="Megapot Tickets" /></h3>
               <LandingSplitText
                 tag="p"
-                text="The ticket enters the Megapot draw and can win the jackpot."
+                text="Each ticket enters the Megapot draw and can win the jackpot."
                 splitType="lines"
                 delay={66}
                 duration={0.78}
@@ -150,31 +161,30 @@ export function Landing() {
                   />
                 ))}
               </div>
-              <h3><LandingSplitText tag="span" text="Planet" /></h3>
+              <h3><LandingSplitText tag="span" text="Planets" /></h3>
+              <LandingSplitText
+                tag="span"
+                className="landing-planet-coordinates-kicker"
+                text="Generated from your ticket numbers"
+                delay={48}
+                duration={0.72}
+              />
               <LandingSplitText
                 tag="p"
-                text="The Planet is tied to that ticket, mines minerals and competes on the leaderboard for extra rewards."
+                className="landing-planet-coordinates-copy"
+                text="Your ticket numbers become the coordinates that generate your Planet. Every Planet is unique and keeps mining minerals after the draw."
                 splitType="lines"
                 delay={66}
                 duration={0.82}
               />
+              <a className="landing-button landing-button-small landing-planet-cta" href="/play">
+                <LandingSplitText text="Play" className="landing-button-label" />
+              </a>
             </article>
-          </div>
-
-          <div className="landing-mechanics-proof">
-            <LandingSplitText tag="span" className="landing-micro-label" text="TICKET PROVENANCE" />
-            <LandingSplitText
-              tag="span"
-              className="landing-proof-copy"
-              text="Every Planet carries the ticket that created it."
-              delay={52}
-            />
-            <a className="landing-button landing-button-small" href="/play">
-              <LandingSplitText text="Play" className="landing-button-label" />
-            </a>
           </div>
         </section>
 
+        <LandingMiningLeaderboard />
         <LandingHowItWorks />
       </main>
 

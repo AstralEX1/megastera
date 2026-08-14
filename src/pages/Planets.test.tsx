@@ -198,12 +198,28 @@ describe('backend My Planets', () => {
     expect(metrics).toHaveTextContent('10.1');
     expect(within(metrics).queryByText('/day')).not.toBeInTheDocument();
     expect(within(metrics).queryByText('mined')).not.toBeInTheDocument();
+    expect(within(metrics).getByText('RATE')).toBeInTheDocument();
+    expect(within(metrics).getByText('MINED')).toBeInTheDocument();
+    expect(within(metrics).getByText('BOOST')).toBeInTheDocument();
+    const metricGroups = [metrics, within(screen.getByRole('complementary', { name: 'Selected planet detail' })).getByTestId('planet-mining-metrics')];
+    for (const group of metricGroups) {
+      const rate = within(group).getByText('RATE');
+      const boost = within(group).getByText('BOOST');
+      const mined = within(group).getByText('MINED');
+      expect(rate.compareDocumentPosition(boost) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(boost.compareDocumentPosition(mined) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(mined.parentElement).toHaveClass('border-l');
+      expect(within(group).getByRole('tooltip', { name: 'Minerals per day including boost' })).toBeInTheDocument();
+      expect(within(group).getByRole('tooltip', { name: 'Bonus from matching planet types' })).toBeInTheDocument();
+      expect(within(group).getByRole('tooltip', { name: 'Total minerals collected' })).toBeInTheDocument();
+    }
     expect(metrics).toHaveTextContent('+5%');
+    expect(metrics.parentElement).not.toHaveClass('border-t');
     expect(within(card).queryByTestId('planet-mining-overlay')).not.toBeInTheDocument();
     expect(within(card).queryByTestId('planet-ticket-action')).not.toBeInTheDocument();
   });
 
-  it('uses rarity glow on the card and detail image without redundant detail headings', () => {
+  it('groups mining and details in one info panel while keeping mining prominent', () => {
     mocks.planets = [generatedRow({ ...backendPlanet, rarity: 'Epic' })];
 
     render(<Planets onNavigate={vi.fn()} onViewPlanet={vi.fn()} />);
@@ -215,6 +231,18 @@ describe('backend My Planets', () => {
     expect(within(detail).queryByText('#456')).not.toBeInTheDocument();
     expect(within(detail).queryByText('MINING ACTIVE')).not.toBeInTheDocument();
     expect(within(detail).queryByText(/Generated /)).not.toBeInTheDocument();
+    expect(within(detail).getByTestId('planet-detail-title')).not.toHaveTextContent('Nebula');
+    expect(within(detail).queryByTestId('planet-mining-overlay')).not.toBeInTheDocument();
+    const infoPanel = within(detail).getByTestId('planet-detail-info');
+    const miningPanel = within(infoPanel).getByTestId('planet-detail-mining');
+    const detailsPanel = within(infoPanel).getByTestId('planet-detail-details');
+    expect(infoPanel).toHaveAttribute('aria-label', 'Planet info');
+    expect(infoPanel).not.toHaveClass('border');
+    expect(within(detail).queryByRole('heading', { name: 'Mining' })).not.toBeInTheDocument();
+    expect(miningPanel).not.toHaveClass('border');
+    expect(detailsPanel).toHaveClass('border-t');
+    expect(infoPanel.compareDocumentPosition(within(detail).getByTestId('ticket-block')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(detail).getByTestId('ticket-block')).toHaveTextContent('DRAWING #12');
     expect(within(detail).getByTestId('planet-detail-image')).toHaveClass('border-2');
     expect(within(detail).getByTestId('planet-detail-image').className).toContain('shadow-[0_0_');
   });

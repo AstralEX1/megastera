@@ -21,8 +21,23 @@ describe('PlanetMiningOverlay', () => {
   it('maps the backend mining snapshot into the intrinsic production metrics', () => {
     render(<PlanetMiningOverlay mining={mining} miningAsOf="2026-08-10T00:00:01.000Z" />);
     expect(screen.getByTestId('planet-mining-overlay')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Minerals' })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Mined' })).toBeInTheDocument();
+    expect(screen.getByText('RATE')).toBeInTheDocument();
+    expect(screen.getByText('MINED')).toBeInTheDocument();
+    expect(screen.getByText('BOOST')).toBeInTheDocument();
+    const rate = screen.getByText('RATE');
+    const boost = screen.getByText('BOOST');
+    const mined = screen.getByText('MINED');
+    expect(rate.compareDocumentPosition(boost) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(boost.compareDocumentPosition(mined) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(mined.parentElement).toHaveClass('border-l');
+    const rateTooltip = screen.getByRole('tooltip', { name: 'Minerals per day including boost' });
+    const boostTooltip = screen.getByRole('tooltip', { name: 'Bonus from matching planet types' });
+    const minedTooltip = screen.getByRole('tooltip', { name: 'Total minerals collected' });
+    expect(rateTooltip).toHaveClass('h-[22px]', 'px-2', 'text-[10px]', 'font-medium', 'duration-150', 'group-hover:opacity-100', 'group-focus-visible:opacity-100');
+    expect(boostTooltip).toHaveClass('h-[22px]', 'px-2', 'text-[10px]', 'font-medium', 'duration-150');
+    expect(minedTooltip).toHaveClass('bg-[rgba(97,97,97,0.9)]');
+    expect(screen.queryByTitle('Minerals per day after all collection bonuses')).not.toBeInTheDocument();
+    expect(rate.parentElement).toHaveAttribute('tabindex', '0');
     expect(screen.getByText('25.2')).toHaveClass('text-[var(--rare)]');
     expect(screen.queryByText('24')).not.toBeInTheDocument();
     expect(screen.getByText('10.1')).toBeInTheDocument();
@@ -30,8 +45,6 @@ describe('PlanetMiningOverlay', () => {
     expect(screen.queryByText('mined')).not.toBeInTheDocument();
     expect(screen.getByText('+5%')).toHaveClass('text-[var(--rare)]');
     expect(screen.queryByText('MINERALS / DAY')).not.toBeInTheDocument();
-    expect(screen.queryByText('MINED')).not.toBeInTheDocument();
-    expect(screen.queryByText('3 SAME TYPE')).not.toBeInTheDocument();
   });
 
   it('shows collection progress when the same-type bonus is not active', () => {
@@ -43,7 +56,7 @@ describe('PlanetMiningOverlay', () => {
     );
     expect(screen.getByText('+0%')).toBeInTheDocument();
     expect(screen.getByText('+0%')).toHaveClass('text-[var(--text-secondary)]');
-    expect(screen.queryByText(/SAME TYPE/)).not.toBeInTheDocument();
+    expect(screen.getByText('BOOST')).toBeInTheDocument();
   });
 
   it('does not invent mining values when the backend snapshot is unavailable', () => {
@@ -57,8 +70,9 @@ describe('PlanetMiningOverlay', () => {
     const overlay = screen.getByTestId('planet-mining-overlay');
     expect(overlay).toHaveClass('inset-x-2', 'bottom-2');
     expect(overlay.querySelector(':scope > div')).toHaveClass('p-2');
-    expect(screen.getByRole('img', { name: 'Minerals' })).toHaveClass('h-4', 'w-4');
-    expect(screen.getByRole('img', { name: 'Mined' })).toHaveClass('h-4', 'w-4', 'bg-white');
+    expect(screen.getByText('RATE')).toBeInTheDocument();
+    expect(screen.getByText('MINED')).toBeInTheDocument();
+    expect(screen.getByText('BOOST')).toBeInTheDocument();
     expect(screen.getByText('25.2')).toHaveClass('text-sm', 'text-[var(--rare)]');
   });
 });
