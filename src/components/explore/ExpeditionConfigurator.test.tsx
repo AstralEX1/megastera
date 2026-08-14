@@ -27,14 +27,15 @@ describe('ExpeditionConfigurator', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Win up to $123.46' })).toBeInTheDocument();
-    expect(container.querySelectorAll('.depth-text__layer')).toHaveLength(28);
+    expect(container.querySelectorAll('.depth-text__layer')).toHaveLength(32);
     expect(container.querySelector('.depth-text')).toHaveStyle({
       '--depth-text-perspective': '1500px',
-      '--depth-text-font-weight': '950',
+      '--depth-text-font-size': 'clamp(3.45rem, 5.6vw, 5.3rem)',
+      '--depth-text-font-weight': '800',
       '--depth-text-face-color': '#f8fafc',
     });
     expect(container.querySelector('.depth-text__layer')).toHaveStyle({
-      transform: 'translateZ(-42px)',
+      transform: 'translateZ(-128px)',
     });
   });
 
@@ -124,7 +125,10 @@ describe('ExpeditionConfigurator', () => {
     const [toggle] = screen.getAllByRole('button', { name: 'Open coordinates' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(toggle).toHaveClass('transition-[left,background-color]');
-    expect(toggle).toHaveStyle({ left: 'calc(50% + 420px)' });
+    expect(toggle).toHaveClass('h-80', 'w-[104px]');
+    expect(toggle).toHaveStyle({ left: 'calc(50% + 368px)' });
+    expect(toggle.querySelector('.text-\\[1\\.36rem\\]')).toBeInTheDocument();
+    expect(toggle.querySelector('.text-\\[3rem\\]')).toBeInTheDocument();
 
     await user.click(toggle);
     expect(screen.getAllByRole('region', { name: 'Coordinates' })).toHaveLength(2);
@@ -133,7 +137,7 @@ describe('ExpeditionConfigurator', () => {
 
     const [closeToggle] = screen.getAllByRole('button', { name: 'Close coordinates' });
     expect(closeToggle).toHaveStyle({
-      left: 'min(calc(50% + 420px), calc(50% + 50vw - 448px))',
+      left: 'min(calc(50% + 368px), calc(50% + 50vw - 500px))',
     });
     await user.click(closeToggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
