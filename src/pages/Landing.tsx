@@ -112,7 +112,7 @@ export function Landing() {
           <div className="landing-mechanics-grid">
             <article className="landing-mechanic landing-ticket-mechanic">
               <div className="landing-ticket-visual">
-                <div className="landing-ticket-visual-stack">
+                <div className="landing-ticket-visual-stack landing-ticket-visual-stack--vertical">
                   {generatedPlanetAssets.map((ticket) => (
                     <div
                       className="landing-megapot-ticket"

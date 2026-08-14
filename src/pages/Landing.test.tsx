@@ -94,6 +94,7 @@ describe('Landing', () => {
     expect(generatePlanetButton).not.toHaveAttribute('title');
     expect(generatePlanetButton.closest('.landing-live-generator-art')).toBeTruthy();
     expect(container.querySelector('.landing-megapot-ticket')).toBeInTheDocument();
+    expect(container.querySelector('.landing-ticket-visual-stack')).toHaveClass('landing-ticket-visual-stack--vertical');
     expect(container.querySelectorAll('.landing-megapot-ticket')).toHaveLength(3);
     expect(container.querySelectorAll('.landing-ticket-ball')).toHaveLength(18);
     expect(container.querySelectorAll('.landing-ticket-ball-bonus')).toHaveLength(3);

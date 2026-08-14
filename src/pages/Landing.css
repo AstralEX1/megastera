@@ -540,9 +540,9 @@
 
 .landing-ticket-visual-stack {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
 }
 
@@ -628,45 +628,45 @@
   color: var(--landing-haze);
 }
 
-.landing-ticket-visual-stack .landing-megapot-ticket {
+.landing-ticket-visual-stack--vertical .landing-megapot-ticket {
   min-height: 0;
-  gap: 12px;
-  padding: 14px 12px 12px;
+  gap: 8px;
+  padding: 12px 16px 11px;
   transform: none;
 }
 
-.landing-ticket-visual-stack .landing-ticket-visual-top,
-.landing-ticket-visual-stack .landing-ticket-visual-bottom,
-.landing-ticket-visual-stack .landing-megapot-ticket-price,
-.landing-ticket-visual-stack .landing-megapot-ticket-id {
+.landing-ticket-visual-stack--vertical .landing-ticket-visual-top,
+.landing-ticket-visual-stack--vertical .landing-ticket-visual-bottom,
+.landing-ticket-visual-stack--vertical .landing-megapot-ticket-price,
+.landing-ticket-visual-stack--vertical .landing-megapot-ticket-id {
   overflow: hidden;
-  font-size: 0.42rem;
-  letter-spacing: 0.07em;
+  font-size: 0.48rem;
+  letter-spacing: 0.08em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.landing-ticket-visual-stack .landing-ticket-visual-title {
-  font-size: clamp(1.45rem, 3.2vw, 2.8rem);
+.landing-ticket-visual-stack--vertical .landing-ticket-visual-title {
+  font-size: clamp(2.2rem, 4vw, 3.6rem);
 }
 
-.landing-ticket-visual-stack .landing-ticket-balls {
+.landing-ticket-visual-stack--vertical .landing-ticket-balls {
   flex-wrap: nowrap;
-  gap: 4px;
+  gap: 6px;
 }
 
-.landing-ticket-visual-stack .landing-ticket-ball {
-  width: clamp(18px, 1.8vw, 28px);
-  height: clamp(18px, 1.8vw, 28px);
+.landing-ticket-visual-stack--vertical .landing-ticket-ball {
+  width: clamp(24px, 2.6vw, 36px);
+  height: clamp(24px, 2.6vw, 36px);
   flex: 0 0 auto;
-  font-size: 0.48rem;
+  font-size: 0.56rem;
 }
 
-.landing-ticket-visual-stack .landing-ticket-ball-bonus {
+.landing-ticket-visual-stack--vertical .landing-ticket-ball-bonus {
   margin-left: 0;
 }
 
-.landing-ticket-visual-stack .landing-megapot-ticket-foot {
+.landing-ticket-visual-stack--vertical .landing-megapot-ticket-foot {
   flex-wrap: wrap;
   row-gap: 4px;
 }
