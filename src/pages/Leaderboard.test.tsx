@@ -96,10 +96,13 @@ describe('Leaderboard', () => {
 
     expect(screen.getByRole('heading', { name: 'Leaderboard' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Season 1' })).toBeInTheDocument();
-    expect(screen.getByText('Final standings close August 23, 2026')).toBeInTheDocument();
-    expect(
-      screen.getByText(/top 10 places receive USDC and 1\/1 Planet NFT prizes/i),
-    ).toBeInTheDocument();
+    expect(screen.queryByText('Final standings close August 23, 2026')).not.toBeInTheDocument();
+    expect(screen.getByText('August 23, 2026, 23:39 UTC')).toBeInTheDocument();
+    expect(screen.getByRole('timer')).toBeInTheDocument();
+    expect(screen.getByText('PRIZES')).toBeInTheDocument();
+    expect(screen.getByText('TOP 10 RECEIVE')).toBeInTheDocument();
+    expect(screen.getByText('USDC')).toBeInTheDocument();
+    expect(screen.getByText('1/1 Planet NFT')).toBeInTheDocument();
     expect(screen.queryByText('LIVE MINERAL SCORE')).not.toBeInTheDocument();
     expect(screen.queryByText('LIVE · GENERATED AT + BASE RATE')).not.toBeInTheDocument();
     expect(screen.queryByText(/As of Aug 12/)).not.toBeInTheDocument();

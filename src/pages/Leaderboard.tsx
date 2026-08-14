@@ -19,7 +19,37 @@ function relativeTimeLabel(timestamp: number | undefined, now: number) {
   return `${hours} hour${hours === 1 ? '' : 's'} ago`;
 }
 
-function SeasonOnePanel() {
+const SEASON_END_AT = Date.UTC(2026, 7, 23, 23, 39, 0);
+const SEASON_END_LABEL = 'August 23, 2026, 23:39 UTC';
+
+function getSeasonCountdown(now: number) {
+  const remainingSeconds = Math.max(0, Math.ceil((SEASON_END_AT - now) / 1000));
+
+  return {
+    ended: now >= SEASON_END_AT,
+    days: Math.floor(remainingSeconds / 86_400),
+    hours: Math.floor((remainingSeconds % 86_400) / 3_600),
+    minutes: Math.floor((remainingSeconds % 3_600) / 60),
+    seconds: remainingSeconds % 60,
+  };
+}
+
+function padCountdown(value: number) {
+  return String(value).padStart(2, '0');
+}
+
+function SeasonOnePanel({ now }: { now: number }) {
+  const countdown = getSeasonCountdown(now);
+  const countdownUnits = [
+    { label: 'DAYS', value: countdown.days },
+    { label: 'HRS', value: countdown.hours },
+    { label: 'MIN', value: countdown.minutes },
+    { label: 'SEC', value: countdown.seconds },
+  ];
+  const timerLabel = countdown.ended
+    ? 'Season 1 has ended.'
+    : `Season 1 countdown: ${countdown.days} days, ${countdown.hours} hours, ${countdown.minutes} minutes, ${countdown.seconds} seconds remaining.`;
+
   return (
     <section
       aria-labelledby="season-1-title"
@@ -30,35 +60,63 @@ function SeasonOnePanel() {
         aria-hidden
         className="absolute inset-0 bg-gradient-to-br from-violet-400/10 via-transparent to-cyan-300/[0.06]"
       />
-      <div className="relative grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(19rem,0.9fr)] md:items-center">
+      <div className="relative grid gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(15rem,0.9fr)] md:items-center">
         <div>
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <div className="flex items-center justify-between gap-3">
             <h2
               id="season-1-title"
               className="font-hud text-2xl font-bold tracking-[-0.04em] text-[var(--text-primary)]"
             >
               Season 1
             </h2>
-            <span className="font-mono text-xs text-cyan-200">
-              Final standings close August 23, 2026
-            </span>
+            <span className="telemetry text-cyan-200">Ends in</span>
           </div>
-          <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--text-secondary)]">
-            The top 10 places receive USDC and 1/1 Planet NFT prizes at the end of Season 1.
+
+          {countdown.ended ? (
+            <div
+              role="timer"
+              aria-label={timerLabel}
+              data-season-countdown
+              data-season-ended="true"
+              className="mt-3 font-hud text-xl font-bold text-[var(--text-primary)]"
+            >
+              Season 1 has ended
+            </div>
+          ) : (
+            <div
+              role="timer"
+              aria-label={timerLabel}
+              data-season-countdown
+              data-season-ended="false"
+              className="mt-3 grid grid-cols-4 gap-2"
+            >
+              {countdownUnits.map((unit) => (
+                <div
+                  key={unit.label}
+                  className="rounded-xl border border-violet-200/15 bg-violet-300/[0.045] px-2 py-2 text-center"
+                >
+                  <p className="font-hud text-xl font-bold tabular-nums text-[var(--text-primary)]">
+                    {padCountdown(unit.value)}
+                  </p>
+                  <p className="telemetry mt-1 text-[var(--text-secondary)]">{unit.label}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="mt-2 font-mono text-[11px] text-[var(--text-secondary)]">
+            {SEASON_END_LABEL}
           </p>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2">
-          <div className="rounded-xl border border-violet-200/20 bg-violet-300/[0.06] p-3">
-            <p className="telemetry text-violet-200">Prize category</p>
-            <p className="mt-2 font-hud text-lg font-bold text-[var(--text-primary)]">USDC</p>
-          </div>
-          <div className="rounded-xl border border-cyan-200/20 bg-cyan-300/[0.05] p-3">
-            <p className="telemetry text-cyan-200">Prize category</p>
-            <p className="mt-2 font-hud text-lg font-bold text-[var(--text-primary)]">
-              1/1 Planet NFT
-            </p>
-          </div>
+        <div className="border-t border-[var(--border)] pt-4 md:border-l md:border-t-0 md:pl-5 md:pt-0">
+          <h3 className="font-hud text-xl font-bold tracking-[-0.03em] text-[var(--text-primary)]">
+            PRIZES
+          </h3>
+          <p className="mt-2 telemetry text-cyan-200">TOP 10 RECEIVE</p>
+          <p className="mt-2 font-hud text-base font-bold text-[var(--text-primary)] sm:text-lg">
+            <span>USDC</span> <span className="px-1 text-violet-200">+</span>{' '}
+            <span>1/1 Planet NFT</span>
+          </p>
         </div>
       </div>
     </section>
@@ -163,7 +221,7 @@ export function Leaderboard() {
         </div>
       </header>
 
-      <SeasonOnePanel />
+      <SeasonOnePanel now={now} />
 
       {data.rows.length === 0 ? (
         <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center">

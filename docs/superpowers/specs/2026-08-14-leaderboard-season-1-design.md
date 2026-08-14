@@ -28,18 +28,18 @@ Design dials:
 
 ## Chosen design
 
-Add a Season 1 command panel directly below the page header and above the standings.
-The left side carries the season identity and deadline. The right side carries two
-compact prize statements:
+Use one compact Season 1 panel directly below the page header and above the
+standings. The panel has two responsive columns inside one outer frame:
 
-1. `USDC` for the fungible prize category.
-2. `1/1 PLANET NFT` for the unique planet prize category.
+- Left: `SEASON 1`, `ENDS IN`, a four-part countdown, and `August 23, 2026,
+  23:39 UTC`.
+- Right: one `PRIZES` heading, `TOP 10 RECEIVE`, and the concise prize line
+  `USDC + 1/1 PLANET NFT`.
 
-Supporting copy states that the top 10 places receive USDC and 1/1 Planet NFT prizes
-at the end of Season 1. The deadline is shown as `August 23, 2026`.
-
-The panel uses the existing violet/cyan space language with a restrained diagonal
-surface treatment. It is one hierarchy-setting block, not a new dashboard of cards.
+Remove the previous `Final standings close August 23, 2026` line and both
+`Prize category` labels. The panel uses the existing violet/cyan space language
+with a restrained diagonal surface treatment. It is one hierarchy-setting block,
+not a new dashboard of cards.
 
 ## Rank treatment
 
@@ -59,10 +59,11 @@ hierarchy carry the meaning with less visual noise.
 
 ## Responsive behavior
 
-- At desktop widths, the Season 1 panel uses a two-column layout and keeps the prize
-  categories aligned to the right.
-- Below the medium breakpoint, the panel stacks identity and prizes, and each prize
-  category remains readable without horizontal overflow.
+- At desktop widths, the Season 1 panel uses a two-column layout with the countdown
+  on the left and prizes aligned to the right.
+- Below the medium breakpoint, the two columns stack inside the same outer panel.
+- The countdown uses `days`, `hours`, `minutes`, and `seconds` cells and changes to a
+  concise ended state after the UTC deadline.
 - The existing desktop table and mobile article list both receive the same rank tier
   classes so the semantics do not disappear on mobile.
 
@@ -71,9 +72,8 @@ hierarchy carry the meaning with less visual noise.
 - Rank colors are paired with the visible rank number and are not the only source of
   meaning.
 - Existing focus styles and button behavior remain unchanged.
-- The new copy uses sentence case and avoids payout amounts that were not specified;
-  the top-10 prize-zone interpretation follows the requested emphasis on ranks 4
-  through 10.
+- The new copy avoids payout amounts that were not specified and keeps only the
+  explicit top-10 prize message.
 - Add assertions for Season 1 copy, the August 23 deadline, and rank-tier classes in
   the existing page/table tests.
 - Run the targeted leaderboard tests, then the repository lint, typecheck, and build
