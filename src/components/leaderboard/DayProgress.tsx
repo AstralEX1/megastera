@@ -10,7 +10,7 @@ export function DayProgress({ period, asOf }: { period: LeaderboardPeriod; asOf:
     <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="flex items-center justify-between gap-3 text-xs">
         <span className="telemetry text-[var(--text-secondary)]">UTC daily snapshot</span>
-        <span className="font-mono font-semibold text-[var(--text-primary)]">As of {new Date(asOf).toLocaleTimeString('en-US', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' })} UTC</span>
+        <span className="font-mono font-semibold text-[var(--text-primary)]">Last refresh: {new Date(asOf).toLocaleTimeString('en-US', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' })} UTC</span>
       </div>
       <div
         role="progressbar"

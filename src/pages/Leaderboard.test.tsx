@@ -27,6 +27,12 @@ vi.mock('@/hooks/useLeaderboard', () => ({
   useWalletLeaderboardPosition: () => ({ data: { period: current.period, asOf: current.asOf, row: current.rows[1], distanceToNextRankMicros: '6000000' }, isLoading: false }),
 }));
 
+vi.stubGlobal('IntersectionObserver', class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+});
+
 import { Leaderboard } from './Leaderboard';
 
 describe('Leaderboard', () => {
@@ -50,12 +56,13 @@ describe('Leaderboard', () => {
     const { container } = render(<Leaderboard />);
 
     expect(screen.getByRole('heading', { name: 'Leaderboard' })).toBeInTheDocument();
-    expect(screen.getByText('LIVE · GENERATED AT + BASE RATE')).toBeInTheDocument();
-    expect(screen.getAllByText('25').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('19').length).toBeGreaterThan(0);
+    expect(screen.queryByText('LIVE MINERAL SCORE')).not.toBeInTheDocument();
+    expect(screen.queryByText('LIVE · GENERATED AT + BASE RATE')).not.toBeInTheDocument();
+    expect(screen.queryByText(/As of Aug 12/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Last refresh: Aug 12/)).toBeInTheDocument();
+    expect(container.querySelectorAll('.count-up-text')).toHaveLength(15);
     expect(screen.getByText('Your rank')).toBeInTheDocument();
-    expect(screen.getByText('6 to next rank')).toBeInTheDocument();
-    expect(screen.getByText(/As of Aug 12/)).toBeInTheDocument();
+    expect(screen.getByText(/to next rank/)).toBeInTheDocument();
     expect(screen.queryByRole('progressbar', { name: 'Daily snapshot progress' })).not.toBeInTheDocument();
     expect(container.querySelector('[data-wallet-row="true"]')).toBeInTheDocument();
     expect(container.querySelector('[data-mobile-standings]')).toHaveClass('md:hidden');
@@ -63,9 +70,9 @@ describe('Leaderboard', () => {
 
   it('keeps the public page useful when no wallet is connected', () => {
     state.account = { address: undefined };
-    render(<Leaderboard />);
+    const { container } = render(<Leaderboard />);
 
-    expect(screen.getAllByText('25').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('.count-up-text')).toHaveLength(12);
     expect(screen.queryByText('Your rank')).not.toBeInTheDocument();
   });
 

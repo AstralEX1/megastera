@@ -1,3 +1,4 @@
+import CountUp from '@/components/common/CountUp';
 import type { LeaderboardRow } from '@/hooks/useLeaderboard';
 import { formatMinerals } from '@/lib/minerals';
 
@@ -7,6 +8,10 @@ function shortAddress(address: string) {
 
 function isWallet(row: LeaderboardRow, walletAddress?: string) {
   return !!walletAddress && row.walletAddress.toLowerCase() === walletAddress.toLowerCase();
+}
+
+function toMineralNumber(micros: string) {
+  return Number(formatMinerals(BigInt(micros)).replaceAll(',', ''));
 }
 
 export function LeaderboardTable({ rows, walletAddress }: { rows: LeaderboardRow[]; walletAddress?: string }) {
@@ -19,12 +24,14 @@ export function LeaderboardTable({ rows, walletAddress }: { rows: LeaderboardRow
         <tbody>
           {rows.map((row) => {
             const own = isWallet(row, walletAddress);
+            const score = toMineralNumber(row.scoreMicros);
+            const perDay = toMineralNumber(row.effectiveMineralsPerDayMicros);
             return (
               <tr key={row.walletAddress} data-wallet-row={own ? 'true' : undefined} className={`border-b border-[var(--border)] last:border-0 ${own ? 'bg-violet-500/10' : ''}`}>
-                <td className="px-4 py-4 font-hud text-lg font-bold text-[var(--text-primary)]">#{row.rank}</td>
+                <td className="px-4 py-4 font-hud text-lg font-bold text-[var(--text-primary)]">#<CountUp to={row.rank} className="count-up-text" /></td>
                 <td className="px-4 py-4 font-mono text-sm text-[var(--text-secondary)]" title={row.walletAddress}>{shortAddress(row.walletAddress)}{own ? <span className="ml-2 text-violet-300">You</span> : null}</td>
-                <td className="px-4 py-4 text-right font-hud font-bold text-[var(--text-primary)]">{formatMinerals(BigInt(row.scoreMicros))}</td>
-                <td className="px-4 py-4 text-right font-mono text-sm text-[var(--text-secondary)]">{formatMinerals(BigInt(row.effectiveMineralsPerDayMicros))}</td>
+                <td className="px-4 py-4 text-right font-hud font-bold text-[var(--text-primary)]"><CountUp to={score} separator="," duration={1} className="count-up-text" /></td>
+                <td className="px-4 py-4 text-right font-mono text-sm text-[var(--text-secondary)]"><CountUp to={perDay} separator="," duration={1} className="count-up-text" /></td>
               </tr>
             );
           })}
@@ -33,11 +40,13 @@ export function LeaderboardTable({ rows, walletAddress }: { rows: LeaderboardRow
       <div data-mobile-standings className="divide-y divide-[var(--border)] md:hidden">
         {rows.map((row) => {
           const own = isWallet(row, walletAddress);
+          const score = toMineralNumber(row.scoreMicros);
+          const perDay = toMineralNumber(row.effectiveMineralsPerDayMicros);
           return (
             <article key={row.walletAddress} data-wallet-row={own ? 'true' : undefined} className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 p-4 ${own ? 'bg-violet-500/10' : ''}`}>
-              <span className="font-hud text-xl font-bold text-[var(--text-primary)]">#{row.rank}</span>
+              <span className="font-hud text-xl font-bold text-[var(--text-primary)]">#<CountUp to={row.rank} className="count-up-text" /></span>
               <span className="min-w-0 truncate font-mono text-xs text-[var(--text-secondary)]">{shortAddress(row.walletAddress)}</span>
-              <div className="text-right"><p className="font-hud font-bold text-[var(--text-primary)]">{formatMinerals(BigInt(row.scoreMicros))}</p><p className="font-mono text-[11px] text-[var(--text-secondary)]">+{formatMinerals(BigInt(row.effectiveMineralsPerDayMicros))}/day</p></div>
+              <div className="text-right"><p className="font-hud font-bold text-[var(--text-primary)]"><CountUp to={score} separator="," duration={1} className="count-up-text" /></p><p className="font-mono text-[11px] text-[var(--text-secondary)]">+<CountUp to={perDay} separator="," duration={1} className="count-up-text" />/day</p></div>
             </article>
           );
         })}
