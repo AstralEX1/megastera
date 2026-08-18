@@ -1,80 +1,107 @@
 # Megastera
 
-Megastera is a one-day hackathon MVP built around Megapot tickets on Base Sepolia.
-Planets are deliberately backend records, not on-chain NFTs: a confirmed ticket receipt
-creates one database row, the server renders a deterministic GIF, and My Planets displays
-that row. Mining remains a read-only lifetime calculation.
+**Turn Megapot tickets into unique planets, build a collection, mine minerals, and compete on the leaderboard — while every expedition remains a real Megapot jackpot entry.**
 
-## The demo loop
+Built for **Summer Game Jam 2026 — Megapot Track**.
+
+## What is Megastera?
+
+Megastera turns the Megapot lottery into a persistent exploration game.
+
+Players explore the universe by purchasing real Megapot tickets. Each confirmed ticket becomes immutable provenance for a deterministic planet with unique visual traits. Discovered planets continuously produce minerals, collections grow over time, and players compete on a live leaderboard.
+
+The lottery is not a link-out or side feature: buying a Megapot ticket is the action that advances the game.
+
+## Gameplay loop
 
 ```mermaid
 flowchart LR
-  A["Buy 1–10 tickets"] --> B["Confirmed TicketPurchased receipt"]
-  A2["Create 11–50 bulk order"] --> A3["Keeper execution"] --> B
-  B --> C["Persist MEGASTERA ticket proof"]
-  C --> D["Generate GIF + BackendPlanet"]
-  D --> E["My Planets collection"]
-  C --> P["Pending row / retry"]
-  P --> D
-  C --> F["Lazy mining from generatedAt"]
-  F --> G["Live leaderboard · 60s cache"]
+  A[Explore] --> B[Buy Megapot ticket]
+  B --> C[Discover planet]
+  C --> D[Mine minerals]
+  D --> E[Grow collection]
+  E --> F[Compete on leaderboard]
+  F --> A
 ```
 
-1. Connect a wallet to Base Sepolia.
-2. Buy one to ten direct tickets or create an eleven-to-fifty keeper order.
-3. After the receipt is confirmed, the Play screen shows `Exploring planets…` and retries
-   backend generation while the receipt reaches the configured finality depth.
-4. The backend verifies the canonical `MEGASTERA` `TicketPurchased` event, persists
-   immutable ticket provenance before generation, derives deterministic traits, and stores
-   GIF bytes. Repeating the same request is idempotent.
-5. My Planets reads the backend collection: ready Planets, compact retryable pending cards,
-   and optionally unmatched wallet tickets from the paginated testnet Data API. The same
-   ready rows power lazy mining and the live leaderboard; `/tickets` exposes protocol
-   status and claimable wins.
+1. Connect a wallet on Base Sepolia.
+2. Choose an expedition size and ticket coordinates.
+3. Purchase Megapot tickets directly or through the bulk flow.
+4. Megastera verifies the confirmed `TicketPurchased` receipt.
+5. Each eligible ticket deterministically generates a planet.
+6. Planets mine minerals over time and contribute to the collection leaderboard.
+7. The same ticket remains a real entry in the Megapot jackpot.
 
-There is no Planet contract call, mint button, voucher, Pinata/IPFS artifact, direct
-ERC721A holdings read, or continuous indexer in the active MVP.
+## Why Megapot is core to the game
 
-## Product rules
+- **Every expedition is a Megapot purchase.** There is no separate game-only mint required to discover a planet.
+- **Ticket provenance creates the planet.** A confirmed Megapot `TicketPurchased` event is verified before generation.
+- **One action has two outcomes.** The player advances in Megastera while also participating in the Megapot jackpot.
+- **Lottery history stays useful.** Ticket status and winnings remain visible alongside the game collection.
+- **More exploration creates progression.** Additional planets expand the collection, mineral production, and leaderboard position.
 
-- Base Sepolia (`chainId 84532`) only.
-- `MEGASTERA` is the Megapot source tag.
-- Direct checkout supports one to ten tickets; bulk checkout supports eleven to fifty.
-- Backend generation is idempotent on `originTxHash:logIndex` and rejects conflicting
-  persisted provenance.
-- The collection API is restricted to Base Sepolia `MEGASTERA` ticket proofs; legacy
-  `MEGAPLANETS_V1` rows are not eligible.
-- Historical ticket status, winnings, and claimed state come from the Megapot testnet
-  Data API (`https://api-testnet.megapot.io/v1`). Live drawing state and writes remain
-  on RPC.
-- Planet traits use the shared deterministic generator. GIF bytes and their hash are stored
-  in `BackendPlanet`.
-- Mining is `baseMineralsPerDay × elapsed time` with fixed-point integer arithmetic. The
-  browser never writes mineral state.
-- Public reads require no application auth; server secrets stay outside Vite env variables.
+## Game mechanics
 
-## Runtime boundaries
+### Planets
 
-| Boundary | Responsibility |
-| --- | --- |
-| Megapot + Base RPC | Ticket purchase, receipt finality, and canonical event verification |
-| Frontend | Wallet checkout, generation progress, backend collection, mining display |
-| API + PostgreSQL | Ticket provenance, BackendPlanet rows, GIF bytes, mining, leaderboard |
-| Planet generator | DOM-free deterministic traits and server/browser rendering support |
+Each eligible Megapot ticket generates a deterministic planet. Its traits are derived from immutable ticket provenance, so the same input always resolves to the same world.
 
-## API
+### Minerals
 
-See [`api/README.md`](api/README.md) for the full route surface. The important paths are:
+Ready planets produce minerals continuously from their generation time. Mining is calculated server-side with deterministic fixed-point arithmetic rather than mutable browser state.
 
-- `POST /api/planets/generate` and `/generate/batch`
-- `GET /api/planets/collection?owner=...` (ready and pending site tickets)
-- `GET /api/planets?owner=...` and `/planets/:planetId/gif`
-- `GET /api/wallets/:address/mining`
-- `GET /api/leaderboard/current`
+### Collection strategy
+
+Different planet types have different production characteristics, and same-type collection bonuses can increase mining output. Building the collection is therefore more than a visual inventory.
+
+### Leaderboard
+
+Wallets compete by mineral production. The leaderboard is calculated from the same verified planet records that power the collection.
+
+### Jackpot
+
+Every expedition still buys real Megapot tickets. Game progression never replaces the underlying lottery entry.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  A[React + Vite] --> B[Megapot on Base Sepolia]
+  B --> C[Verified ticket receipt]
+  C --> D[Megastera API]
+  D --> E[PostgreSQL]
+  D --> F[Deterministic planet generator]
+  E --> G[Collection + Mining + Leaderboard]
+  F --> G
+```
+
+Key implementation properties:
+
+- Base Sepolia (`chainId 84532`).
+- `MEGASTERA` source tag for eligible Megapot tickets.
+- Direct checkout for 1–10 tickets and a keeper-assisted bulk flow for 11–50.
+- Canonical receipt verification before planet generation.
+- Idempotent generation keyed by ticket provenance.
+- Deterministic shared planet generator used across server and client rendering paths.
+- Server-side PostgreSQL persistence through Prisma.
+- Public read APIs; server secrets never enter the Vite client environment.
+
+For implementation details, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`api/README.md`](api/README.md).
+
+## Tech stack
+
+- React 19 + TypeScript
+- Vite
+- wagmi + viem + RainbowKit
+- Megapot
+- Base Sepolia
+- PostgreSQL + Prisma
+- Hono
+- Vitest + Biome
 
 ## Local development
 
-Requirements: Node.js 22+, pnpm, and a Base Sepolia RPC URL for live receipt reads.
+Requirements: Node.js 22+, pnpm, PostgreSQL, and a Base Sepolia RPC URL for live receipt reads.
 
 ```bash
 pnpm install
@@ -84,9 +111,7 @@ pnpm dev
 pnpm api:server
 ```
 
-Backend generation requires `BASE_SEPOLIA_RPC_URL` and `DATABASE_URL`; optional RPC
-failover uses `BASE_SEPOLIA_RPC_FALLBACK_URLS`. Keep `.env.local` and server secrets out
-of git.
+Copy the required values from [`.env.example`](.env.example) into your local environment. Backend generation requires `BASE_SEPOLIA_RPC_URL` and `DATABASE_URL`; optional RPC failover uses `BASE_SEPOLIA_RPC_FALLBACK_URLS`.
 
 ## Verification
 
@@ -99,3 +124,11 @@ pnpm db:generate
 pnpm db:validate
 pnpm --filter @megaplanets/planet-generator golden
 ```
+
+## Hackathon & disclosure
+
+Megastera was built for the **2026 Summer Game Jam — Megapot Track**.
+
+The project integrates the Megapot protocol and was bootstrapped using Megapot developer resources and starter components. Megastera-specific gameplay, planet generation, mining, collection, leaderboard, backend verification, and presentation layers were developed for the project.
+
+Third-party licenses and required attribution are preserved in the repository, including [`LICENSE`](LICENSE) and [`packages/planet-generator/THIRD_PARTY_NOTICES.md`](packages/planet-generator/THIRD_PARTY_NOTICES.md).
