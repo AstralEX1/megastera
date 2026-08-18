@@ -24,12 +24,20 @@ import type { ReactNode } from 'react';
 import { PlanetsIcon } from '@/components/icons/PlanetsIcon';
 import { PlayIcon } from '@/components/icons/PlayIcon';
 
-export type NavKey = 'home' | 'play' | 'tickets' | 'planets' | 'lab' | 'history';
+export type NavKey = 'home' | 'play' | 'tickets' | 'planets' | 'lab' | 'history' | 'comingSoon';
+
+const ComingSoonIcon = (
+  <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none">
+    <path d="M12 2.8l1.45 5.75L19.2 10l-5.75 1.45L12 17.2l-1.45-5.75L4.8 10l5.75-1.45L12 2.8Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M18.2 15.4l.7 2.7 2.7.7-2.7.7-.7 2.7-.7-2.7-2.7-.7 2.7-.7.7-2.7Z" fill="currentColor" opacity=".7" />
+  </svg>
+);
 
 const ITEMS: { key: NavKey; label: string; icon: ReactNode }[] = [
   { key: 'play', label: 'Play', icon: <PlayIcon /> },
   { key: 'planets', label: 'My planets', icon: <PlanetsIcon /> },
   { key: 'history', label: 'Leaderboard', icon: <PlanetsIcon /> },
+  { key: 'comingSoon', label: 'Coming soon', icon: ComingSoonIcon },
 ];
 
 type NavProps = { active: NavKey; onSelect: (k: NavKey) => void };
