@@ -25,8 +25,20 @@ describe('ComingSoon roadmap', () => {
     expect(container.querySelectorAll('[data-roadmap-completed-item="true"]')).toHaveLength(3);
   });
 
-  it('keeps future utility and PvP scope visible without over-specifying mechanics', () => {
+  it('uses restrained React Bits-inspired ambient motion without adding roadmap artwork', () => {
     const { container } = render(<ComingSoon />);
+
+    expect(container.querySelector('[data-react-bits="galaxy"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-react-bits="blur-text"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-react-bits="decrypted-text"]')).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-react-bits="fade-content"]')).toHaveLength(5);
+    expect(container.querySelector('[data-react-bits="spotlight-card"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-roadmap-progress="true"]')).toBeInTheDocument();
+    expect(container.querySelector('svg')).not.toBeInTheDocument();
+  });
+
+  it('keeps future utility and PvP scope visible without over-specifying mechanics', () => {
+    render(<ComingSoon />);
 
     expect(screen.getByText('Stars as a New Game Asset')).toBeInTheDocument();
     expect(screen.getByText('Stellar Systems')).toBeInTheDocument();
@@ -39,7 +51,5 @@ describe('ComingSoon roadmap', () => {
     expect(screen.getByText('Captains')).toBeInTheDocument();
     expect(screen.getByText('Fleet-Based Mechanics')).toBeInTheDocument();
     expect(screen.getByText('Expanded Gameplay Built Around Player Competition')).toBeInTheDocument();
-
-    expect(container.querySelector('svg')).not.toBeInTheDocument();
   });
 });
