@@ -1,19 +1,19 @@
 import { Hono } from 'hono';
 import { getAddress, isAddress } from 'viem';
 import { z } from 'zod';
-import { getPrismaClient } from './database';
-import { loadBackendPlanetConfig, type BackendPlanetConfig } from './backendConfig';
+import { getPrismaClient } from './database.js';
+import { loadBackendPlanetConfig, type BackendPlanetConfig } from './backendConfig.js';
 import {
   type BackendPlanetCollectionRecord,
   type BackendPlanetRecord,
   type BackendPlanetStore,
   PrismaBackendPlanetStore,
-} from './backendPlanet';
-import type { MegasteraProof } from './eligibility';
-import { readBoundedJson } from './http';
-import { getBackendPlanetMiningSnapshot, getBackendWalletMiningSnapshot } from './miningStore';
-import { findTicketFromReceipt, parseReceiptReference, type ReceiptReference } from './receiptVerification';
-import { saveMegasteraProof } from './prismaTicketPurchase';
+} from './backendPlanet.js';
+import type { MegasteraProof } from './eligibility.js';
+import { readBoundedJson } from './http.js';
+import { getBackendPlanetMiningSnapshot, getBackendWalletMiningSnapshot } from './miningStore.js';
+import { findTicketFromReceipt, parseReceiptReference, type ReceiptReference } from './receiptVerification.js';
+import { saveMegasteraProof } from './prismaTicketPurchase.js';
 
 export type BackendPlanetReference = ReceiptReference;
 

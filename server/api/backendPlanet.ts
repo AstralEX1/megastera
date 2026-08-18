@@ -6,9 +6,9 @@ import {
   GENERATOR_VERSION,
   renderPlanetGif,
 } from '@megaplanets/planet-generator';
-import type { PrismaClient } from './generated/prisma/client';
-import { BASE_JACKPOT, normalizeMegasteraProof, type MegasteraProof } from './eligibility';
-import { BASE_CHAIN_ID as CONFIGURED_CHAIN_ID, MEGASTERA_SOURCE } from './config';
+import type { PrismaClient } from './generated/prisma/client.js';
+import { BASE_JACKPOT, normalizeMegasteraProof, type MegasteraProof } from './eligibility.js';
+import { BASE_CHAIN_ID as CONFIGURED_CHAIN_ID, MEGASTERA_SOURCE } from './config.js';
 
 export type BackendPlanetStatus = 'READY' | 'FAILED';
 

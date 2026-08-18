@@ -1,4 +1,4 @@
-import { BASE_CHAIN_ID, DEFAULT_RECEIPT_CONFIRMATIONS } from './config';
+import { BASE_CHAIN_ID, DEFAULT_RECEIPT_CONFIRMATIONS } from './config.js';
 
 export type BackendPlanetConfig = {
   chainId: typeof BASE_CHAIN_ID;

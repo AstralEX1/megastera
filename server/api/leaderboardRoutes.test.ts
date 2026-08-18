@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createLeaderboardRoutes } from './leaderboardRoutes';
+import { createLeaderboardRoutes } from './leaderboardRoutes.js';
 
 const ADDRESS = '0x1111111111111111111111111111111111111111';
 const period = {

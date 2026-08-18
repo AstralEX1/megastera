@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
-import { createCorsMiddleware } from './cors';
+import { createCorsMiddleware } from './cors.js';
 import {
   createBackendPlanetRoutes,
   type BackendPlanetRouteDependencies,
-} from './backendPlanetRoutes';
-import { createLeaderboardRoutes } from './leaderboardRoutes';
-import { createOperationalState } from './operations';
+} from './backendPlanetRoutes.js';
+import { createLeaderboardRoutes } from './leaderboardRoutes.js';
+import { createOperationalState } from './operations.js';
 
 /**
  * The active API surface is deliberately small for the hackathon MVP:

@@ -1,4 +1,4 @@
-import type { Hex, HexColor, PlanetRenderDescriptor } from './visual-types';
+import type { Hex, HexColor, PlanetRenderDescriptor } from './visual-types.js';
 
 export const GENERATOR_VERSION = 3 as const;
 

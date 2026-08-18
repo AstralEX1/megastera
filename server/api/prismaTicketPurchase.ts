@@ -1,7 +1,7 @@
 import { getAddress, stringToHex } from 'viem';
-import { BASE_CHAIN_ID, MEGASTERA_SOURCE } from './config';
-import { BASE_JACKPOT, normalizeMegasteraProof, type MegasteraProof } from './eligibility';
-import type { PrismaClient } from './generated/prisma/client';
+import { BASE_CHAIN_ID, MEGASTERA_SOURCE } from './config.js';
+import { BASE_JACKPOT, normalizeMegasteraProof, type MegasteraProof } from './eligibility.js';
+import type { PrismaClient } from './generated/prisma/client.js';
 
 type PersistedTicket = {
   id?: string;

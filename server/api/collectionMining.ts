@@ -1,4 +1,4 @@
-import { MINERAL_SCALE } from './mining';
+import { MINERAL_SCALE } from './mining.js';
 
 const BONUS_DENOMINATOR_BPS = 10_000n;
 const MILLISECONDS_PER_DAY = 86_400_000n;

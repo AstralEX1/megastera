@@ -1,9 +1,9 @@
 import { keccak256, stringToHex } from 'viem';
-import { namedRandom } from './generator-random';
-import { deepFreeze } from './immutable';
-import { normalizePlanetInput } from './input';
-import { validatePlanetConfig } from './planet-config';
-import { derivePlanetSeed } from './seed';
+import { namedRandom } from './generator-random.js';
+import { deepFreeze } from './immutable.js';
+import { normalizePlanetInput } from './input.js';
+import { validatePlanetConfig } from './planet-config.js';
+import { derivePlanetSeed } from './seed.js';
 import type {
   PlanetDescriptor,
   PlanetInput,
@@ -11,8 +11,8 @@ import type {
   PlanetConfig,
   TypeConfig,
   TypePalette,
-} from './types';
-import type { HexColor } from './visual-types';
+} from './types.js';
+import type { HexColor } from './visual-types.js';
 
 /**
  * Phoneme grammar adapted from the supplied namegen script. It synthesizes names

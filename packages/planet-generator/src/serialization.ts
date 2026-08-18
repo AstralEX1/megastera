@@ -1,6 +1,6 @@
-import { deserializePlanetInput, serializePlanetInput } from './input';
-import { verifyPlanetDescriptor } from './integrity';
-import type { PlanetConfig, PlanetDescriptor, SerializedPlanetInput } from './types';
+import { deserializePlanetInput, serializePlanetInput } from './input.js';
+import { verifyPlanetDescriptor } from './integrity.js';
+import type { PlanetConfig, PlanetDescriptor, SerializedPlanetInput } from './types.js';
 
 export type SerializedPlanetDescriptor = Omit<PlanetDescriptor, 'input'> & {
   input: SerializedPlanetInput;

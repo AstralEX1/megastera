@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true
+  },
+  "include": [
+    "vite.config.ts",
+    "api/index.ts",
+    "server/**/*.ts",
+    "packages/planet-generator/src/**/*.ts"
+  ]
+}

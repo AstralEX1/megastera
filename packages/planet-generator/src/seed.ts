@@ -1,7 +1,7 @@
 import { encodeAbiParameters, keccak256 } from 'viem';
-import { normalizePlanetInput } from './input';
-import { GENERATOR_VERSION, type PlanetInput } from './types';
-import type { Hex } from './visual-types';
+import { normalizePlanetInput } from './input.js';
+import { GENERATOR_VERSION, type PlanetInput } from './types.js';
+import type { Hex } from './visual-types.js';
 
 export function derivePlanetSeed(input: PlanetInput): Hex {
   const normalized = normalizePlanetInput(input);

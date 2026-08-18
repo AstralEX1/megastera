@@ -1,6 +1,6 @@
-import { deepFreeze } from './immutable';
-import { verifyPlanetDescriptor } from './integrity';
-import type { PlanetConfig, PlanetDescriptor, PlanetMetadata } from './types';
+import { deepFreeze } from './immutable.js';
+import { verifyPlanetDescriptor } from './integrity.js';
+import type { PlanetConfig, PlanetDescriptor, PlanetMetadata } from './types.js';
 
 /** Builds public metadata plus non-attribute audit provenance. */
 export function buildPlanetMetadata(

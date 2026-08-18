@@ -1,9 +1,9 @@
 import { type Address, createPublicClient, getAddress, type Hex, http, isAddress, isHash } from 'viem';
 import { base } from 'viem/chains';
-import { BASE_CHAIN_ID, DEFAULT_RECEIPT_CONFIRMATIONS } from './config';
-import type { BackendPlanetConfig } from './backendConfig';
-import { type MegasteraProof, MegasteraVerifier } from './eligibility';
-import { readWithRpcFallback } from './rpc';
+import { BASE_CHAIN_ID, DEFAULT_RECEIPT_CONFIRMATIONS } from './config.js';
+import type { BackendPlanetConfig } from './backendConfig.js';
+import { type MegasteraProof, MegasteraVerifier } from './eligibility.js';
+import { readWithRpcFallback } from './rpc.js';
 
 export type ReceiptReference = { transactionHash: Hex; logIndex: number; recipient?: Address };
 

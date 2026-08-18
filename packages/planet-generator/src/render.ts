@@ -1,13 +1,13 @@
 import { createNoise3D, type NoiseFunction3D } from 'simplex-noise';
-import { namedVisualRandom } from './random';
-import { GENERATOR_CONFIG } from './render-config';
+import { namedVisualRandom } from './random.js';
+import { GENERATOR_CONFIG } from './render-config.js';
 import type {
   HexColor,
   NoiseMode,
   PlanetFrame,
   PlanetRenderDescriptor,
   SatelliteTrait,
-} from './visual-types';
+} from './visual-types.js';
 
 type Rgb = readonly [number, number, number];
 type Surface = {

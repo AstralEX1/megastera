@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createOperationalState } from './operations';
+import { createOperationalState } from './operations.js';
 
 describe('operational API state', () => {
   it('tracks HTTP requests without indexer metrics', () => {

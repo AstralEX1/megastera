@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import { getAddress, stringToHex, type Hex } from 'viem';
-import { BASE_CHAIN_ID, MEGASTERA_SOURCE } from './config';
-import { BASE_JACKPOT, type MegasteraProof } from './eligibility';
-import { MemoryBackendPlanetStore } from './backendPlanet';
-import { createBackendPlanetRoutes } from './backendPlanetRoutes';
+import { BASE_CHAIN_ID, MEGASTERA_SOURCE } from './config.js';
+import { BASE_JACKPOT, type MegasteraProof } from './eligibility.js';
+import { MemoryBackendPlanetStore } from './backendPlanet.js';
+import { createBackendPlanetRoutes } from './backendPlanetRoutes.js';
 
 const proof: MegasteraProof = {
   recipient: getAddress('0x1111111111111111111111111111111111111111'),

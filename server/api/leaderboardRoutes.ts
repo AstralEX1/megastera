@@ -1,13 +1,13 @@
 import { Hono } from 'hono';
 import { getAddress, isAddress } from 'viem';
 import { z } from 'zod';
-import { getPrismaClient } from './database';
-import type { PrismaClient } from './generated/prisma/client';
+import { getPrismaClient } from './database.js';
+import type { PrismaClient } from './generated/prisma/client.js';
 import {
   getCurrentLeaderboard,
   getWalletLeaderboardPosition,
-} from './leaderboardStore';
-import { loadBackendPlanetConfig } from './backendConfig';
+} from './leaderboardStore.js';
+import { loadBackendPlanetConfig } from './backendConfig.js';
 
 const paginationSchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createApp } from './index';
+import { createApp } from './index.js';
 
 describe('active API surface', () => {
   it('exposes backend Planet health and metrics', async () => {

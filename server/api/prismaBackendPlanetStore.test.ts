@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { PrismaClient } from './generated/prisma/client';
-import { PrismaBackendPlanetStore } from './backendPlanet';
-import type { MegasteraProof } from './eligibility';
+import type { PrismaClient } from './generated/prisma/client.js';
+import { PrismaBackendPlanetStore } from './backendPlanet.js';
+import type { MegasteraProof } from './eligibility.js';
 
 const proof = {
   recipient: '0x1111111111111111111111111111111111111111',

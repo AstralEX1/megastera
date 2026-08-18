@@ -1,7 +1,7 @@
 import { createNoise3D, type NoiseFunction3D } from 'simplex-noise';
-import { namedRandom } from './generator-random';
-import type { TerrainMode } from './types';
-import type { Hex } from './visual-types';
+import { namedRandom } from './generator-random.js';
+import type { TerrainMode } from './types.js';
+import type { Hex } from './visual-types.js';
 
 const TAU = Math.PI * 2;
 

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { getAddress, stringToHex, type Hex } from 'viem';
-import { BASE_CHAIN_ID, MEGASTERA_SOURCE } from './config';
-import { BASE_JACKPOT, type MegasteraProof } from './eligibility';
-import { MemoryBackendPlanetStore, deriveBackendPlanet } from './backendPlanet';
+import { BASE_CHAIN_ID, MEGASTERA_SOURCE } from './config.js';
+import { BASE_JACKPOT, type MegasteraProof } from './eligibility.js';
+import { MemoryBackendPlanetStore, deriveBackendPlanet } from './backendPlanet.js';
 
 const proof: MegasteraProof = {
   recipient: getAddress('0x1111111111111111111111111111111111111111'),

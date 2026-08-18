@@ -1,8 +1,8 @@
-import { deriveOriginalCavityColors } from './generator';
-import { type DeterministicRandom, namedVisualRandom } from './random';
-import { GENERATOR_CONFIG, getPaletteProfile, getPaletteWeights } from './render-config';
-import type { TerrainMode, TypePalette, TypeVisualProfile } from './types';
-import { GENERATOR_VERSION } from './types';
+import { deriveOriginalCavityColors } from './generator.js';
+import { type DeterministicRandom, namedVisualRandom } from './random.js';
+import { GENERATOR_CONFIG, getPaletteProfile, getPaletteWeights } from './render-config.js';
+import type { TerrainMode, TypePalette, TypeVisualProfile } from './types.js';
+import { GENERATOR_VERSION } from './types.js';
 import type {
   Hex,
   HexColor,
@@ -14,8 +14,8 @@ import type {
   PlanetTypeId,
   PlanetVisualInput,
   SatelliteTrait,
-} from './visual-types';
-import { isPlanetType } from './visual-types';
+} from './visual-types.js';
+import { isPlanetType } from './visual-types.js';
 
 const round = (value: number) => Math.round(value * 1_000_000) / 1_000_000;
 const mod = (value: number, divisor: number) => ((value % divisor) + divisor) % divisor;

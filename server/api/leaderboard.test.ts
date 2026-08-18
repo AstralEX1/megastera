@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getDistanceToNextRank, getLeaderboardPeriod, rankLeaderboardRows } from './leaderboard';
+import { getDistanceToNextRank, getLeaderboardPeriod, rankLeaderboardRows } from './leaderboard.js';
 
 const ADDRESS_A = '0x1111111111111111111111111111111111111111';
 const ADDRESS_B = '0x2222222222222222222222222222222222222222';

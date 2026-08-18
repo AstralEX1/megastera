@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getLogsAdaptive, readWithRpcFallback } from './rpc';
+import { getLogsAdaptive, readWithRpcFallback } from './rpc.js';
 
 describe('getLogsAdaptive', () => {
   it('shrinks a rejected range and grows after recovery', async () => {

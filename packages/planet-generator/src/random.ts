@@ -1,5 +1,5 @@
 import { concatHex, hexToBigInt, hexToBytes, keccak256, stringToHex, toHex } from 'viem';
-import type { Hex } from './visual-types';
+import type { Hex } from './visual-types.js';
 
 const UINT256_RANGE = 1n << 256n;
 const BYTES32_PATTERN = /^0x[\da-fA-F]{64}$/;

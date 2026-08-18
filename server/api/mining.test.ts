@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateLifetimeMinerals, MINERAL_SCALE } from './mining';
+import { calculateLifetimeMinerals, MINERAL_SCALE } from './mining.js';
 
 describe('lifetime mining', () => {
   it('calculates intrinsic lifetime production from mint time', () => {

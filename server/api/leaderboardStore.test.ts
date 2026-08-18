@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { PrismaClient } from './generated/prisma/client';
+import type { PrismaClient } from './generated/prisma/client.js';
 import {
   calculateLiveLeaderboardRows,
   calculateLeaderboardRows,
   createLiveLeaderboardCache,
   finalizeLeaderboardPeriod,
   paginateLeaderboardRows,
-} from './leaderboardStore';
+} from './leaderboardStore.js';
 
 const ADDRESS_A = '0x1111111111111111111111111111111111111111';
 const ADDRESS_B = '0x2222222222222222222222222222222222222222';

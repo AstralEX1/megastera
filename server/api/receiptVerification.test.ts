@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertReceiptFinality } from './receiptVerification';
+import { assertReceiptFinality } from './receiptVerification.js';
 
 describe('receipt verification', () => {
   it('requires confirmation depth and canonical block hash', () => {

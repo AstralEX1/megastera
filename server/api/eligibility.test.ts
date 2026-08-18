@@ -1,6 +1,6 @@
 import { encodeAbiParameters, encodeEventTopics, getAddress, stringToHex, type Log, type TransactionReceipt } from 'viem';
 import { describe, expect, it } from 'vitest';
-import { BASE_CHAIN_ID, MEGASTERA_SOURCE } from './config';
+import { BASE_CHAIN_ID, MEGASTERA_SOURCE } from './config.js';
 import {
   BASE_JACKPOT,
   decodeEligibleTicket,
@@ -8,7 +8,7 @@ import {
   MegasteraVerifier,
   normalizeMegasteraProof,
   TICKET_PURCHASED_ABI,
-} from './eligibility';
+} from './eligibility.js';
 
 const recipient = '0x1111111111111111111111111111111111111111' as const;
 const transactionHash = `0x${'ab'.repeat(32)}` as const;

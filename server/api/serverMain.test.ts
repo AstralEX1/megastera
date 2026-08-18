@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { IncomingMessage } from 'node:http';
 import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
-import { createApiServer, nodeRequestToRequest, parseApiHost, parseApiPort } from './serverMain';
+import { createApiServer, nodeRequestToRequest, parseApiHost, parseApiPort } from './serverMain.js';
 
 describe('standalone API server', () => {
   it('uses safe local defaults and validates the configured port', () => {

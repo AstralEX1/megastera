@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readBoundedJson, withTimeout } from './http';
+import { readBoundedJson, withTimeout } from './http.js';
 
 describe('bounded HTTP helpers', () => {
   it('rejects oversized request bodies before JSON parsing', async () => {

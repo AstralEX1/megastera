@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { PrismaClient } from './generated/prisma/client';
-import { getBackendPlanetMiningSnapshot, getBackendWalletMiningSnapshot } from './miningStore';
+import type { PrismaClient } from './generated/prisma/client.js';
+import { getBackendPlanetMiningSnapshot, getBackendWalletMiningSnapshot } from './miningStore.js';
 
 describe('backend Planet mining snapshots', () => {
   it('calculates lifetime production from backend-generatedAt', async () => {

@@ -1,6 +1,6 @@
 import { decodeEventLog, getAddress, isHash, stringToHex, type Address, type Hex, type Log, type TransactionReceipt } from 'viem';
-import { BASE_CHAIN_ID, MEGASTERA_SOURCE } from './config';
-import { validateTicketPurchasedFields } from '../../shared/ticketValidation';
+import { BASE_CHAIN_ID, MEGASTERA_SOURCE } from './config.js';
+import { validateTicketPurchasedFields } from '../../shared/ticketValidation.js';
 
 export const BASE_JACKPOT = getAddress('0x3bAe643002069dBCbcd62B1A4eb4C4A397d042a2');
 export const TICKET_PURCHASED_ABI = [{ type: 'event', name: 'TicketPurchased', inputs: [
