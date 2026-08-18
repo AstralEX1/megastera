@@ -1,34 +1,17 @@
-/**
- * ---
- * @customize  No router dependency — pass `active` and `onSelect` from your shell.
- *             Replace icon imports with your icon library if you swap from inline SVG.
- *             Add or remove tabs by editing the ITEMS array (and the NavKey type).
- * ---
- *
- * Two exports, one per breakpoint:
- *   - `<Nav>`             — top-nav on `md+`, sits inline with brand + ProfileCard.
- *   - `<MobileBottomNav>` — fixed bottom-nav on mobile. MUST be rendered as a
- *                            sibling of the sticky header, not inside it: the
- *                            header uses `backdrop-blur` (`backdrop-filter`),
- *                            which creates a containing block for `position:
- *                            fixed` descendants. Nesting the bottom nav inside
- *                            the header anchors its `bottom: 0` to the header's
- *                            bottom edge instead of the viewport's, so the nav
- *                            floats just below the header (mid-page) instead
- *                            of pinning to the bottom of the screen.
- *
- * Active tab gets a colored top accent on mobile and a filled background on
- * desktop, both visible at a glance.
- */
 import type { ReactNode } from 'react';
 import { PlanetsIcon } from '@/components/icons/PlanetsIcon';
 import { PlayIcon } from '@/components/icons/PlayIcon';
 
-export type NavKey = 'home' | 'play' | 'tickets' | 'planets' | 'lab' | 'history' | 'comingSoon';
+export type NavKey = 'home' | 'play' | 'tickets' | 'planets' | 'history' | 'lab' | 'comingSoon';
 
 const ComingSoonIcon = (
   <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none">
-    <path d="M12 2.8l1.45 5.75L19.2 10l-5.75 1.45L12 17.2l-1.45-5.75L4.8 10l5.75-1.45L12 2.8Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path
+      d="M12 2.8l1.45 5.75L19.2 10l-5.75 1.45L12 17.2l-1.45-5.75L4.8 10l5.75-1.45L12 2.8Z"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    />
     <path d="M18.2 15.4l.7 2.7 2.7.7-2.7.7-.7 2.7-.7-2.7-2.7-.7 2.7-.7.7-2.7Z" fill="currentColor" opacity=".7" />
   </svg>
 );
