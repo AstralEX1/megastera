@@ -1,30 +1,8 @@
-/**
- * ---
- * @customize  No router dependency — pass `active` and `onSelect` from your shell.
- *             Replace icon imports with your icon library if you swap from inline SVG.
- *             Add or remove tabs by editing the ITEMS array (and the NavKey type).
- * ---
- *
- * Two exports, one per breakpoint:
- *   - `<Nav>`             — top-nav on `md+`, sits inline with brand + ProfileCard.
- *   - `<MobileBottomNav>` — fixed bottom-nav on mobile. MUST be rendered as a
- *                            sibling of the sticky header, not inside it: the
- *                            header uses `backdrop-blur` (`backdrop-filter`),
- *                            which creates a containing block for `position:
- *                            fixed` descendants. Nesting the bottom nav inside
- *                            the header anchors its `bottom: 0` to the header's
- *                            bottom edge instead of the viewport's, so the nav
- *                            floats just below the header (mid-page) instead
- *                            of pinning to the bottom of the screen.
- *
- * Active tab gets a colored top accent on mobile and a filled background on
- * desktop, both visible at a glance.
- */
 import type { ReactNode } from 'react';
 import { PlanetsIcon } from '@/components/icons/PlanetsIcon';
 import { PlayIcon } from '@/components/icons/PlayIcon';
 
-export type NavKey = 'home' | 'play' | 'tickets' | 'planets' | 'lab' | 'history';
+export type NavKey = 'home' | 'play' | 'tickets' | 'planets' | 'history' | 'lab';
 
 const ITEMS: { key: NavKey; label: string; icon: ReactNode }[] = [
   { key: 'play', label: 'Play', icon: <PlayIcon /> },
