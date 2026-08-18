@@ -1,26 +1,62 @@
-name: Verify
+name: Quality Gate
 
 on:
   pull_request:
   push:
-    branches: [main, master]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: true
 
 jobs:
-  frontend:
+  verify:
+    name: Application & generator
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
         with:
           version: 11
-      - uses: actions/setup-node@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm db:generate
-      - run: pnpm db:validate
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm build
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Validate Prisma schema
+        run: pnpm db:validate
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Verify deterministic planet fixtures
+        run: pnpm --filter @megaplanets/planet-generator golden
+
+      - name: Build production bundle
+        run: pnpm build
