@@ -4,10 +4,19 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./server": "./src/server.ts"
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./src/server.ts",
+      "import": "./dist/server.js",
+      "default": "./dist/server.js"
+    }
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "golden": "vitest run tests/generator.test.ts",
     "golden:update": "tsx scripts/generate-golden.ts",
     "landing:generate": "tsx scripts/generate-landing-previews.ts"
