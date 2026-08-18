@@ -14,6 +14,7 @@ describe('ComingSoon roadmap', () => {
     expect(screen.getByRole('heading', { name: 'Genesis' })).toBeInTheDocument();
     expect(screen.getByText('Completed')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Mid-Season 1 Update' })).toBeInTheDocument();
+    expect(screen.getByText('Upcoming')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Season 1 Finale' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Stellar Expansion' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Galactic Conflict' })).toBeInTheDocument();
@@ -23,16 +24,17 @@ describe('ComingSoon roadmap', () => {
     expect(screen.getByText('Mineral Rewards Based on Ticket Results')).toBeInTheDocument();
     expect(container.querySelector('[data-roadmap-current="true"]')).toBeInTheDocument();
     expect(container.querySelectorAll('[data-roadmap-completed-item="true"]')).toHaveLength(3);
+    expect(container.querySelectorAll('[data-roadmap-future="true"]')).toHaveLength(3);
   });
 
-  it('uses restrained React Bits-inspired ambient motion without adding roadmap artwork', () => {
+  it('uses restrained React Bits-inspired ambient motion without roadmap artwork or hover spotlight', () => {
     const { container } = render(<ComingSoon />);
 
     expect(container.querySelector('[data-react-bits="galaxy"]')).toBeInTheDocument();
     expect(container.querySelector('[data-react-bits="blur-text"]')).toBeInTheDocument();
     expect(container.querySelector('[data-react-bits="decrypted-text"]')).toBeInTheDocument();
     expect(container.querySelectorAll('[data-react-bits="fade-content"]')).toHaveLength(5);
-    expect(container.querySelector('[data-react-bits="spotlight-card"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-react-bits="spotlight-card"]')).not.toBeInTheDocument();
     expect(container.querySelector('[data-roadmap-progress="true"]')).toBeInTheDocument();
     expect(container.querySelector('svg')).not.toBeInTheDocument();
   });
