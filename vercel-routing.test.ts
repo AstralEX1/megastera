@@ -2,23 +2,25 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-type Rewrite = { source: string; destination: string };
+type Route = { src?: string; dest?: string; handle?: string };
 
 const config = JSON.parse(
   readFileSync(fileURLToPath(new URL('./vercel.json', import.meta.url)), 'utf8'),
-) as { rewrites?: Rewrite[] };
+) as { routes?: Route[] };
 
 describe('Vercel routing', () => {
-  it('forwards API subpaths to the single API function before the SPA fallback', () => {
-    const rewrites = config.rewrites ?? [];
-    const apiRewriteIndex = rewrites.findIndex(
-      ({ source, destination }) => source === '/api/:path*' && destination === '/api',
+  it('routes API requests to the single function before static files and the SPA fallback', () => {
+    const routes = config.routes ?? [];
+    const apiRouteIndex = routes.findIndex(
+      ({ src, dest }) => src === '/api(?:/.*)?' && dest === '/api/index.ts',
     );
-    const spaRewriteIndex = rewrites.findIndex(
-      ({ source, destination }) => source === '/(.*)' && destination === '/index.html',
+    const filesystemRouteIndex = routes.findIndex(({ handle }) => handle === 'filesystem');
+    const spaFallbackIndex = routes.findIndex(
+      ({ src, dest }) => src === '/.*' && dest === '/index.html',
     );
 
-    expect(apiRewriteIndex).toBeGreaterThanOrEqual(0);
-    expect(spaRewriteIndex).toBeGreaterThan(apiRewriteIndex);
+    expect(apiRouteIndex).toBeGreaterThanOrEqual(0);
+    expect(filesystemRouteIndex).toBeGreaterThan(apiRouteIndex);
+    expect(spaFallbackIndex).toBeGreaterThan(filesystemRouteIndex);
   });
 });
