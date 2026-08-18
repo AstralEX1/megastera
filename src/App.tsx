@@ -16,6 +16,9 @@ import { Tickets } from '@/pages/Tickets';
 const Planets = lazy(() =>
   import('@/pages/Planets').then((module) => ({ default: module.Planets })),
 );
+const ComingSoon = lazy(() =>
+  import('@/pages/ComingSoon').then((module) => ({ default: module.ComingSoon })),
+);
 const Lab = import.meta.env.DEV
   ? lazy(() => import('@/pages/Lab').then((module) => ({ default: module.Lab })))
   : null;
@@ -64,6 +67,9 @@ export default function App() {
       break;
     case 'history':
       page = <Leaderboard />;
+      break;
+    case 'comingSoon':
+      page = <ComingSoon />;
       break;
   }
 
