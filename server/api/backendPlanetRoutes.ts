@@ -181,7 +181,9 @@ export function createBackendPlanetRoutes(
     try {
       const gif = await dependencies.getStore(dependencies.loadConfig()).getGif(parsed.data);
       if (!gif) return c.json({ error: 'Planet GIF not found.' }, 404);
-      return new Response(gif.bytes, {
+      const responseBody = new ArrayBuffer(gif.bytes.byteLength);
+      new Uint8Array(responseBody).set(gif.bytes);
+      return new Response(responseBody, {
         status: 200,
         headers: {
           'content-type': 'image/gif',

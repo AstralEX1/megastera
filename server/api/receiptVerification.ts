@@ -84,10 +84,11 @@ export function parseReceiptReference(value: unknown): ReceiptReference | undefi
     !Number.isSafeInteger(candidate.logIndex) ||
     candidate.logIndex < 0
   ) return undefined;
-  if (candidate.recipient !== undefined && (typeof candidate.recipient !== 'string' || !isAddress(candidate.recipient))) return undefined;
+  const recipient = candidate.recipient;
+  if (recipient !== undefined && (typeof recipient !== 'string' || !isAddress(recipient))) return undefined;
   return {
     transactionHash: candidate.transactionHash,
     logIndex: candidate.logIndex,
-    recipient: candidate.recipient === undefined ? undefined : getAddress(candidate.recipient),
+    recipient: recipient === undefined ? undefined : getAddress(recipient),
   };
 }
