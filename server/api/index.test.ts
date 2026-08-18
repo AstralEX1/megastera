@@ -36,4 +36,26 @@ describe('active API surface', () => {
       expect.objectContaining({ method: 'GET', body: undefined }),
     );
   });
+
+  it('buffers upstream bodies and removes transport encoding headers before returning them', async () => {
+    const body = JSON.stringify({ id: '148', status: 'active' });
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(body, {
+        status: 200,
+        headers: {
+          'content-type': 'application/json',
+          'content-encoding': 'gzip',
+          'content-length': String(body.length),
+          'transfer-encoding': 'chunked',
+        },
+      }),
+    );
+
+    const response = await createApp().request('/api/megapot/rounds/active');
+
+    expect(await response.text()).toBe(body);
+    expect(response.headers.get('content-encoding')).toBeNull();
+    expect(response.headers.get('content-length')).toBeNull();
+    expect(response.headers.get('transfer-encoding')).toBeNull();
+  });
 });
