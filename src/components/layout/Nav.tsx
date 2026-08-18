@@ -37,7 +37,7 @@ const ITEMS: { key: NavKey; label: string; icon: ReactNode }[] = [
   { key: 'play', label: 'Play', icon: <PlayIcon /> },
   { key: 'planets', label: 'My planets', icon: <PlanetsIcon /> },
   { key: 'history', label: 'Leaderboard', icon: <PlanetsIcon /> },
-  { key: 'comingSoon', label: 'Coming soon', icon: ComingSoonIcon },
+  { key: 'comingSoon', label: 'Coming Soon', icon: ComingSoonIcon },
 ];
 
 type NavProps = { active: NavKey; onSelect: (k: NavKey) => void };
