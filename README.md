@@ -4,7 +4,7 @@
 
 **An onchain exploration game where Megapot tickets discover deterministic planets, planets produce minerals, and players compete across seasons for leaderboard rewards.**
 
-Megastera turns a lottery ticket into persistent game progression. A player explores by purchasing a real Megapot ticket on Base Sepolia. Once the purchase is confirmed, Megastera verifies the onchain receipt and deterministically derives a planet from that ticket's provenance. The ticket remains a Megapot jackpot entry while the planet becomes part of the player's collection.
+Megastera turns a lottery ticket into persistent game progression. A player explores by purchasing a real Megapot ticket on Base mainnet. Once the purchase is confirmed, Megastera verifies the onchain receipt and deterministically derives a planet from that ticket's provenance. The ticket remains a Megapot jackpot entry while the planet becomes part of the player's collection.
 
 > **One purchase, two outcomes:** a Megapot jackpot entry and a persistent Megastera planet.
 
@@ -12,20 +12,6 @@ Megastera turns a lottery ticket into persistent game progression. A player expl
   <img src="public/megastera-planet.gif" alt="A deterministic Megastera planet discovered from Megapot ticket provenance" width="320" />
 </p>
 <p align="center"><em>Every eligible Megapot ticket can become a unique world.</em></p>
-
-## At a glance
-
-| | |
-| --- | --- |
-| **Network** | Base Sepolia (`84532`) |
-| **Protocol** | Megapot |
-| **Core action** | Purchase tickets to explore |
-| **Game structure** | Seasonal competition with a clear start, finish, and reward settlement |
-| **Game progression** | Discover planets → produce minerals → grow a collection → climb the seasonal leaderboard |
-| **Season rewards** | 100% of referral fees received by Megastera are allocated back to leaderboard rewards |
-| **Planet provenance** | Verified `TicketPurchased` receipt |
-| **Planet generation** | Deterministic, shared generator |
-| **Persistence** | PostgreSQL + Prisma |
 
 ## The game loop
 
@@ -49,7 +35,7 @@ flowchart LR
 Connect a wallet and choose ticket coordinates. Small expeditions use direct checkout; larger all-random expeditions can use the bulk flow.
 
 ### 2. Buy a real Megapot ticket
-The purchase happens through Megapot on Base Sepolia. Megastera does not use a separate game-only purchase to simulate the lottery interaction.
+The purchase happens through Megapot on Base mainnet. Megastera does not use a separate game-only purchase to simulate the lottery interaction.
 
 ### 3. Verify the receipt
 The backend verifies the canonical `TicketPurchased` event, chain, jackpot, source tag, receipt status, confirmation depth and block identity before accepting the ticket as planet provenance.
@@ -143,7 +129,7 @@ Megastera combines several reasons to return instead of relying on a single lott
 
 ## What is implemented
 
-- Wallet connection and Base Sepolia network flow.
+- Wallet connection and Base mainnet network flow.
 - Megapot ticket selection and direct checkout.
 - Keeper-assisted bulk purchases for larger all-random expeditions.
 - Canonical receipt recovery and verification.
@@ -164,7 +150,7 @@ Season 1 leaderboard reward distribution is intentionally handled manually. Auto
 ```mermaid
 flowchart TD
   W[Wallet] --> UI[React + Vite]
-  UI --> MP[Megapot / Base Sepolia]
+  UI --> MP[Megapot / Base mainnet]
   MP --> R[TicketPurchased receipt]
   R --> V[Receipt verification]
   V --> API[Megastera API]
@@ -183,7 +169,7 @@ flowchart TD
 The browser is responsible for interaction, not authority. Server-side generation only accepts verified ticket provenance.
 
 - The client never receives database credentials or server secrets.
-- Receipt verification checks Base Sepolia and canonical event data before generation.
+- Receipt verification checks Base mainnet and canonical event data before generation.
 - Planet generation is idempotent: repeating the same valid request does not create a second planet.
 - Conflicting persisted provenance fails closed.
 - Generated GIF bytes are stored with an immutable content hash.
@@ -211,7 +197,7 @@ megastera/
 ## Tech stack
 
 **Frontend:** React 19, TypeScript, Vite, wagmi, viem, RainbowKit  
-**Protocol:** Megapot on Base Sepolia  
+**Protocol:** Megapot on Base mainnet  
 **Backend:** Hono, PostgreSQL, Prisma  
 **Rendering:** shared deterministic planet generator  
 **Quality:** Vitest, TypeScript, Biome, GitHub Actions
@@ -223,7 +209,7 @@ Requirements:
 - Node.js 22+
 - pnpm 11+
 - PostgreSQL
-- Base Sepolia RPC URL for live receipt verification
+- Base mainnet RPC URL for live receipt verification
 
 ```bash
 pnpm install
