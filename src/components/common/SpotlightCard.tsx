@@ -28,6 +28,7 @@ export function SpotlightCard({
     <div
       {...props}
       ref={cardRef}
+      data-react-bits="spotlight-card"
       className={`relative overflow-hidden ${className}`}
       onPointerMove={(event) => {
         onPointerMove?.(event);
