@@ -3,9 +3,12 @@
   <p><strong>A space tycoon built around Megapot. Buy a ticket, discover a planet, grow your mining power, and compete for seasonal rewards.</strong></p>
 </div>
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/AstralEX1/megastera/main/public/megastera-planet.gif" alt="Megastera procedurally generated planet" width="320" />
-</p>
+
+
+<img width="718" height="722" alt="converted" src="https://github.com/user-attachments/assets/8bcd7b58-bec4-4e94-aaff-05c377cf35e3" />
+
+
+
 
 <div align="center">
   <p><strong>Buy a Megapot ticket → discover a planet → increase mining power → climb the leaderboard → earn seasonal rewards.</strong></p>
