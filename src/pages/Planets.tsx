@@ -77,11 +77,19 @@ function BackendPlanetCard({
   mining,
   selected,
   onSelect,
+  ticketStatus,
+  onClaim,
+  isClaimPending,
+  claimError,
 }: {
   planet: BackendPlanet;
   mining?: PlanetMiningSnapshot;
   selected: boolean;
   onSelect: () => void;
+  ticketStatus: TicketStatus;
+  onClaim: () => void;
+  isClaimPending: boolean;
+  claimError?: Error | null;
 }) {
   return (
     <article
@@ -110,6 +118,9 @@ function BackendPlanetCard({
       </button>
       <div className="p-3.5">
         <PlanetMiningMetrics mining={mining} miningAsOf={mining?.activeSince} />
+      </div>
+      <div className="border-t border-[var(--border)] px-3.5 pb-3.5">
+        <PlanetTicketAction status={ticketStatus} onClaim={onClaim} isClaimPending={isClaimPending} claimError={claimError} compact />
       </div>
     </article>
   );
@@ -614,7 +625,7 @@ export function Planets({ onNavigate, onViewPlanet, routePlanetId }: PlanetsProp
                 return <PendingPlanetCard key={item.key} row={item.site} status={status} onRetry={() => void retryGeneration(item.site, item.key)} retrying={retryingKey === item.key} onClaim={() => claimTicket(ticketId)} isClaimPending={ticketId === claimingTicketId && claim.isPending} claimError={ticketId === claimingTicketId ? claim.error : null} />;
               }
               const planet = item.site.planet;
-              return <BackendPlanetCard key={item.key} planet={planet} mining={miningByPlanetId.get(planet.planetId)} selected={planet.planetId === selected?.planetId} onSelect={() => selectPlanet(planet.planetId)} />;
+              return <BackendPlanetCard key={item.key} planet={planet} mining={miningByPlanetId.get(planet.planetId)} selected={planet.planetId === selected?.planetId} onSelect={() => selectPlanet(planet.planetId)} ticketStatus={status} onClaim={() => claimTicket(ticketId)} isClaimPending={ticketId === claimingTicketId && claim.isPending} claimError={ticketId === claimingTicketId ? claim.error : null} />;
             })}
           </div>
         </section>

@@ -160,8 +160,25 @@ describe('backend My Planets', () => {
     expect(screen.queryByText(/COLLECTION \/\s*2/)).not.toBeInTheDocument();
   });
 
-  it('keeps only the planet type in the image overlay and omits ticket status controls', () => {
+  it('shows the ticket status on the generated Planet card', () => {
     mocks.planets = [generatedRow(backendPlanet)];
+    mocks.walletTickets = [{
+      id: 'api-ticket-456',
+      wallet: mocks.account.address,
+      buyer: mocks.account.address,
+      round_id: '12',
+      user_ticket_id: '456',
+      normals: backendPlanet.ticket.normals,
+      bonusball: backendPlanet.ticket.bonusBall,
+      matched_normals: 1,
+      bonusball_match: false,
+      winnings_amount: { amount: '0', decimals: 6 },
+      claimed: false,
+      claimed_tx_hash: null,
+      tx_hash: backendPlanet.ticket.originTxHash,
+      block_number: 1,
+      created_at: '2026-08-13T12:00:00.000Z',
+    }];
 
     render(<Planets onNavigate={vi.fn()} onViewPlanet={vi.fn()} />);
 
@@ -171,9 +188,8 @@ describe('backend My Planets', () => {
     expect(within(card).queryByText('DRAWING #12')).not.toBeInTheDocument();
     expect(within(card).queryByText('24/day')).not.toBeInTheDocument();
     expect(within(card).queryByText('#456')).not.toBeInTheDocument();
-    expect(within(card).queryByTestId('planet-status-overlay')).not.toBeInTheDocument();
-    expect(within(card).queryByTestId('planet-status-footer')).not.toBeInTheDocument();
-    expect(within(card).queryByTestId('planet-ticket-action')).not.toBeInTheDocument();
+    expect(within(card).getByTestId('planet-ticket-action')).toBeInTheDocument();
+    expect(within(card).getByTestId('ticket-status-drawn')).toHaveTextContent('Drawn');
     expect(within(card).getByTestId('planet-mining-metrics')).toBeInTheDocument();
   });
 
@@ -216,7 +232,7 @@ describe('backend My Planets', () => {
     expect(metrics).toHaveTextContent('+5%');
     expect(metrics.parentElement).not.toHaveClass('border-t');
     expect(within(card).queryByTestId('planet-mining-overlay')).not.toBeInTheDocument();
-    expect(within(card).queryByTestId('planet-ticket-action')).not.toBeInTheDocument();
+    expect(within(card).getByTestId('planet-ticket-action')).toBeInTheDocument();
   });
 
   it('groups mining and details in one info panel while keeping mining prominent', () => {
@@ -335,7 +351,8 @@ describe('backend My Planets', () => {
 
     const selectionButton = screen.getByRole('button', { name: 'Select Astraea' });
     const claimButtons = screen.getAllByRole('button', { name: 'Claim $12.50 USDC' });
-    expect(claimButtons).toHaveLength(1);
+    expect(claimButtons).toHaveLength(2);
+    expect(within(screen.getByTestId('backend-planet-card-planet-1')).getByRole('button', { name: 'Claim $12.50 USDC' })).toBeInTheDocument();
     expect(selectionButton).not.toContainElement(claimButtons[0]);
 
     fireEvent.click(claimButtons[0]);
