@@ -2,14 +2,16 @@
  * Lightweight History API routing keeps the demo shell small while supporting
  * canonical collection and Planet detail deep links.
  */
+
+import { Analytics } from '@vercel/analytics/react';
 import type { ReactNode } from 'react';
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import type { NavKey } from '@/components/layout/Nav';
 import { navPath, parseAppRoute } from '@/lib/appRoute';
 import { Home } from '@/pages/Home';
-import { Leaderboard } from '@/pages/Leaderboard';
 import { Landing } from '@/pages/Landing';
+import { Leaderboard } from '@/pages/Leaderboard';
 import { Play } from '@/pages/Play';
 import { Tickets } from '@/pages/Tickets';
 
@@ -57,7 +59,9 @@ export default function App() {
       page = <Tickets onNavigate={navigate} />;
       break;
     case 'planets':
-      page = <Planets onNavigate={navigate} onViewPlanet={viewPlanet} routePlanetId={route.planetId} />;
+      page = (
+        <Planets onNavigate={navigate} onViewPlanet={viewPlanet} routePlanetId={route.planetId} />
+      );
       break;
     case 'lab':
       page = Lab ? <Lab /> : <Home onNavigate={navigate} />;
@@ -68,10 +72,13 @@ export default function App() {
   }
 
   return (
-    <Layout active={active} onSelect={navigate}>
-      <Suspense fallback={<div className="card-pad text-sm text-zinc-400">Loading…</div>}>
-        {page}
-      </Suspense>
-    </Layout>
+    <>
+      <Layout active={active} onSelect={navigate}>
+        <Suspense fallback={<div className="card-pad text-sm text-zinc-400">Loading…</div>}>
+          {page}
+        </Suspense>
+      </Layout>
+      <Analytics />
+    </>
   );
 }
