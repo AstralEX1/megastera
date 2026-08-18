@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getAddress, stringToHex, type Hex } from 'viem';
-import { BASE_SEPOLIA_CHAIN_ID, MEGASTERA_SOURCE } from './config';
-import { BASE_SEPOLIA_JACKPOT, type MegasteraProof } from './eligibility';
+import { BASE_CHAIN_ID, MEGASTERA_SOURCE } from './config';
+import { BASE_JACKPOT, type MegasteraProof } from './eligibility';
 import { MemoryBackendPlanetStore, deriveBackendPlanet } from './backendPlanet';
 
 const proof: MegasteraProof = {
@@ -11,12 +11,12 @@ const proof: MegasteraProof = {
   normals: [3, 17, 42, 88, 201],
   bonusBall: 9,
   originTxHash: `0x${'ab'.repeat(32)}` as Hex,
-  blockNumber: 44_996_800n,
+  blockNumber: 30_000_000n,
   logIndex: 4n,
   blockHash: `0x${'cd'.repeat(32)}` as Hex,
   purchasedAt: new Date('2026-08-13T12:00:00.000Z'),
-  chainId: BASE_SEPOLIA_CHAIN_ID,
-  jackpotAddress: BASE_SEPOLIA_JACKPOT,
+  chainId: BASE_CHAIN_ID,
+  jackpotAddress: BASE_JACKPOT,
   source: stringToHex(MEGASTERA_SOURCE, { size: 32 }),
 };
 

@@ -1,6 +1,6 @@
 import { getAddress, stringToHex } from 'viem';
-import { BASE_SEPOLIA_CHAIN_ID, MEGASTERA_SOURCE } from './config';
-import { BASE_SEPOLIA_JACKPOT, normalizeMegasteraProof, type MegasteraProof } from './eligibility';
+import { BASE_CHAIN_ID, MEGASTERA_SOURCE } from './config';
+import { BASE_JACKPOT, normalizeMegasteraProof, type MegasteraProof } from './eligibility';
 import type { PrismaClient } from './generated/prisma/client';
 
 type PersistedTicket = {
@@ -29,8 +29,8 @@ function persistenceData(proof: MegasteraProof) {
   const logIndex = Number(normalized.logIndex);
   if (!Number.isSafeInteger(logIndex) || logIndex < 0) throw new Error('Ticket proof log index is invalid.');
   return {
-    chainId: BASE_SEPOLIA_CHAIN_ID,
-    jackpotAddress: BASE_SEPOLIA_JACKPOT.toLowerCase(),
+    chainId: BASE_CHAIN_ID,
+    jackpotAddress: BASE_JACKPOT.toLowerCase(),
     ticketId: normalized.ticketId.toString(),
     drawingId: normalized.drawingId.toString(),
     recipient: getAddress(normalized.recipient).toLowerCase(),

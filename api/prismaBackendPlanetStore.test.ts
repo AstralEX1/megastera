@@ -10,7 +10,7 @@ const proof = {
   normals: [1, 2, 3, 4, 5],
   bonusBall: 6,
   originTxHash: `0x${'11'.repeat(32)}`,
-  blockNumber: 44_996_800n,
+  blockNumber: 30_000_000n,
   logIndex: 0n,
   blockHash: `0x${'22'.repeat(32)}`,
 } as unknown as MegasteraProof;
@@ -57,7 +57,7 @@ describe('PrismaBackendPlanetStore', () => {
     };
     const existingPlanet = {
       id: 'planet-row',
-      chainId: 84532,
+      chainId: 8453,
       ticketId: { toFixed: () => '1' },
       ownerAddress: proof.recipient,
       planetName: 'Existing Planet',

@@ -1,8 +1,8 @@
 import { encodeAbiParameters, encodeEventTopics, getAddress, stringToHex, type Log, type TransactionReceipt } from 'viem';
 import { describe, expect, it } from 'vitest';
-import { MEGAPLANETS_LAUNCH_BLOCK, MEGAPLANETS_TICKET_START_BLOCK, MEGASTERA_SOURCE } from './config';
+import { BASE_CHAIN_ID, MEGASTERA_SOURCE } from './config';
 import {
-  BASE_SEPOLIA_JACKPOT,
+  BASE_JACKPOT,
   decodeEligibleTicket,
   findEligibleTicket,
   MegasteraVerifier,
@@ -12,12 +12,13 @@ import {
 
 const recipient = '0x1111111111111111111111111111111111111111' as const;
 const transactionHash = `0x${'ab'.repeat(32)}` as const;
+const blockNumber = 30_000_000n;
 
 function ticketLog(overrides: Partial<Log> = {}): Log {
   const source = stringToHex(MEGASTERA_SOURCE, { size: 32 });
   return {
-    address: BASE_SEPOLIA_JACKPOT,
-    blockNumber: MEGAPLANETS_LAUNCH_BLOCK,
+    address: BASE_JACKPOT,
+    blockNumber,
     transactionHash,
     logIndex: 4,
     topics: encodeEventTopics({
@@ -39,7 +40,7 @@ function ticketLog(overrides: Partial<Log> = {}): Log {
 }
 
 describe('Megastera eligibility', () => {
-  it('decodes only a confirmed Megastera purchase log', () => {
+  it('decodes only a canonical Megastera purchase log', () => {
     expect(decodeEligibleTicket(ticketLog())).toEqual({
       recipient,
       ticketId: 456n,
@@ -47,44 +48,40 @@ describe('Megastera eligibility', () => {
       normals: [2, 7, 14, 22, 29],
       bonusBall: 9,
       originTxHash: transactionHash,
-      blockNumber: MEGAPLANETS_LAUNCH_BLOCK,
+      blockNumber,
       logIndex: 4n,
     });
   });
 
-  it('rejects purchases before the canonical activation boundary', () => {
-    expect(() => decodeEligibleTicket(ticketLog({ blockNumber: MEGAPLANETS_TICKET_START_BLOCK - 1n }))).toThrow(
-      'outside the eligible Megastera range',
+  it('rejects a ticket emitted by a non-canonical jackpot', () => {
+    expect(() => decodeEligibleTicket(ticketLog({ address: '0x2222222222222222222222222222222222222222' }))).toThrow(
+      /canonical Megastera purchase/i,
     );
   });
 
-  it('accepts the canonical activation boundary before the Planet launch block', () => {
-    expect(
-      decodeEligibleTicket(ticketLog({ blockNumber: MEGAPLANETS_TICKET_START_BLOCK })).ticketId,
-    ).toBe(456n);
-  });
   it('locates the requested log index before decoding it', () => {
     const otherLog = ticketLog({ logIndex: 3 });
     expect(findEligibleTicket([otherLog, ticketLog()], 4).ticketId).toBe(456n);
     expect(() => findEligibleTicket([otherLog], 4)).toThrow('was not found in the receipt');
   });
 
-  it('normalizes a receipt-backed Megastera proof without changing the Ethereum receipt type', () => {
+  it('normalizes a receipt-backed Base mainnet Megastera proof', () => {
     const source = stringToHex(MEGASTERA_SOURCE, { size: 32 });
     const proof = normalizeMegasteraProof({
       ...decodeEligibleTicket(ticketLog()),
-      chainId: 84_532,
-      jackpotAddress: BASE_SEPOLIA_JACKPOT.toLowerCase() as `0x${string}`,
+      chainId: BASE_CHAIN_ID,
+      jackpotAddress: BASE_JACKPOT.toLowerCase() as `0x${string}`,
       source,
     });
 
     expect(proof).toMatchObject({
-      chainId: 84_532,
-      jackpotAddress: BASE_SEPOLIA_JACKPOT,
+      chainId: BASE_CHAIN_ID,
+      jackpotAddress: BASE_JACKPOT,
       recipient: getAddress(recipient),
       source,
       ticketId: 456n,
     });
+    expect(() => normalizeMegasteraProof({ ...proof, chainId: 84_532 })).toThrow(/Base mainnet/i);
   });
 
   it('rejects a reverted, non-canonical, or wrong-recipient receipt', () => {
@@ -93,7 +90,7 @@ describe('Megastera eligibility', () => {
       status: 'success',
       transactionHash,
       blockHash,
-      blockNumber: MEGAPLANETS_LAUNCH_BLOCK,
+      blockNumber,
       logs: [ticketLog({ blockHash, transactionHash })],
     } as unknown as TransactionReceipt;
     const verifier = new MegasteraVerifier();
@@ -123,7 +120,7 @@ describe('Megastera eligibility', () => {
       status: 'success',
       transactionHash,
       blockHash,
-      blockNumber: MEGAPLANETS_LAUNCH_BLOCK,
+      blockNumber,
       logs: [log],
     } as unknown as TransactionReceipt;
 

@@ -1,6 +1,6 @@
 import { type Address, createPublicClient, getAddress, type Hex, http, isAddress, isHash } from 'viem';
-import { baseSepolia } from 'viem/chains';
-import { BASE_SEPOLIA_CHAIN_ID, DEFAULT_RECEIPT_CONFIRMATIONS } from './config';
+import { base } from 'viem/chains';
+import { BASE_CHAIN_ID, DEFAULT_RECEIPT_CONFIRMATIONS } from './config';
 import type { BackendPlanetConfig } from './backendConfig';
 import { type MegasteraProof, MegasteraVerifier } from './eligibility';
 import { readWithRpcFallback } from './rpc';
@@ -43,12 +43,12 @@ export async function findTicketFromReceipt(
   config: Pick<BackendPlanetConfig, 'rpcUrl' | 'rpcFallbackUrls' | 'confirmations'>,
   request: ReceiptReference,
   makeClient: RpcClientFactory = (rpcUrl) =>
-    createPublicClient({ chain: baseSepolia, transport: http(rpcUrl) }) as unknown as ReceiptRpcClient,
+    createPublicClient({ chain: base, transport: http(rpcUrl) }) as unknown as ReceiptRpcClient,
 ): Promise<MegasteraProof> {
   return readWithRpcFallback(rpcEndpoints(config), async (rpcUrl) => {
     const client = makeClient(rpcUrl);
     const chainId = await client.getChainId();
-    if (chainId !== BASE_SEPOLIA_CHAIN_ID) throw new Error('Receipt RPC is not Base Sepolia.');
+    if (chainId !== BASE_CHAIN_ID) throw new Error('Receipt RPC is not Base mainnet.');
     const receipt = await client.getTransactionReceipt({ hash: request.transactionHash });
     const ticket = new MegasteraVerifier({ chainId }).verifyReceipt(receipt, {
       transactionHash: request.transactionHash,

@@ -1,6 +1,11 @@
 <div align="center">
   <h1>Megastera</h1>
   <p><strong>A space tycoon built around Megapot. Buy a ticket, discover a planet, grow your mining power, and compete for seasonal rewards.</strong></p>
+  <p>
+    <a href="https://megastera.vercel.app"><img src="https://img.shields.io/badge/Play-Megastera-6C5CE7?style=for-the-badge" alt="Live Megastera app" /></a>
+    <a href="https://x.com/MegasteraGame"><img src="https://img.shields.io/badge/Follow-@MegasteraGame-000000?style=for-the-badge&logo=x&logoColor=white" alt="Megastera on X" /></a>
+    <a href="https://x.com/AstralEX163/status/2088334372063654047"><img src="https://img.shields.io/badge/Watch-Founders'_Game_Review-1DA1F2?style=for-the-badge&logo=x&logoColor=white" alt="Game review by twin founders" /></a>
+  </p>
 </div>
 
 
@@ -161,11 +166,7 @@ The result is an alternative consumer experience for Megapot that can reach user
 
 ## Early traction
 
-Megastera already has an initial community around the game.
-
-During the early community rollout, the recorded build reached approximately **20 participating wallets**. Some wallets were used for testing, while most belonged to community members and friends who joined, purchased tickets and started generating planets.
-
-That is an early signal rather than a claim of large-scale adoption, but it demonstrates that the loop has already been used by people outside the development flow. The leaderboard reflects that activity through participating wallets, discovered planets and total mineral production.
+Megastera already has an active user base of **40+ players** participating in the live ticket-to-planet and leaderboard loop.
 
 ## Why players come back
 
@@ -239,23 +240,9 @@ For deeper implementation details, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTUR
 
 ## Where Megastera goes next
 
-The planet and mining loop is intended to be the foundation of a larger connected universe.
+Season 1 establishes the core **Megapot ticket → planet → mining → competition** loop.
 
-Future mechanics can build on the planets players already own:
-
-- planet upgrades;
-- deeper planet exploration;
-- stars and solar systems;
-- colony mechanics;
-- starships and fleet progression;
-- captains;
-- additional resources and gameplay items;
-- expanded onchain / NFT mechanics where they add gameplay value;
-- player-to-player interaction;
-- battles, attack and defense systems;
-- trading and a broader connected economy.
-
-The long-term direction is a universe in which planets remain meaningful assets inside a much wider strategy game rather than becoming obsolete when a season ends.
+Future seasons can expand that foundation with planet upgrades, colonies, stars, ships, trading, and deeper player-to-player interaction. Existing planets are intended to remain relevant as the universe grows rather than becoming obsolete after a season.
 
 ## Repository
 

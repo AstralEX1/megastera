@@ -3,11 +3,11 @@
  * @skill      https://llms.megapot.io/contracts/reference
  * Set VITE_REFERRER_ADDRESS only for an explicitly approved deployment
  * configuration. The checked-in value is the approved Megastera referrer;
- * never replace it with a dead address. Base Sepolia is the current target.
+ * never replace it with a dead address. Base mainnet is the production target.
  * ---
  *
  * All Megapot contract addresses + chain-aware helpers. Single source of
- * truth — every hook reads from here so a chain switch is one env var.
+ * truth — every hook reads from here so an explicit testnet switch remains possible.
  */
 
 import { type Address, getAddress, isAddress, stringToHex } from 'viem';
@@ -16,7 +16,7 @@ import { base, baseSepolia } from 'viem/chains';
 export type ChainName = 'mainnet' | 'testnet';
 
 export function parseChainName(value: string | undefined): ChainName {
-  if (value === undefined || value.trim() === '') return 'testnet';
+  if (value === undefined || value.trim() === '') return 'mainnet';
   if (value === 'mainnet' || value === 'testnet') return value;
   throw new Error('VITE_CHAIN must be either "mainnet" or "testnet".');
 }
