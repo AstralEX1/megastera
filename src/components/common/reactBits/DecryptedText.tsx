@@ -28,6 +28,14 @@ export function DecryptedText({
   const [hasAnimated, setHasAnimated] = useState(false);
   const reduceMotion = useReducedMotion();
   const characterPool = useMemo(() => characters.split(''), [characters]);
+  const positions = useMemo(
+    () =>
+      Array.from(text).map((_, position) => ({
+        position,
+        id: `char-${text.slice(0, position).length}-${text.length}`,
+      })),
+    [text],
+  );
 
   const scramble = useCallback(
     (progress: number) =>
@@ -94,11 +102,14 @@ export function DecryptedText({
     <span ref={ref} data-react-bits="decrypted-text" className="inline-block whitespace-pre-wrap">
       <span className="sr-only">{text}</span>
       <span aria-hidden="true">
-        {displayText.split('').map((character, index) => (
-          <span key={`${index}-${character}`} className={displayText === text ? className : encryptedClassName}>
-            {character}
-          </span>
-        ))}
+        {positions.map((position) => {
+          const character = displayText[position.position] ?? '';
+          return (
+            <span key={position.id} className={displayText === text ? className : encryptedClassName}>
+              {character}
+            </span>
+          );
+        })}
       </span>
     </span>
   );
