@@ -1,4 +1,6 @@
+import { readdirSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
+import { fileURLToPath } from 'node:url';
 import config from './vite.config';
 
 describe('planet voucher dev API', () => {
@@ -38,5 +40,16 @@ describe('planet voucher dev API', () => {
     );
     expect(mountedHandlers.has('/api/wallets')).toBe(true);
     expect(mountedHandlers.has('/api/leaderboard')).toBe(true);
+  });
+});
+
+describe('Vercel API function layout', () => {
+  it('keeps only the Vercel entrypoint directly inside api', () => {
+    const apiDirectory = fileURLToPath(new URL('./api/', import.meta.url));
+    const apiTypeScriptFiles = readdirSync(apiDirectory)
+      .filter((fileName) => fileName.endsWith('.ts'))
+      .sort();
+
+    expect(apiTypeScriptFiles).toEqual(['index.ts']);
   });
 });

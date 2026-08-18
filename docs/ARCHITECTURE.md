@@ -7,11 +7,11 @@ This document describes the active Megastera architecture on Base mainnet. Histo
 | Concern | Source of truth | Active consumer |
 | --- | --- | --- |
 | Ticket purchase and drawing state | Megapot contract and Base mainnet RPC | wagmi checkout |
-| Ticket eligibility | Finalized receipt containing canonical `MEGASTERA` `TicketPurchased` | `api/receiptVerification.ts` |
+| Ticket eligibility | Finalized receipt containing canonical `MEGASTERA` `TicketPurchased` | `server/api/receiptVerification.ts` |
 | Historical ticket status and winnings | Base mainnet Megapot Data API wallet ticket feed | `src/lib/api.ts` / `useWalletTickets` |
 | Planet identity and media | Shared deterministic generator plus `BackendPlanet` row | API and My Planets |
 | Planet ownership | `BackendPlanet.ownerAddress`, copied from the verified receipt recipient | API list/mining routes |
-| Planet mining | `baseMineralsPerDay` and `generatedAt` | `api/miningStore.ts` |
+| Planet mining | `baseMineralsPerDay` and `generatedAt` | `server/api/miningStore.ts` |
 | Leaderboard | Ready `BackendPlanet.generatedAt` + `baseMineralsPerDay` rows | Live read route with an approximately 60-second backend cache |
 
 ## Runtime flow
@@ -34,15 +34,15 @@ The source tag is always `MEGASTERA`. It is a Megapot attribution value and does
 
 ## Backend API
 
-`api/index.ts` mounts only:
+The Vercel entrypoint `api/index.ts` delegates to `server/api/index.ts`, which mounts only:
 
 - backend Planet generation, collection, GIF, and mining routes;
 - live leaderboard routes; and
 - liveness/metrics routes.
 
-`api/receiptVerification.ts` performs the complete verification sequence against bounded RPC fallbacks: Base mainnet chain ID, receipt event fields, optional recipient, finalized block depth, canonical block hash, and block timestamp.
+`server/api/receiptVerification.ts` performs the complete verification sequence against bounded RPC fallbacks: Base mainnet chain ID, receipt event fields, optional recipient, finalized block depth, canonical block hash, and block timestamp.
 
-`api/prismaTicketPurchase.ts` persists only the immutable ticket row required by backend generation. `api/backendPlanet.ts` derives the deterministic traits and GIF and upserts one row per ticket purchase. Existing ready rows are returned unchanged; conflicting proof fields fail closed. Collection queries filter by Base mainnet, the active jackpot, and the `MEGASTERA` source tag.
+`server/api/prismaTicketPurchase.ts` persists only the immutable ticket row required by backend generation. `server/api/backendPlanet.ts` derives the deterministic traits and GIF and upserts one row per ticket purchase. Existing ready rows are returned unchanged; conflicting proof fields fail closed. Collection queries filter by Base mainnet, the active jackpot, and the `MEGASTERA` source tag.
 
 No active module signs vouchers, pins media, reads a Planet contract, projects Planet events, scans all tickets continuously, or writes transfer/accrual ledgers.
 

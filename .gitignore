@@ -22,6 +22,7 @@ dist-ssr
 # local API state and generated client
 .data/
 api/generated/
+server/api/generated/
 
 # editor
 .vscode/*
