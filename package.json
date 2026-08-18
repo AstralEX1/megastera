@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "packageManager": "pnpm@11.19.0",
   "description": "Onchain exploration game where Megapot tickets discover unique planets on Base.",
   "scripts": {
     "bootstrap": "pnpm install",
@@ -64,6 +65,6 @@
     "vitest": "^3.2.4"
   },
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   }
 }
