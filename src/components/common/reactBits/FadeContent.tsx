@@ -1,15 +1,14 @@
-import type { HTMLAttributes, PropsWithChildren } from 'react';
+import type { PropsWithChildren } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 
-type FadeContentProps = PropsWithChildren<
-  HTMLAttributes<HTMLDivElement> & {
-    delay?: number;
-    duration?: number;
-    blur?: boolean;
-    threshold?: number;
-  }
->;
+type FadeContentProps = PropsWithChildren<{
+  className?: string;
+  delay?: number;
+  duration?: number;
+  blur?: boolean;
+  threshold?: number;
+}>;
 
 /**
  * Restrained viewport reveal adapted from the React Bits FadeContent concept.
@@ -22,7 +21,6 @@ export function FadeContent({
   duration = 0.55,
   blur = true,
   threshold = 0.12,
-  ...props
 }: FadeContentProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
@@ -58,7 +56,6 @@ export function FadeContent({
 
   return (
     <motion.div
-      {...props}
       ref={ref}
       data-react-bits="fade-content"
       className={className}
