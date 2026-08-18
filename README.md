@@ -1,19 +1,21 @@
 <div align="center">
-
-# Megastera
-
-**A space tycoon built around Megapot. Buy a ticket, discover a planet, grow your mining power, and compete for seasonal rewards.**
-
-[![Quality Gate](https://github.com/AstralEX1/megastera/actions/workflows/verify.yml/badge.svg)](https://github.com/AstralEX1/megastera/actions/workflows/verify.yml)
-
-<p>
-  <img src="./public/megastera-planet.gif" alt="Megastera procedurally generated planet" width="320" />
-</p>
-
-**Buy a Megapot ticket → discover a planet → increase mining power → climb the leaderboard → earn seasonal rewards.**
-
-[How it works](#how-it-works) · [Planets & mining](#planets--mining) · [Seasons & rewards](#seasons--rewards) · [Why Megapot is core](#why-megapot-is-core) · [Architecture](#architecture) · [Run locally](#run-locally)
-
+  <h1>Megastera</h1>
+  <p><strong>A space tycoon built around Megapot. Buy a ticket, discover a planet, grow your mining power, and compete for seasonal rewards.</strong></p>
+  <p>
+    <a href="https://github.com/AstralEX1/megastera/actions/workflows/verify.yml"><img src="https://github.com/AstralEX1/megastera/actions/workflows/verify.yml/badge.svg" alt="Quality Gate" /></a>
+  </p>
+  <p>
+    <img src="./public/megastera-planet.gif" alt="Megastera procedurally generated planet" width="320" />
+  </p>
+  <p><strong>Buy a Megapot ticket → discover a planet → increase mining power → climb the leaderboard → earn seasonal rewards.</strong></p>
+  <p>
+    <a href="#how-it-works">How it works</a> ·
+    <a href="#planets--mining">Planets &amp; mining</a> ·
+    <a href="#seasons--rewards">Seasons &amp; rewards</a> ·
+    <a href="#why-megapot-is-core">Why Megapot is core</a> ·
+    <a href="#architecture">Architecture</a> ·
+    <a href="#run-locally">Run locally</a>
+  </p>
 </div>
 
 Megastera turns every Megapot ticket into persistent game progression.
