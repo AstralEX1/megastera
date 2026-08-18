@@ -1,12 +1,13 @@
 <div align="center">
   <h1>Megastera</h1>
   <p><strong>A space tycoon built around Megapot. Buy a ticket, discover a planet, grow your mining power, and compete for seasonal rewards.</strong></p>
-  <p>
-    <a href="https://github.com/AstralEX1/megastera/actions/workflows/verify.yml"><img src="https://github.com/AstralEX1/megastera/actions/workflows/verify.yml/badge.svg" alt="Quality Gate" /></a>
-  </p>
-  <p>
-    <img src="./public/megastera-planet.gif" alt="Megastera procedurally generated planet" width="320" />
-  </p>
+</div>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/AstralEX1/megastera/main/public/megastera-planet.gif" alt="Megastera procedurally generated planet" width="320" />
+</p>
+
+<div align="center">
   <p><strong>Buy a Megapot ticket → discover a planet → increase mining power → climb the leaderboard → earn seasonal rewards.</strong></p>
   <p>
     <a href="#how-it-works">How it works</a> ·
