@@ -43,10 +43,21 @@ Season 1 assets carry forward into Season 2 and play a crucial role in the new S
 - Expanded Gameplay Built Around Player Competition
 
 ## Interaction and motion
-Keep motion intentionally restrained. Adapt the pointer spotlight interaction from React Bits `SpotlightCard` for the active Mid-Season milestone only. No parallax, scroll choreography, continuous motion, 3D, orbital animation, or decorative ship animation. Respect keyboard focus and reduced-motion expectations.
+Motion stays restrained and function-specific rather than decorative:
+
+- React Bits `Galaxy`, adapted as a very low-density OGL star field behind the page. It has no pointer interaction and uses low glow/speed values.
+- React Bits `BlurText`, adapted for the `Roadmap` heading as a short one-time focus reveal.
+- React Bits `DecryptedText`, adapted for the small `Coming Soon` telemetry label only.
+- React Bits `FadeContent`, adapted so each of the five milestones reveals once as it enters the viewport with a small blur and vertical offset.
+- The existing React Bits-inspired `SpotlightCard` remains limited to the active Mid-Season milestone.
+- Completed Genesis checkmarks resolve in a short staggered sequence.
+- The completed portion of the timeline animates from Genesis to the current milestone only; future timeline segments stay quiet.
+- The Season 1 Legacy icon receives a very subtle periodic glow, with no continuous spinning or movement.
+
+No parallax, cursor gimmicks, hyperspeed, 3D, illustration animation, orbital artwork, ship artwork, or repeating milestone entrance animations. All effects respect reduced-motion preferences. WebGL-unavailable environments retain a static low-contrast background fallback.
 
 ## Architecture
-Create a standalone `ComingSoon` page and one roadmap-specific spotlight component. Add a new navigation key and `/coming-soon` route through the existing History API router. The feature remains frontend-only and isolated from all game data flows.
+Create a standalone `ComingSoon` page plus small isolated React Bits-inspired presentation components under `src/components/common/reactBits`. Add a new navigation key and `/coming-soon` route through the existing History API router. The feature remains frontend-only and isolated from all game data flows.
 
 ## Verification
-Add route coverage, navigation label coverage, and page rendering/accessibility coverage. The repository pull-request verification workflow must pass database validation, lint, typecheck, tests, and build.
+Add route coverage, navigation label coverage, page rendering/accessibility coverage, and explicit integration coverage for the restrained ambient motion layers. The repository pull-request verification workflow must pass database validation, lint, typecheck, tests, and build.
