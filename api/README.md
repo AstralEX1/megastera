@@ -1,8 +1,6 @@
 # Megastera API
 
-The active API verifies finalized Megapot `TicketPurchased` receipt logs, persists the
-canonical ticket row, generates one deterministic Planet GIF per receipt log, and serves
-the database-backed collection, mining snapshots, and leaderboard.
+The active API verifies finalized Megapot `TicketPurchased` receipt logs, persists the canonical ticket row, generates one deterministic Planet GIF per receipt log, and serves the database-backed collection, mining snapshots, and leaderboard.
 
 ## HTTP surface
 
@@ -16,30 +14,22 @@ the database-backed collection, mining snapshots, and leaderboard.
 - `GET /api/planets/:planetId/mining`
 - `GET /api/wallets/:address/mining`
 - `GET /api/leaderboard/current`, `/current/:address`, `/history`, `/days/:periodId`
-- `POST /api/leaderboard/finalize` with the scheduler-only worker bearer token
 
-Planet vouchers, Pinata/IPFS artifacts, Planet contract reads/writes, direct holdings, and
-continuous indexers are intentionally not exposed.
+Planet vouchers, Pinata/IPFS artifacts, Planet contract reads/writes, direct holdings, and continuous indexers are intentionally not exposed.
 
-## Local processes
+## Local process
 
 ```sh
 pnpm api:server
-pnpm api:leaderboard-worker
 ```
 
-The HTTP server defaults to `127.0.0.1:8787`; set `MEGAPLANETS_API_HOST` and
-`MEGAPLANETS_API_PORT` to override. Backend generation requires `DATABASE_URL` and
-`BASE_SEPOLIA_RPC_URL`; optional RPC failover is configured with
-`BASE_SEPOLIA_RPC_FALLBACK_URLS`.
+The HTTP server defaults to `127.0.0.1:8787`; set `MEGAPLANETS_API_HOST` and `MEGAPLANETS_API_PORT` to override. Backend generation requires `DATABASE_URL` and `BASE_SEPOLIA_RPC_URL`; optional RPC failover is configured with `BASE_SEPOLIA_RPC_FALLBACK_URLS`.
 
 ## Safety boundary
 
 - `MEGAPLANETS_ALLOWED_ORIGINS` remains an exact CORS allowlist.
 - Request bodies are bounded to 16 KiB.
-- Receipt verification checks Base Sepolia, canonical jackpot/source, event fields,
-  confirmation depth, block hash, and optional wallet recipient.
-- Generation is idempotent on `originTxHash:logIndex`; conflicting persisted provenance
-  is rejected.
+- Receipt verification checks Base Sepolia, canonical jackpot/source, event fields, confirmation depth, block hash, and optional wallet recipient.
+- Generation is idempotent on `originTxHash:logIndex`; conflicting persisted provenance is rejected.
 - GIF bytes are stored in PostgreSQL and served with an immutable content hash.
-- The leaderboard worker is the only daily snapshot mutator.
+- Leaderboard reads are derived from ready persisted Planet records.

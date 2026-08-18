@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Megastera MVP: backend-generated planets powered by Megapot tickets on Base.",
+  "description": "Onchain exploration game where Megapot tickets discover unique planets on Base.",
   "scripts": {
     "bootstrap": "pnpm install",
     "dev": "vite",
