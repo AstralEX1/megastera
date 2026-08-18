@@ -6,6 +6,7 @@ import {
 } from './backendPlanetRoutes.js';
 import { createLeaderboardRoutes } from './leaderboardRoutes.js';
 import { createOperationalState } from './operations.js';
+import megapotProxy from '../proxy.js';
 
 /**
  * The active API surface is deliberately small for the hackathon MVP:
@@ -30,6 +31,7 @@ export function createApp(
   app.get('/api/planets/metrics', (c) =>
     c.json({ ok: true, service: 'api', operations: operations.snapshot() }),
   );
+  app.route('/', megapotProxy);
   app.route('/api', createBackendPlanetRoutes(backendPlanetOverrides));
   app.route('/api/leaderboard', createLeaderboardRoutes());
 
