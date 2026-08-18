@@ -18,4 +18,16 @@ describe('primary navigation', () => {
 
     expect(screen.queryAllByRole('button', { name: 'Ticket status' })).toHaveLength(0);
   });
+
+  it('labels the roadmap destination as Coming Soon in desktop and mobile navigation', () => {
+    const onSelect = vi.fn();
+    render(
+      <>
+        <Nav active="play" onSelect={onSelect} />
+        <MobileBottomNav active="play" onSelect={onSelect} />
+      </>,
+    );
+
+    expect(screen.getAllByRole('button', { name: 'Coming Soon' })).toHaveLength(2);
+  });
 });
