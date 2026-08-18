@@ -19,5 +19,6 @@ export function navPath(key: NavKey) {
     case 'history': return '/leaderboard';
     case 'tickets': return '/tickets';
     case 'home': return '/';
+    case 'lab': return '/';
   }
 }
