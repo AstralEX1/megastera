@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { PlanetsIcon } from '@/components/icons/PlanetsIcon';
 import { PlayIcon } from '@/components/icons/PlayIcon';
 
-export type NavKey = 'home' | 'play' | 'tickets' | 'planets' | 'history';
+export type NavKey = 'home' | 'play' | 'tickets' | 'planets' | 'history' | 'lab';
 
 const ITEMS: { key: NavKey; label: string; icon: ReactNode }[] = [
   { key: 'play', label: 'Play', icon: <PlayIcon /> },
