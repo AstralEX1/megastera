@@ -1,5 +1,5 @@
 /**
- * Lightweight History API routing keeps the demo shell small while supporting
+ * Lightweight History API routing keeps the app shell small while supporting
  * canonical collection and Planet detail deep links.
  */
 import type { ReactNode } from 'react';
@@ -7,7 +7,6 @@ import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import type { NavKey } from '@/components/layout/Nav';
 import { navPath, parseAppRoute } from '@/lib/appRoute';
-import { Home } from '@/pages/Home';
 import { Leaderboard } from '@/pages/Leaderboard';
 import { Landing } from '@/pages/Landing';
 import { Play } from '@/pages/Play';
@@ -19,9 +18,6 @@ const Planets = lazy(() =>
 const ComingSoon = lazy(() =>
   import('@/pages/ComingSoon').then((module) => ({ default: module.ComingSoon })),
 );
-const Lab = import.meta.env.DEV
-  ? lazy(() => import('@/pages/Lab').then((module) => ({ default: module.Lab })))
-  : null;
 
 export default function App() {
   const [route, setRoute] = useState(() => parseAppRoute(window.location.pathname));
@@ -61,9 +57,6 @@ export default function App() {
       break;
     case 'planets':
       page = <Planets onNavigate={navigate} onViewPlanet={viewPlanet} routePlanetId={route.planetId} />;
-      break;
-    case 'lab':
-      page = Lab ? <Lab /> : <Home onNavigate={navigate} />;
       break;
     case 'history':
       page = <Leaderboard />;
