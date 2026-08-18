@@ -18,6 +18,8 @@ describe('app routes', () => {
     expect(parseAppRoute('/tickets')).toEqual({ active: 'tickets' });
     expect(navPath('tickets')).toBe('/tickets');
     expect(navPath('history')).toBe('/leaderboard');
+    expect(parseAppRoute('/coming-soon')).toEqual({ active: 'comingSoon' });
+    expect(navPath('comingSoon')).toBe('/coming-soon');
     expect(navPath('home')).toBe('/');
   });
 });

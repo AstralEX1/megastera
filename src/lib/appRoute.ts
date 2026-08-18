@@ -6,6 +6,7 @@ export function parseAppRoute(pathname: string): AppRoute {
   if (pathname === '/play') return { active: 'play' };
   if (pathname === '/my-planets' || pathname === '/planets') return { active: 'planets' };
   if (pathname === '/leaderboard') return { active: 'history' };
+  if (pathname === '/coming-soon') return { active: 'comingSoon' };
   if (pathname === '/tickets') return { active: 'tickets' };
   const planetMatch = pathname.match(/^\/planet\/([A-Za-z0-9-]+)$/);
   if (planetMatch?.[1]) return { active: 'planets', planetId: planetMatch[1] };
@@ -17,6 +18,7 @@ export function navPath(key: NavKey) {
     case 'play': return '/play';
     case 'planets': return '/my-planets';
     case 'history': return '/leaderboard';
+    case 'comingSoon': return '/coming-soon';
     case 'tickets': return '/tickets';
     case 'home': return '/';
     case 'lab': return '/';

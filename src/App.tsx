@@ -15,6 +15,9 @@ import { Tickets } from '@/pages/Tickets';
 const Planets = lazy(() =>
   import('@/pages/Planets').then((module) => ({ default: module.Planets })),
 );
+const ComingSoon = lazy(() =>
+  import('@/pages/ComingSoon').then((module) => ({ default: module.ComingSoon })),
+);
 
 export default function App() {
   const [route, setRoute] = useState(() => parseAppRoute(window.location.pathname));
@@ -57,6 +60,9 @@ export default function App() {
       break;
     case 'history':
       page = <Leaderboard />;
+      break;
+    case 'comingSoon':
+      page = <ComingSoon />;
       break;
   }
 
