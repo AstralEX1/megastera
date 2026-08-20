@@ -73,4 +73,34 @@ describe('backend Planet API', () => {
     );
     await expect(requestBackendPlanetGeneration({ transactionHash: TX, logIndex: 4n })).rejects.toThrow(/malformed/i);
   });
+
+  it('exposes an immutable receipt-only Planet upgrade request', async () => {
+    const module = await import('./backendApi');
+    expect(module.requestBackendPlanetUpgrade).toEqual(expect.any(Function));
+    if (typeof module.requestBackendPlanetUpgrade !== 'function') return;
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ upgrade: {
+        purchaseId: 'purchase-1',
+        planetId: 'planet-1',
+        ownerAddress: ADDRESS,
+        targetLevel: 1,
+        bonusBpsAfter: 1000,
+        costMicros: '200000',
+        purchasedAt: '2026-08-13T12:00:00.000Z',
+        currentBalanceMicros: '4800000',
+      } }), { status: 200 }),
+    );
+
+    await expect(module.requestBackendPlanetUpgrade({ planetId: 'planet-1', targetLevel: 1 })).resolves.toEqual({
+      purchaseId: 'purchase-1',
+      planetId: 'planet-1',
+      ownerAddress: ADDRESS,
+      targetLevel: 1,
+      bonusBpsAfter: 1000,
+      costMicros: '200000',
+      purchasedAt: '2026-08-13T12:00:00.000Z',
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/planets/planet-1/upgrade', expect.objectContaining({ method: 'POST' }));
+  });
 });

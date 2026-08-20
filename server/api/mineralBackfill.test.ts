@@ -9,11 +9,22 @@ function makePrisma(dbNow: Date) {
   const createMany = vi.fn().mockResolvedValue({ count: 1 });
   const transaction = {
     $queryRaw: vi.fn().mockResolvedValue([{ now: dbNow }]),
+    backendPlanet: {
+      findMany: vi.fn().mockResolvedValue([
+        {
+          id: 'planet-1',
+          ownerAddress: OWNER,
+          planetType: 'Gaia',
+          baseMineralsPerDay: 100n,
+          generatedAt: new Date('2026-08-19T00:00:00.000Z'),
+        },
+      ]),
+    },
     mineralEconomyCutover: {
       findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt: CUTOVER }),
       createMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
-    mineralAccount: { createMany },
+    mineralAccount: { createMany, findMany: vi.fn().mockResolvedValue([]) },
   };
   const prisma = {
     backendPlanet: {
@@ -56,6 +67,18 @@ describe('Mineral account backfill', () => {
 
     await expect(runMineralAccountsBackfill(prisma, CUTOVER)).rejects.toThrow(
       'Mineral backfill cannot run before the configured cutover',
+    );
+    expect(createMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects an existing account whose opening balance does not match V1', async () => {
+    const { prisma, createMany, transaction } = makePrisma(new Date('2026-08-21T00:00:00.000Z'));
+    (transaction.mineralAccount.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ownerAddress: OWNER, openingBalanceMicros: 1n },
+    ]);
+
+    await expect(runMineralAccountsBackfill(prisma, CUTOVER)).rejects.toThrow(
+      'opening balance does not match',
     );
     expect(createMany).not.toHaveBeenCalled();
   });

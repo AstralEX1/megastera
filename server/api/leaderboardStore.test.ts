@@ -235,6 +235,30 @@ describe('live leaderboard', () => {
 });
 
 describe('post-cutover spendable leaderboard', () => {
+  it('rejects a reconstructed negative spendable balance', () => {
+    expect(() => calculatePostCutoverLeaderboardRows({
+      period: POST_CUTOVER_PERIOD,
+      asOf: POST_CUTOVER_PERIOD.endsAt,
+      cutoverAt: CUTOVER,
+      accounts: [{ ownerAddress: ADDRESS_A, openingBalanceMicros: 0n }],
+      planets: [{
+        id: 'planet-1',
+        ownerAddress: ADDRESS_A,
+        planetType: 'Gaia',
+        baseMineralsPerDay: 1n,
+        generatedAt: CUTOVER,
+      }],
+      purchases: [{
+        planetId: 'planet-1',
+        walletAddress: ADDRESS_A,
+        targetLevel: 1,
+        bonusBpsAfter: 1_000,
+        costMicros: 2_000_001n,
+        purchasedAt: new Date('2026-08-20T00:00:00.001Z'),
+      }],
+    })).toThrow('negative');
+  });
+
   it('reconstructs balance from opening balance, canonical production, and purchase costs', () => {
     const rows = calculatePostCutoverLeaderboardRows({
       period: POST_CUTOVER_PERIOD,
@@ -311,7 +335,7 @@ describe('overdue leaderboard finalization', () => {
       finalized.has(where.id) ? { id: where.id, finalizedAt: finalized.get(where.id) } : undefined,
     );
     const transaction = {
-      $queryRaw: vi.fn().mockResolvedValue([]),
+      $queryRaw: vi.fn().mockResolvedValue([{ now: new Date('2026-08-22T00:00:00.000Z') }]),
       leaderboardPeriod: {
         findUnique: periodFindUnique,
         upsert: vi.fn().mockImplementation(async ({ create }: { create: { id: string; finalizedAt: Date } }) => {
@@ -401,10 +425,21 @@ describe('paginateLeaderboardRows', () => {
 
 describe('finalizeLeaderboardPeriod', () => {
   it('wraps the void advisory-lock result in a scalar for Prisma decoding', async () => {
-    let lockQuery = '';
+    const lockQueries: string[] = [];
+    let rawCalls = 0;
     const transaction = {
-      $queryRaw: async (strings: TemplateStringsArray) => {
-        lockQuery = strings.join('?');
+      $queryRaw: async (...args: unknown[]) => {
+        const query = args[0] as { values?: unknown[]; strings?: string[] } | TemplateStringsArray;
+        const rendered = Array.isArray(query)
+          ? query.join('?')
+          : query && 'strings' in query && Array.isArray(query.strings)
+            ? query.strings.join('?')
+            : String(query);
+        lockQueries.push(rendered);
+        rawCalls += 1;
+        return rawCalls % 2 === 0
+          ? [{ now: new Date('2026-08-18T00:00:00.000Z') }]
+          : [{ locked: 1 }];
       },
       leaderboardPeriod: {
         findUnique: async () => undefined,
@@ -423,8 +458,8 @@ describe('finalizeLeaderboardPeriod', () => {
 
     await finalizeLeaderboardPeriod(prisma, PERIOD, new Date('2026-08-17T00:00:01.000Z'));
 
-    expect(lockQuery).toContain('SELECT 1 AS locked');
-    expect(lockQuery).toContain('pg_advisory_xact_lock');
+    expect(lockQueries.join('\n')).toContain('SELECT 1 AS locked');
+    expect(lockQueries.join('\n')).toContain('pg_advisory_xact_lock');
   });
 
   it('archives a period only once when finalization is retried', async () => {
@@ -434,6 +469,9 @@ describe('finalizeLeaderboardPeriod', () => {
     const transaction = {
       $queryRaw: async () => {
         lockCalls += 1;
+        return lockCalls % 2 === 0
+          ? [{ now: new Date('2026-08-18T00:00:00.000Z') }]
+          : [{ locked: 1 }];
       },
       leaderboardPeriod: {
         findUnique: async () => periodRecord,
@@ -458,6 +496,6 @@ describe('finalizeLeaderboardPeriod', () => {
     await finalizeLeaderboardPeriod(prisma, PERIOD, new Date('2026-08-17T00:01:00.000Z'));
 
     expect(periodWrites).toBe(1);
-    expect(lockCalls).toBe(3);
+    expect(lockCalls).toBe(4);
   });
 });

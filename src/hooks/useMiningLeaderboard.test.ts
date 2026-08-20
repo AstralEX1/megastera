@@ -15,7 +15,7 @@ describe('backend mining fetchers', () => {
   });
 
   it('loads one aggregated wallet mining snapshot', async () => {
-    const payload = { mining: { ownerAddress: ADDRESS, asOf: '2026-08-12T12:00:00.000Z', ownedPlanetCount: 1, earnedMicros: '2', effectiveMineralsPerDayMicros: '3', planets: [] } };
+    const payload = { mining: { ownerAddress: ADDRESS, asOf: '2026-08-12T12:00:00.000Z', ownedPlanetCount: 1, currentBalanceMicros: '2', effectiveMineralsPerDayMicros: '3', upgradesEnabled: false, planets: [] } };
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -23,13 +23,14 @@ describe('backend mining fetchers', () => {
     expect(fetchMock).toHaveBeenCalledWith(`/api/wallets/${ADDRESS}/mining`);
   });
 
-  it('normalizes legacy mining rows so missing collection fields cannot render NaN', async () => {
+  it('rejects legacy mining rows that do not implement the V2 contract', async () => {
     const payload = {
       mining: {
         ownerAddress: ADDRESS,
         asOf: '2026-08-12T12:00:00.000Z',
         ownedPlanetCount: 1,
         earnedMicros: '2',
+        upgradesEnabled: false,
         effectiveMineralsPerDayMicros: '3',
         planets: [{
           tokenId: '7',
@@ -42,14 +43,7 @@ describe('backend mining fetchers', () => {
     };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 })));
 
-    await expect(fetchWalletMining(ADDRESS)).resolves.toMatchObject({
-      planets: [{
-        planetId: '7',
-        planetType: 'Unknown',
-        sameTypeCount: 1,
-        collectionBonusBps: 0,
-      }],
-    });
+    await expect(fetchWalletMining(ADDRESS)).rejects.toThrow(/currentBalanceMicros/i);
   });
 
   it('surfaces an explicit error when the leaderboard backend fails', async () => {

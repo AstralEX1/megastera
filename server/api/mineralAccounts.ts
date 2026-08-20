@@ -31,8 +31,21 @@ function assertCutover(cutoverAt: Date): void {
     throw new Error('Mineral economy cutover timestamp is invalid.');
 }
 
-type MineralEconomyCutoverClient = Pick<Prisma.TransactionClient, 'mineralEconomyCutover'>;
+type MineralEconomyCutoverRow = { id: number; cutoverAt: Date };
+type MineralEconomyCutoverStore = {
+  findUnique(args: { where: { id: number } }): Promise<MineralEconomyCutoverRow | null>;
+  create?(args: { data: MineralEconomyCutoverRow }): Promise<MineralEconomyCutoverRow>;
+  createMany?(args: { data: MineralEconomyCutoverRow[]; skipDuplicates?: boolean }): Promise<{ count: number }>;
+};
+type MineralEconomyCutoverClient = {
+  mineralEconomyCutover?: MineralEconomyCutoverStore;
+};
 type PostgresClockClient = Pick<Prisma.TransactionClient, '$queryRaw'>;
+
+export type MineralEconomyCutoverResolution =
+  | { state: 'V1'; cutoverAt: null; source: 'none' }
+  | { state: 'STAGED_V2'; cutoverAt: Date; source: 'config' }
+  | { state: 'V2'; cutoverAt: Date; source: 'database' | 'config+database' };
 
 export async function getPostgresClockTimestamp(prisma: PostgresClockClient): Promise<Date> {
   const rows = await prisma.$queryRaw<Array<{ now: Date }>>(
@@ -48,8 +61,92 @@ export async function getPostgresClockTimestamp(prisma: PostgresClockClient): Pr
 export async function readMineralEconomyCutover(
   prisma: MineralEconomyCutoverClient,
 ): Promise<Date | null> {
-  const row = await prisma.mineralEconomyCutover.findUnique({ where: { id: 1 } });
+  const model = prisma.mineralEconomyCutover;
+  if (!model) return null;
+  const row = await model.findUnique({ where: { id: 1 } });
   return row?.cutoverAt ?? null;
+}
+
+/** Resolves rollout state without creating or updating any database row. */
+export async function resolveMineralEconomyCutover(
+  prisma: MineralEconomyCutoverClient,
+  configuredCutoverAt: Date | null | undefined,
+): Promise<MineralEconomyCutoverResolution> {
+  if (configuredCutoverAt) assertCutover(configuredCutoverAt);
+  const persistedCutoverAt = await readMineralEconomyCutover(prisma);
+  if (persistedCutoverAt) assertCutover(persistedCutoverAt);
+  if (!persistedCutoverAt && !configuredCutoverAt) {
+    return { state: 'V1', cutoverAt: null, source: 'none' };
+  }
+  if (
+    persistedCutoverAt &&
+    configuredCutoverAt &&
+    persistedCutoverAt.getTime() !== configuredCutoverAt.getTime()
+  ) {
+    throw new Error('Configured mineral economy cutover conflicts with the persisted database cutover.');
+  }
+  if (persistedCutoverAt) {
+    return {
+      state: 'V2',
+      cutoverAt: persistedCutoverAt,
+      source: configuredCutoverAt ? 'config+database' : 'database',
+    };
+  }
+  return { state: 'STAGED_V2', cutoverAt: configuredCutoverAt as Date, source: 'config' };
+}
+
+type EconomyBarrierClient = Pick<Prisma.TransactionClient, '$queryRaw'>;
+
+/** Shared transaction-scoped lock for generation and upgrade mutations. */
+export async function acquireMineralEconomySharedBarrier(
+  prisma: EconomyBarrierClient,
+): Promise<void> {
+  await prisma.$queryRaw<Array<{ locked: number }>>`SELECT 1 AS locked
+    FROM (
+      SELECT pg_advisory_xact_lock_shared(hashtextextended('megaplanets:mineral-economy', 0)) AS acquired
+    ) AS lock_result`;
+}
+
+/** Exclusive transaction-scoped lock for finalization, backfill, and preparation. */
+export async function acquireMineralEconomyExclusiveBarrier(
+  prisma: EconomyBarrierClient,
+): Promise<void> {
+  await prisma.$queryRaw<Array<{ locked: number }>>`SELECT 1 AS locked
+    FROM (
+      SELECT pg_advisory_xact_lock(hashtextextended('megaplanets:mineral-economy', 0)) AS acquired
+    ) AS lock_result`;
+}
+
+export const lockMineralEconomyShared = acquireMineralEconomySharedBarrier;
+export const lockMineralEconomyExclusive = acquireMineralEconomyExclusiveBarrier;
+
+/** Deliberately persists a future cutover; ordinary reads and mutations never do this. */
+export async function prepareMineralEconomyCutover(
+  prisma: PrismaClient,
+  cutoverAt: Date,
+): Promise<MineralEconomyCutoverRow> {
+  assertCutover(cutoverAt);
+  return prisma.$transaction(async (transaction) => {
+    await acquireMineralEconomyExclusiveBarrier(transaction);
+    const databaseNow = await getPostgresClockTimestamp(transaction);
+    if (cutoverAt <= databaseNow) {
+      throw new Error('Mineral economy cutover must be in the future of PostgreSQL time.');
+    }
+    const model = (transaction as unknown as MineralEconomyCutoverClient).mineralEconomyCutover;
+    if (!model) throw new Error('Mineral economy cutover model is unavailable.');
+    const existing = await model.findUnique({ where: { id: 1 } });
+    if (existing && existing.cutoverAt.getTime() !== cutoverAt.getTime()) {
+      throw new Error('Configured mineral economy cutover conflicts with the persisted database cutover.');
+    }
+    if (existing) return existing;
+    if (model.create) return model.create({ data: { id: 1, cutoverAt } });
+    if (model.createMany) {
+      await model.createMany({ data: [{ id: 1, cutoverAt }], skipDuplicates: true });
+      const persisted = await model.findUnique({ where: { id: 1 } });
+      if (persisted) return persisted;
+    }
+    throw new Error('Mineral economy cutover could not be persisted.');
+  });
 }
 
 /** Creates the immutable singleton on first use and rejects a configured conflict. */
@@ -59,11 +156,13 @@ export async function ensureMineralEconomyCutover(
 ) {
   if (!cutoverAt) return null;
   assertCutover(cutoverAt);
-  await prisma.mineralEconomyCutover.createMany({
+  const model = prisma.mineralEconomyCutover;
+  if (!model?.createMany) throw new Error('Mineral economy cutover model is unavailable.');
+  await model.createMany({
     data: [{ id: 1, cutoverAt }],
     skipDuplicates: true,
   });
-  const persisted = await prisma.mineralEconomyCutover.findUnique({ where: { id: 1 } });
+  const persisted = await model.findUnique({ where: { id: 1 } });
   if (!persisted) throw new Error('Mineral economy cutover could not be persisted.');
   if (persisted.cutoverAt.getTime() !== cutoverAt.getTime()) {
     throw new Error('Configured mineral economy cutover conflicts with the persisted database cutover.');
@@ -137,6 +236,11 @@ type MineralBackfillRow = {
   openingBalanceMicros: bigint;
 };
 
+type MineralBackfillAccount = {
+  ownerAddress: string;
+  openingBalanceMicros: bigint;
+};
+
 export type MineralAccountsBackfillResult = {
   cutoverAt: Date;
   candidateCount: number;
@@ -148,9 +252,9 @@ export type MineralAccountsBackfillResult = {
 };
 
 async function loadMineralBackfillRows(
-  prisma: PrismaClient,
+  prisma: PrismaClient | Prisma.TransactionClient,
   cutoverAt: Date,
-): Promise<{ rows: MineralBackfillRow[]; existingOwners: Set<string> }> {
+): Promise<{ rows: MineralBackfillRow[]; existing: Map<string, MineralBackfillAccount> }> {
   const planets = (await prisma.backendPlanet.findMany({
     where: { status: 'READY', generatedAt: { lte: cutoverAt } },
     select: {
@@ -174,15 +278,21 @@ async function loadMineralBackfillRows(
       ownerAddress,
       openingBalanceMicros: calculateV1WalletOpeningBalance(ownerPlanets, cutoverAt),
     }));
-  const existing = rows.length
-    ? await prisma.mineralAccount.findMany({
-        where: { ownerAddress: { in: rows.map((row) => row.ownerAddress) } },
-        select: { ownerAddress: true },
+  const accountModel = (prisma as PrismaClient & {
+    mineralAccount?: {
+      findMany: (args: unknown) => Promise<MineralBackfillAccount[]>;
+    };
+  }).mineralAccount;
+  const existing = accountModel
+    ? await accountModel.findMany({
+        select: { ownerAddress: true, openingBalanceMicros: true },
       })
     : [];
   return {
     rows,
-    existingOwners: new Set(existing.map((row) => row.ownerAddress.toLowerCase())),
+    existing: new Map(
+      existing.map((row) => [row.ownerAddress.toLowerCase(), row] as const),
+    ),
   };
 }
 
@@ -193,36 +303,49 @@ export async function runMineralAccountsBackfill(
 ): Promise<MineralAccountsBackfillResult> {
   if (!cutoverAt) throw new Error('MINERAL_ECONOMY_CUTOVER_AT is required for mineral backfill.');
   assertCutover(cutoverAt);
-  const { rows, existingOwners } = await loadMineralBackfillRows(prisma, cutoverAt);
-  const missing = rows.filter((row) => !existingOwners.has(row.ownerAddress));
-  const openingBalanceMicros = rows.reduce((total, row) => total + row.openingBalanceMicros, 0n);
-  const missingOpeningBalanceMicros = missing.reduce(
-    (total, row) => total + row.openingBalanceMicros,
-    0n,
-  );
-  const result = {
-    cutoverAt,
-    candidateCount: rows.length,
-    existingCount: rows.length - missing.length,
-    missingCount: missing.length,
-    openingBalanceMicros,
-    missingOpeningBalanceMicros,
-    createdCount: 0,
-  } satisfies MineralAccountsBackfillResult;
   if (options.dryRun) {
     const persisted = await readMineralEconomyCutover(prisma);
     if (persisted && persisted.getTime() !== cutoverAt.getTime()) {
       throw new Error('Configured mineral economy cutover conflicts with the persisted database cutover.');
     }
-    return result;
+    const { rows, existing } = await loadMineralBackfillRows(prisma, cutoverAt);
+    return buildMineralBackfillResult(cutoverAt, rows, existing);
   }
-  const created = await prisma.$transaction(async (transaction) => {
+
+  return prisma.$transaction(async (transaction) => {
+    await acquireMineralEconomyExclusiveBarrier(transaction);
     const databaseNow = await getPostgresClockTimestamp(transaction);
     if (databaseNow < cutoverAt) {
       throw new Error('Mineral backfill cannot run before the configured cutover in PostgreSQL.');
     }
-    await ensureMineralEconomyCutover(transaction, cutoverAt);
-    return transaction.mineralAccount.createMany({
+
+    const resolution = await resolveMineralEconomyCutover(transaction, cutoverAt);
+    if (resolution.cutoverAt?.getTime() !== cutoverAt.getTime()) {
+      throw new Error('Configured mineral economy cutover conflicts with the persisted database cutover.');
+    }
+    const { rows, existing } = await loadMineralBackfillRows(transaction, cutoverAt);
+    const expectedByOwner = new Map(rows.map((row) => [row.ownerAddress, row.openingBalanceMicros]));
+    for (const [ownerAddress, account] of existing) {
+      const expected = expectedByOwner.get(ownerAddress) ?? 0n;
+      if (account.openingBalanceMicros !== expected) {
+        throw new Error(`Mineral account ${ownerAddress} opening balance does not match V1.`);
+      }
+    }
+    const leaderboardPeriod = (transaction as Prisma.TransactionClient & {
+      leaderboardPeriod?: { findFirst: (args: unknown) => Promise<{ id: string } | null> };
+    }).leaderboardPeriod;
+    const finalizedPostCutover = leaderboardPeriod
+      ? await leaderboardPeriod.findFirst({
+          where: { startsAt: { gte: cutoverAt }, finalizedAt: { not: null } },
+          select: { id: true },
+        })
+      : null;
+    if (finalizedPostCutover) {
+      throw new Error('Mineral backfill cannot run after a finalized post-cutover leaderboard period.');
+    }
+    const result = buildMineralBackfillResult(cutoverAt, rows, existing);
+    const missing = rows.filter((row) => !existing.has(row.ownerAddress));
+    const created = await transaction.mineralAccount.createMany({
       data: missing.map((row) => ({
         ownerAddress: row.ownerAddress,
         openingBalanceMicros: row.openingBalanceMicros,
@@ -231,8 +354,28 @@ export async function runMineralAccountsBackfill(
       })),
       skipDuplicates: true,
     });
+    return { ...result, createdCount: created.count };
   });
-  return { ...result, createdCount: created.count };
+}
+
+function buildMineralBackfillResult(
+  cutoverAt: Date,
+  rows: readonly MineralBackfillRow[],
+  existing: ReadonlyMap<string, MineralBackfillAccount>,
+): MineralAccountsBackfillResult {
+  const missing = rows.filter((row) => !existing.has(row.ownerAddress));
+  return {
+    cutoverAt,
+    candidateCount: rows.length,
+    existingCount: rows.length - missing.length,
+    missingCount: missing.length,
+    openingBalanceMicros: rows.reduce((total, row) => total + row.openingBalanceMicros, 0n),
+    missingOpeningBalanceMicros: missing.reduce(
+      (total, row) => total + row.openingBalanceMicros,
+      0n,
+    ),
+    createdCount: 0,
+  };
 }
 
 export const backfillMineralAccounts = runMineralAccountsBackfill;
@@ -348,11 +491,8 @@ function serializePurchase(row: {
   };
 }
 
-function serializeUpgradeResult(
-  purchase: Parameters<typeof serializePurchase>[0],
-  currentBalanceMicros: bigint,
-) {
-  return { ...serializePurchase(purchase), currentBalanceMicros: currentBalanceMicros.toString() };
+function serializeUpgradeResult(purchase: Parameters<typeof serializePurchase>[0]) {
+  return serializePurchase(purchase);
 }
 
 export async function purchasePlanetUpgrade(
@@ -366,20 +506,23 @@ export async function purchasePlanetUpgrade(
   assertTimestamp(input.cutoverAt, 'Mineral economy cutover');
   getMineralUpgradeConfig(input.targetLevel);
   return prisma.$transaction(async (transaction) => {
-    await ensureMineralEconomyCutover(transaction, input.cutoverAt);
+    await acquireMineralEconomySharedBarrier(transaction);
+    const resolution = await resolveMineralEconomyCutover(transaction, input.cutoverAt);
+    const cutoverAt = resolution.cutoverAt;
+    if (!cutoverAt) throw new Error('Mineral economy is disabled.');
     const ownerHint = await transaction.backendPlanet.findUnique({
       where: { id: input.planetId },
       select: { ownerAddress: true },
     });
     if (!ownerHint) throw new Error('Planet not found.');
     const ownerAddress = normalizeOwner(ownerHint.ownerAddress);
-    const account = await ensureAndLockMineralAccount(transaction, ownerAddress, input.cutoverAt);
+    const account = await ensureAndLockMineralAccount(transaction, ownerAddress, cutoverAt);
     const planet = await lockPlanet(transaction, input.planetId);
     if (!planet) throw new Error('Planet not found.');
     const existing = await transaction.planetUpgradePurchase.findUnique({
       where: { planetId_targetLevel: { planetId: input.planetId, targetLevel: input.targetLevel } },
     });
-    if (existing) return serializeUpgradeResult(existing, account.balanceMicros);
+    if (existing) return serializeUpgradeResult(existing);
     if (planet.ownerAddress.toLowerCase() !== ownerAddress) throw new Error('Planet owner changed.');
     if (planet.status !== 'READY') throw new Error('Planet is not ready for upgrades.');
     if (input.targetLevel !== planet.upgradeLevel + 1) {
@@ -387,7 +530,7 @@ export async function purchasePlanetUpgrade(
     }
     const purchasedAt = await getPostgresClockTimestamp(transaction);
     assertTimestamp(purchasedAt, 'Upgrade purchase');
-    if (purchasedAt < input.cutoverAt) throw new Error('Mineral economy is not active yet.');
+    if (purchasedAt < cutoverAt) throw new Error('Mineral economy is not active yet.');
 
     const planets = (await transaction.backendPlanet.findMany({
       where: { ownerAddress, status: 'READY' },
@@ -412,7 +555,7 @@ export async function purchasePlanetUpgrade(
       planets,
       purchases,
       settledAt: purchasedAt,
-      anchor: input.cutoverAt,
+      anchor: cutoverAt,
     });
     const costMicros = calculateUpgradeCostMicros({
       baseMineralsPerDay: planet.baseMineralsPerDay,
@@ -439,6 +582,6 @@ export async function purchasePlanetUpgrade(
         purchasedAt,
       },
     });
-    return serializeUpgradeResult(purchase, balanceMicros);
+    return serializeUpgradeResult(purchase);
   });
 }

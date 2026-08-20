@@ -39,6 +39,7 @@ function makePrisma(overrides: {
   const tx = {
     $queryRaw: vi
       .fn()
+      .mockResolvedValueOnce([{ locked: 1 }])
       .mockResolvedValueOnce([{ id: planet.id }])
       .mockResolvedValueOnce([{ now: clockAt }]),
     mineralEconomyCutover: {
@@ -141,6 +142,7 @@ describe('mineral upgrade mutations', () => {
     });
     const persisted = first.tx.planetUpgradePurchase.create.mock.results[0]?.value;
     expect(result).toMatchObject({ targetLevel: 1, costMicros: '200000' });
+    expect(result).not.toHaveProperty('currentBalanceMicros');
     expect(persisted.purchasedAt).toBe(PURCHASED_AT);
     expect(first.tx.mineralAccount.update).toHaveBeenCalledTimes(2);
     expect(first.tx.planetUpgradePurchase.create).toHaveBeenCalledOnce();
@@ -148,7 +150,7 @@ describe('mineral upgrade mutations', () => {
     const retry = makePrisma({
       existingPurchase: persisted,
       account: {
-        balanceMicros: BigInt((result as { currentBalanceMicros: string }).currentBalanceMicros),
+        balanceMicros: first.account.balanceMicros,
         lastSettledAt: PURCHASED_AT,
       },
     });
@@ -158,6 +160,7 @@ describe('mineral upgrade mutations', () => {
       cutoverAt: CUTOVER,
     });
     expect(retryResult).toEqual(result);
+    expect(retryResult).not.toHaveProperty('currentBalanceMicros');
     expect(retry.tx.mineralAccount.update).not.toHaveBeenCalled();
     expect(retry.tx.backendPlanet.update).not.toHaveBeenCalled();
     expect(retry.tx.planetUpgradePurchase.create).not.toHaveBeenCalled();

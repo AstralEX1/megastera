@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -12,8 +12,9 @@ const mocks = vi.hoisted(() => ({
     ownerAddress: '0x0000000000000000000000000000000000000001',
     asOf: '2026-08-13T12:00:00.000Z',
     ownedPlanetCount: 0,
-    earnedMicros: '123123000000',
+    currentBalanceMicros: '5000000',
     effectiveMineralsPerDayMicros: '437000000',
+    upgradesEnabled: true,
     planets: [] as Array<{
       planetId: string;
       planetType: string;
@@ -21,11 +22,19 @@ const mocks = vi.hoisted(() => ({
       collectionBonusBps: number;
       baseMineralsPerDay: string;
       effectiveMineralsPerDayMicros: string;
-      earnedMicros: string;
-      activeSince: string;
+      upgradeLevel: number;
+      upgradeBonusBps: number;
+      nextUpgrade: { targetLevel: number; bonusBpsAfter: number; costMicros: string } | null;
     }>,
   },
   miningRefetch: vi.fn(),
+  upgrade: {
+    mutate: vi.fn(),
+    reset: vi.fn(),
+    variables: undefined as { planetId: string; targetLevel: number } | undefined,
+    isPending: false,
+    error: null as Error | null,
+  },
   planetsRefetch: vi.fn(),
   ticketRefetch: vi.fn(),
   roundRefetch: vi.fn(),
@@ -48,6 +57,7 @@ vi.mock('@/hooks/useBackendPlanets', () => ({
   useBackendPlanets: () => ({ data: mocks.planets, isLoading: mocks.planetsLoading, isFetching: false, isError: false, refetch: mocks.planetsRefetch }),
 }));
 vi.mock('@/hooks/useWalletMining', () => ({ useWalletMining: () => ({ data: mocks.mining, isFetching: false, refetch: mocks.miningRefetch }) }));
+vi.mock('@/hooks/usePlanetUpgrade', () => ({ usePlanetUpgrade: () => mocks.upgrade }));
 vi.mock('@/hooks/useRound', () => ({ useRound: () => ({ data: mocks.round, isFetching: false, refetch: mocks.roundRefetch }) }));
 vi.mock('@/hooks/useJackpotState', () => ({ useJackpotState: () => mocks.jackpot }));
 vi.mock('@/hooks/useWalletTickets', () => ({
@@ -102,14 +112,24 @@ const secondBackendPlanet = {
 describe('backend My Planets', () => {
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     mocks.planets = [];
     mocks.planetsLoading = false;
     mocks.walletTickets = [];
     mocks.mining.planets = [];
+    mocks.mining.currentBalanceMicros = '5000000';
+    mocks.mining.effectiveMineralsPerDayMicros = '437000000';
+    mocks.mining.asOf = '2026-08-13T12:00:00.000Z';
+    mocks.mining.upgradesEnabled = true;
     mocks.round = undefined;
     mocks.planetsRefetch.mockReset();
     mocks.ticketRefetch.mockReset();
     mocks.miningRefetch.mockReset();
+    mocks.upgrade.mutate.mockReset();
+    mocks.upgrade.reset.mockReset();
+    mocks.upgrade.variables = undefined;
+    mocks.upgrade.isPending = false;
+    mocks.upgrade.error = null;
     mocks.roundRefetch.mockReset();
     mocks.jackpot.refetch.mockReset();
     mocks.claim.claim.mockReset();
@@ -151,13 +171,57 @@ describe('backend My Planets', () => {
     expect(summary).toHaveTextContent('Planets');
     expect(summary).toHaveTextContent('Tickets');
     expect(summary).toHaveTextContent('Mining Rate');
-    expect(summary).toHaveTextContent('Mined');
+    expect(summary).toHaveTextContent('Balance');
     expect(within(summary).getByTestId('summary-planets')).toHaveTextContent('2');
     expect(within(summary).getByTestId('summary-tickets')).toHaveTextContent('2');
     expect(within(summary).getByTestId('summary-rate')).toHaveTextContent('437/day');
-    expect(within(summary).getByTestId('summary-mined')).toHaveTextContent('123,123');
+    expect(within(summary).getByTestId('summary-balance')).toBeInTheDocument();
     expect(screen.queryByText(/Every Megastera purchase/)).not.toBeInTheDocument();
     expect(screen.queryByText(/COLLECTION \/\s*2/)).not.toBeInTheDocument();
+  });
+
+  it('shows live spendable Balance anchored at the wallet snapshot asOf', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-13T12:00:00.000Z'));
+    mocks.planets = [generatedRow(backendPlanet)];
+    mocks.mining.currentBalanceMicros = '5000000';
+    mocks.mining.effectiveMineralsPerDayMicros = '86400000000';
+    mocks.mining.asOf = '2026-08-13T12:00:00.000Z';
+
+    render(<Planets onNavigate={vi.fn()} onViewPlanet={vi.fn()} />);
+
+    const summary = screen.getByTestId('collection-summary');
+    expect(summary).toHaveTextContent('Balance');
+    expect(within(summary).getByTestId('summary-balance')).toHaveTextContent('5');
+    expect(within(summary).queryByTestId('summary-mined')).not.toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(within(summary).getByTestId('summary-balance')).toHaveTextContent('6');
+  });
+
+  it('shows the next enabled Planet upgrade and its immutable level progression', () => {
+    mocks.planets = [generatedRow(backendPlanet)];
+    mocks.mining.upgradesEnabled = true;
+    mocks.mining.currentBalanceMicros = '5000000';
+    mocks.mining.planets = [{
+      planetId: backendPlanet.planetId,
+      planetType: backendPlanet.planetType,
+      sameTypeCount: 1,
+      collectionBonusBps: 0,
+      baseMineralsPerDay: backendPlanet.baseMineralsPerDay,
+      effectiveMineralsPerDayMicros: '24000000',
+      upgradeLevel: 1,
+      upgradeBonusBps: 1000,
+      nextUpgrade: { targetLevel: 2, bonusBpsAfter: 2500, costMicros: '300000' },
+    }];
+
+    render(<Planets onNavigate={vi.fn()} onViewPlanet={vi.fn()} />);
+
+    const detail = within(screen.getByRole('complementary', { name: 'Selected planet detail' }));
+    expect(detail.getByText('Level L1')).toBeInTheDocument();
+    expect(detail.getByText('Next upgrade: L2')).toBeInTheDocument();
+    expect(detail.getByRole('button', { name: 'Upgrade to L2' })).toBeInTheDocument();
+    expect(detail.getByText(/0\.3 minerals/)).toBeInTheDocument();
   });
 
   it('shows the ticket status on the generated Planet card', () => {
@@ -202,8 +266,9 @@ describe('backend My Planets', () => {
       collectionBonusBps: 500,
       baseMineralsPerDay: backendPlanet.baseMineralsPerDay,
       effectiveMineralsPerDayMicros: '25200000',
-      earnedMicros: '10100000',
-      activeSince: '2026-08-10T00:00:00.000Z',
+      upgradeLevel: 1,
+      upgradeBonusBps: 1000,
+      nextUpgrade: { targetLevel: 2, bonusBpsAfter: 2500, costMicros: '300000' },
     }];
 
     render(<Planets onNavigate={vi.fn()} onViewPlanet={vi.fn()} />);
@@ -211,23 +276,19 @@ describe('backend My Planets', () => {
     const card = screen.getByTestId('backend-planet-card-planet-1');
     const metrics = within(card).getByTestId('planet-mining-metrics');
     expect(metrics).toHaveTextContent('25.2');
-    expect(metrics).toHaveTextContent('10.1');
+    expect(metrics).not.toHaveTextContent('10.1');
     expect(within(metrics).queryByText('/day')).not.toBeInTheDocument();
     expect(within(metrics).queryByText('mined')).not.toBeInTheDocument();
     expect(within(metrics).getByText('RATE')).toBeInTheDocument();
-    expect(within(metrics).getByText('MINED')).toBeInTheDocument();
     expect(within(metrics).getByText('BOOST')).toBeInTheDocument();
     const metricGroups = [metrics, within(screen.getByRole('complementary', { name: 'Selected planet detail' })).getByTestId('planet-mining-metrics')];
     for (const group of metricGroups) {
       const rate = within(group).getByText('RATE');
       const boost = within(group).getByText('BOOST');
-      const mined = within(group).getByText('MINED');
       expect(rate.compareDocumentPosition(boost) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      expect(boost.compareDocumentPosition(mined) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      expect(mined.parentElement).toHaveClass('border-l');
       expect(within(group).getByRole('tooltip', { name: 'Minerals per day including boost' })).toBeInTheDocument();
       expect(within(group).getByRole('tooltip', { name: 'Bonus from matching planet types' })).toBeInTheDocument();
-      expect(within(group).getByRole('tooltip', { name: 'Total minerals collected' })).toBeInTheDocument();
+      expect(within(group).queryByRole('tooltip', { name: 'Total minerals collected' })).not.toBeInTheDocument();
     }
     expect(metrics).toHaveTextContent('+5%');
     expect(metrics.parentElement).not.toHaveClass('border-t');

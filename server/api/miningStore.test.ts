@@ -1,8 +1,73 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from './generated/prisma/client.js';
 import { getBackendWalletMiningSnapshot } from './miningStore.js';
+import { getCurrentLeaderboard } from './leaderboardStore.js';
 
 describe('backend Planet mining snapshots', () => {
+  it('keeps wallet balance and live leaderboard score equal at PostgreSQL asOf', async () => {
+    const owner = '0x0000000000000000000000000000000000000001';
+    const cutoverAt = new Date('2026-08-20T00:00:00.000Z');
+    const databaseNow = new Date('2026-08-21T00:00:00.000Z');
+    const requestedNow = new Date('2026-08-30T00:00:00.000Z');
+    const planet = {
+      id: 'planet-invariant',
+      ownerAddress: owner,
+      planetType: 'Gaia',
+      planetName: 'Invariant Planet',
+      seed: `0x${'11'.repeat(32)}`,
+      traitsHash: `0x${'22'.repeat(32)}`,
+      generatorVersion: 1,
+      terrain: 'Plains',
+      rarity: 'Common',
+      satelliteCount: 0,
+      hasRing: false,
+      baseMineralsPerDay: 100n,
+      upgradeLevel: 0,
+      upgradeBonusBps: 0,
+      generatedAt: cutoverAt,
+    };
+    const account = {
+      ownerAddress: owner,
+      openingBalanceMicros: 100_000_000n,
+      balanceMicros: 100_000_000n,
+      lastSettledAt: cutoverAt,
+    };
+    const walletTransaction = {
+      $queryRaw: vi.fn().mockResolvedValue([{ now: databaseNow }]),
+      mineralAccount: { findUnique: vi.fn().mockResolvedValue(account) },
+      backendPlanet: { findMany: vi.fn().mockResolvedValue([planet]) },
+      planetUpgradePurchase: { findMany: vi.fn().mockResolvedValue([]) },
+    };
+    const walletPrisma = {
+      $transaction: vi.fn(async (callback: (value: typeof walletTransaction) => unknown) => callback(walletTransaction)),
+    } as unknown as PrismaClient;
+    const leaderboardTransaction = {
+      $queryRaw: vi.fn().mockResolvedValue([{ now: databaseNow }]),
+      backendPlanet: { findMany: vi.fn().mockResolvedValue([planet]) },
+      mineralAccount: { findMany: vi.fn().mockResolvedValue([account]) },
+      planetUpgradePurchase: { findMany: vi.fn().mockResolvedValue([]) },
+    };
+    const leaderboardPrisma = {
+      $transaction: vi.fn(async (callback: (value: typeof leaderboardTransaction) => unknown) => callback(leaderboardTransaction)),
+    } as unknown as PrismaClient;
+
+    const wallet = await getBackendWalletMiningSnapshot(walletPrisma, owner, requestedNow, {
+      mineralEconomyCutoverAt: cutoverAt,
+    });
+    const leaderboard = await getCurrentLeaderboard(
+      leaderboardPrisma,
+      requestedNow,
+      { offset: 0, limit: 50 },
+      { mineralEconomyCutoverAt: cutoverAt },
+    );
+
+    expect(wallet.asOf).toBe(databaseNow.toISOString());
+    expect(leaderboard.asOf).toBe(databaseNow);
+    expect(wallet.currentBalanceMicros).toBe('200000000');
+    expect(leaderboard.rows[0]?.scoreMicros).toBe(200_000_000n);
+    expect(BigInt(wallet.currentBalanceMicros)).toBe(leaderboard.rows[0]?.scoreMicros);
+  });
+
   it('calculates lifetime production from backend-generatedAt', async () => {
     const prisma = {
       backendPlanet: {
@@ -101,7 +166,7 @@ describe('backend Planet mining snapshots', () => {
       currentBalanceMicros: '2000000',
       effectiveMineralsPerDayMicros: '1000000',
       ownedPlanetCount: 1,
-      upgradesEnabled: true,
+      upgradesEnabled: false,
     });
     expect(snapshot).not.toHaveProperty('earnedMicros');
     expect(snapshot.planets[0]).toMatchObject({

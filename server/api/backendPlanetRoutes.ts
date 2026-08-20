@@ -15,7 +15,6 @@ import { getBackendWalletMiningSnapshot } from './miningStore.js';
 import { findTicketFromReceipt, parseReceiptReference, type ReceiptReference } from './receiptVerification.js';
 import { saveMegasteraProof } from './prismaTicketPurchase.js';
 import { reportBackendError } from './errorDiagnostics.js';
-import { purchasePlanetUpgrade } from './mineralAccounts.js';
 import type { PrismaClient } from './generated/prisma/client.js';
 
 export type BackendPlanetReference = ReceiptReference;
@@ -250,32 +249,8 @@ export function createBackendPlanetRoutes(
     if (typeof targetLevel !== 'number' || !Number.isInteger(targetLevel) || targetLevel < 1 || targetLevel > 3) {
       return c.json({ error: 'targetLevel must be an integer between 1 and 3.' }, 400);
     }
-    const config = dependencies.loadConfig();
-    if (!config.mineralUpgradesEnabled || !config.mineralEconomyCutoverAt) {
-      return c.json({ error: 'Planet upgrades are disabled.' }, 404);
-    }
-    try {
-      const upgrade = await purchasePlanetUpgrade(
-        (dependencies.getPrisma ?? ((value) => getPrismaClient(value.databaseUrl)))(config),
-        {
-          planetId: parsedPlanetId.data,
-          targetLevel,
-          cutoverAt: config.mineralEconomyCutoverAt,
-        },
-      );
-      return c.json({ upgrade }, 200);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '';
-      if (message === 'Planet not found.') return c.json({ error: message }, 404);
-      if (/disabled|Insufficient|next Planet level|not ready|backwards|positive/.test(message)) {
-        return c.json({ error: message }, 409);
-      }
-      return c.json(
-        { error: 'Planet upgrade failed.' },
-        422,
-        reportBackendError('POST /api/planets/:planetId/upgrade', error),
-      );
-    }
+    // ponytail: public upgrades stay off until requests are authenticated to the Planet owner.
+    return c.json({ error: 'Planet upgrades are disabled.' }, 404);
   });
 
   app.get('/planets/:planetId', async (c) => {

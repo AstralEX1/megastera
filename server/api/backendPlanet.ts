@@ -10,9 +10,10 @@ import type { PrismaClient } from './generated/prisma/client.js';
 import { BASE_JACKPOT, normalizeMegasteraProof, type MegasteraProof } from './eligibility.js';
 import { BASE_CHAIN_ID as CONFIGURED_CHAIN_ID, MEGASTERA_SOURCE } from './config.js';
 import {
+  acquireMineralEconomySharedBarrier,
   ensureAndLockMineralAccount,
-  ensureMineralEconomyCutover,
   getPostgresClockTimestamp,
+  resolveMineralEconomyCutover,
   settleMineralAccount,
   type MineralSettlementPlanet,
   type MineralSettlementPurchase,
@@ -146,6 +147,14 @@ function planetPersistenceData(
     baseMineralsPerDay: BigInt(draft.baseMineralsPerDay),
     generatedAt,
     status: 'READY' as const,
+    gifData: Buffer.from(draft.gifData),
+    gifHash: draft.gifHash.toLowerCase(),
+    generationError: null,
+  };
+}
+
+function planetMediaRepairData(draft: BackendPlanetDraft) {
+  return {
     gifData: Buffer.from(draft.gifData),
     gifHash: draft.gifHash.toLowerCase(),
     generationError: null,
@@ -306,11 +315,17 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
     });
     if (existing?.status === 'READY' && existing.gifData) return serializeRecord(existing as PrismaBackendPlanetRow);
     const draft = deriveBackendPlanet(normalized, this.now());
-    if (this.mineralEconomyCutoverAt) {
-      return this.generatePostCutoverPlanet(ticket, draft);
+    const economy = await resolveMineralEconomyCutover(
+      this.prisma,
+      this.mineralEconomyCutoverAt,
+    );
+    if (economy.cutoverAt) {
+      return this.generatePostCutoverPlanet(ticket, draft, economy.cutoverAt);
     }
     const candidateAt = existing?.status === 'READY' ? existing.generatedAt : new Date(draft.generatedAt);
-    const data = planetPersistenceData(ticket.id, draft, candidateAt);
+    const data = existing?.status === 'READY'
+      ? planetMediaRepairData(draft)
+      : planetPersistenceData(ticket.id, draft, candidateAt);
     try {
       const row = existing
         ? await this.prisma.backendPlanet.update({
@@ -319,7 +334,7 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
             include: { ticketPurchase: true },
           })
         : await this.prisma.backendPlanet.create({
-            data,
+            data: data as never,
             include: { ticketPurchase: true },
           });
       return serializeRecord(row as PrismaBackendPlanetRow);
@@ -340,20 +355,54 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
   private async generatePostCutoverPlanet(
     ticket: PersistedTicketRow & { id: string },
     draft: BackendPlanetDraft,
+    cutoverAt: Date,
   ): Promise<BackendPlanetRecord> {
-    const cutoverAt = this.mineralEconomyCutoverAt;
-    if (!cutoverAt) throw new Error('Mineral economy cutover is missing.');
     try {
       const row = await this.prisma.$transaction(async (transaction) => {
-        await ensureMineralEconomyCutover(transaction, cutoverAt);
-        const account = await ensureAndLockMineralAccount(transaction, draft.ownerAddress, cutoverAt);
+        await acquireMineralEconomySharedBarrier(transaction);
+        const economy = await resolveMineralEconomyCutover(transaction, cutoverAt);
+        if (!economy.cutoverAt) throw new Error('Mineral economy cutover is missing.');
+        const effectiveAt = await getPostgresClockTimestamp(transaction);
         const current = await transaction.backendPlanet.findUnique({
           where: { ticketPurchaseId: ticket.id },
           include: { ticketPurchase: true },
         });
         if (current?.status === 'READY' && current.gifData) return current as PrismaBackendPlanetRow;
-        const effectiveAt = await getPostgresClockTimestamp(transaction);
-        if (effectiveAt < cutoverAt) throw new PreCutoverGeneration(effectiveAt);
+        if (effectiveAt < cutoverAt) {
+          const canPersist = current
+            ? typeof transaction.backendPlanet.update === 'function'
+            : typeof transaction.backendPlanet.create === 'function';
+          if (!canPersist) throw new PreCutoverGeneration(effectiveAt);
+          const data = current?.status === 'READY'
+            ? planetMediaRepairData(draft)
+            : planetPersistenceData(ticket.id, draft, effectiveAt);
+          const persisted = current
+            ? await transaction.backendPlanet.update({
+                where: { id: current.id },
+                data,
+                include: { ticketPurchase: true },
+              })
+            : await transaction.backendPlanet.create({
+                data: data as never,
+                include: { ticketPurchase: true },
+              });
+          return persisted as PrismaBackendPlanetRow;
+        }
+        const account = await ensureAndLockMineralAccount(transaction, draft.ownerAddress, cutoverAt);
+        const currentAfterAccount = await transaction.backendPlanet.findUnique({
+          where: { ticketPurchaseId: ticket.id },
+          include: { ticketPurchase: true },
+        });
+        if (currentAfterAccount?.status === 'READY' && currentAfterAccount.gifData)
+          return currentAfterAccount as PrismaBackendPlanetRow;
+        if (currentAfterAccount?.status === 'READY') {
+          const repaired = await transaction.backendPlanet.update({
+            where: { id: currentAfterAccount.id },
+            data: planetMediaRepairData(draft),
+            include: { ticketPurchase: true },
+          });
+          return repaired as PrismaBackendPlanetRow;
+        }
         const planets = (await transaction.backendPlanet.findMany({
           where: { ownerAddress: draft.ownerAddress.toLowerCase(), status: 'READY' },
           select: {
@@ -379,16 +428,16 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
           settledAt: effectiveAt,
           anchor: cutoverAt,
         });
-        const generatedAt = current?.status === 'READY' ? current.generatedAt : effectiveAt;
+        const generatedAt = effectiveAt;
         const data = planetPersistenceData(ticket.id, draft, generatedAt);
-        const persisted = current
+        const persisted = currentAfterAccount
           ? await transaction.backendPlanet.update({
-              where: { id: current.id },
+              where: { id: currentAfterAccount.id },
               data,
               include: { ticketPurchase: true },
             })
           : await transaction.backendPlanet.create({
-              data,
+              data: data as never,
               include: { ticketPurchase: true },
             });
         return persisted as PrismaBackendPlanetRow;
@@ -413,7 +462,9 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
         return serializeRecord(current as PrismaBackendPlanetRow);
       }
       const generatedAt = current?.status === 'READY' ? current.generatedAt : error.effectiveAt;
-      const data = planetPersistenceData(ticket.id, draft, generatedAt);
+      const data = current?.status === 'READY'
+        ? planetMediaRepairData(draft)
+        : planetPersistenceData(ticket.id, draft, generatedAt);
       try {
         if (current) {
           const updated = await this.prisma.backendPlanet.updateMany({
@@ -435,7 +486,7 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
           return serializeRecord(row as PrismaBackendPlanetRow);
         }
         const row = await this.prisma.backendPlanet.create({
-          data,
+          data: data as never,
           include: { ticketPurchase: true },
         });
         return serializeRecord(row as PrismaBackendPlanetRow);

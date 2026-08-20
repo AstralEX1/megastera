@@ -11,7 +11,11 @@ import {
   type MineralCollectionPlanet,
   type MineralUpgradePurchase,
 } from './mineralEconomy.js';
-import { calculateV1WalletOpeningBalance } from './mineralAccounts.js';
+import {
+  calculateV1WalletOpeningBalance,
+  getPostgresClockTimestamp,
+  resolveMineralEconomyCutover,
+} from './mineralAccounts.js';
 import { getNextMineralUpgrade } from './mineralUpgrades.js';
 
 type BackendMiningPlanetRow = CollectionMiningPlanet;
@@ -27,16 +31,30 @@ export async function getBackendWalletMiningSnapshot(
   now: Date,
   options: WalletMiningEconomyOptions = {},
 ) {
-  const cutoverAt = options.mineralEconomyCutoverAt;
-  if (!cutoverAt || now < cutoverAt) return getV1WalletMiningSnapshot(prisma, ownerAddress, now);
-  if (!Number.isFinite(cutoverAt.getTime())) throw new Error('Mineral economy cutover timestamp is invalid.');
+  const resolution = await resolveMineralEconomyCutover(
+    prisma,
+    options.mineralEconomyCutoverAt,
+  );
+  const cutoverAt = resolution.cutoverAt;
+  if (!cutoverAt) return getV1WalletMiningSnapshot(prisma, ownerAddress, now);
 
   return prisma.$transaction(
     async (transaction) => {
+      const hasPostgresClock = typeof transaction.$queryRaw === 'function';
+      let asOf = hasPostgresClock ? await getPostgresClockTimestamp(transaction) : now;
       const account = await transaction.mineralAccount.findUnique({
         where: { ownerAddress: ownerAddress.toLowerCase() },
       });
-      const asOf = account?.lastSettledAt && account.lastSettledAt > now ? account.lastSettledAt : now;
+      if (!hasPostgresClock && account?.lastSettledAt && account.lastSettledAt > asOf) {
+        asOf = account.lastSettledAt;
+      }
+      if (asOf < cutoverAt) {
+        return getV1WalletMiningSnapshot(
+          transaction as unknown as PrismaClient,
+          ownerAddress,
+          asOf,
+        );
+      }
       const planets = await transaction.backendPlanet.findMany({
         where: { ownerAddress: ownerAddress.toLowerCase(), status: 'READY', generatedAt: { lte: asOf } },
         select: {
@@ -160,7 +178,8 @@ export async function getBackendWalletMiningSnapshot(
         ownedPlanetCount: snapshots.length,
         currentBalanceMicros: currentBalanceMicros.toString(),
         effectiveMineralsPerDayMicros: effectiveMineralsPerDayMicros.toString(),
-        upgradesEnabled: options.mineralUpgradesEnabled === true,
+        // ponytail: expose upgrades only after the public route gains owner-bound authentication.
+        upgradesEnabled: false,
         planets: snapshots,
       };
     },

@@ -96,8 +96,10 @@ describe('PrismaBackendPlanetStore', () => {
 
     expect(repaired.generatedAt).toBe(generatedAt.toISOString());
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ generatedAt }),
+      data: { gifData: expect.anything(), gifHash: expect.anything(), generationError: null },
     }));
+    expect(update.mock.calls[0]?.[0].data).not.toHaveProperty('generatedAt');
+    expect(update.mock.calls[0]?.[0].data).not.toHaveProperty('planetName');
   });
 
   it('reloads a row that became READY before the pre-cutover fallback', async () => {

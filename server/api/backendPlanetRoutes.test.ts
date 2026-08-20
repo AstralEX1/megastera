@@ -139,10 +139,8 @@ describe('backend Planet routes', () => {
     expect(getPrisma).not.toHaveBeenCalled();
   });
 
-  it('does not use the application clock to decide whether cutover has started', async () => {
-    const getPrisma = vi.fn(() => {
-      throw new Error('database clock is authoritative');
-    });
+  it('keeps the unauthenticated upgrade route server-disabled even when configured', async () => {
+    const getPrisma = vi.fn();
     const app = new Hono();
     app.route('/api', createBackendPlanetRoutes({
       ...makeAppDependencies(),
@@ -161,7 +159,7 @@ describe('backend Planet routes', () => {
       body: JSON.stringify({ targetLevel: 1 }),
     });
 
-    expect(response.status).toBe(422);
-    expect(getPrisma).toHaveBeenCalledOnce();
+    expect(response.status).toBe(404);
+    expect(getPrisma).not.toHaveBeenCalled();
   });
 });

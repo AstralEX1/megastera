@@ -58,3 +58,52 @@ jobs:
 
       - name: Build production bundle
         run: pnpm build
+
+  postgres:
+    name: PostgreSQL economy concurrency
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: megaplanets
+          POSTGRES_PASSWORD: megaplanets
+          POSTGRES_DB: megaplanets
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U megaplanets -d megaplanets"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://megaplanets:megaplanets@127.0.0.1:5432/megaplanets
+      DIRECT_URL: postgresql://megaplanets:megaplanets@127.0.0.1:5432/megaplanets
+      MINERAL_ECONOMY_TEST_DATABASE_URL: postgresql://megaplanets:megaplanets@127.0.0.1:5432/megaplanets
+      MINERAL_ECONOMY_REQUIRE_POSTGRES: '1'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Apply full Prisma migration chain
+        run: pnpm db:migrate:deploy
+
+      - name: Run real PostgreSQL concurrency suite
+        run: pnpm test:postgres
