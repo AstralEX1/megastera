@@ -10,6 +10,31 @@ import {
 const ANCHOR = new Date('2026-08-10T00:00:00.000Z');
 
 describe('Minerals Economy v2 temporal calculations', () => {
+  it('requires one explicit anchor for every settlement calculation', () => {
+    expect(() =>
+      calculateProductionSegments({
+        rateMicrosPerDay: 1n,
+        segments: [{ from: ANCHOR, to: new Date('2026-08-11T00:00:00.000Z') }],
+      } as unknown as Parameters<typeof calculateProductionSegments>[0]),
+    ).toThrow('Production anchor is required');
+
+    const planet: MineralCollectionPlanet = {
+      id: 'anchored',
+      ownerAddress: '0xabc',
+      planetType: 'Gaia',
+      baseMineralsPerDay: 1n,
+      activatedAt: ANCHOR,
+    };
+    expect(() =>
+      calculateCollectionProduction({
+        planet,
+        planets: [planet],
+        from: ANCHOR,
+        to: new Date('2026-08-11T00:00:00.000Z'),
+      } as unknown as Parameters<typeof calculateCollectionProduction>[0]),
+    ).toThrow('Production anchor is required');
+  });
+
   it('uses one anchored floor so splitting a constant segment is exact', () => {
     const from = new Date('2026-08-10T00:00:00.001Z');
     const split = new Date('2026-08-10T12:00:00.001Z');
@@ -22,6 +47,7 @@ describe('Minerals Economy v2 temporal calculations', () => {
     });
     const parts = calculateProductionSegments({
       rateMicrosPerDay: 101n,
+      anchor: ANCHOR,
       segments: [
         { from, to: split },
         { from: split, to },
@@ -29,6 +55,27 @@ describe('Minerals Economy v2 temporal calculations', () => {
     });
 
     expect(parts).toBe(whole);
+  });
+
+  it('keeps split collection settlement exact with a fixed anchor and a remainder', () => {
+    const anchor = new Date('2026-08-01T00:00:00.000Z');
+    const from = new Date('2026-08-01T00:00:00.001Z');
+    const split = new Date('2026-08-01T12:34:56.789Z');
+    const to = new Date('2026-08-02T00:00:00.001Z');
+    const planet: MineralCollectionPlanet = {
+      id: 'split',
+      ownerAddress: '0xabc',
+      planetType: 'Gaia',
+      baseMineralsPerDay: 1n,
+      activatedAt: anchor,
+    };
+    const input = { planet, planets: [planet], anchor };
+    const whole = calculateCollectionProduction({ ...input, from, to });
+    const first = calculateCollectionProduction({ ...input, from, to: split });
+    const second = calculateCollectionProduction({ ...input, from: split, to });
+
+    expect(whole).toBe(1_000_000n);
+    expect(first + second).toBe(whole);
   });
 
   it('keeps an event at the end of a half-open interval out of that interval', () => {

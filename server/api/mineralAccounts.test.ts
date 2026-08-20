@@ -91,4 +91,53 @@ describe('MineralAccount initialization', () => {
     });
     expect(createMany).not.toHaveBeenCalled();
   });
+
+  it('does not reset an existing account on a second initialization', async () => {
+    const findMany = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          id: 'one',
+          ownerAddress: OWNER,
+          planetType: 'Gaia',
+          baseMineralsPerDay: 1n,
+          generatedAt: new Date('2026-08-19T00:00:00.000Z'),
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'one',
+          ownerAddress: OWNER,
+          planetType: 'Gaia',
+          baseMineralsPerDay: 100n,
+          generatedAt: new Date('2026-08-19T00:00:00.000Z'),
+        },
+      ]);
+    const persisted = new Map<string, Record<string, unknown>>();
+    const createMany = vi
+      .fn()
+      .mockImplementation(({ data }: { data: Record<string, unknown>[] }) => {
+        let count = 0;
+        for (const row of data) {
+          const ownerAddress = String(row.ownerAddress);
+          if (persisted.has(ownerAddress)) continue;
+          persisted.set(ownerAddress, { ...row });
+          count += 1;
+        }
+        return { count };
+      });
+    const prisma = {
+      backendPlanet: { findMany },
+      mineralAccount: { createMany },
+    } as unknown as PrismaClient;
+
+    await initializeMineralAccounts(prisma, CUTOVER);
+    const second = await initializeMineralAccounts(prisma, CUTOVER);
+
+    expect(second.createdCount).toBe(0);
+    expect(persisted.get(OWNER)).toMatchObject({
+      openingBalanceMicros: 1_000_000n,
+      balanceMicros: 1_000_000n,
+    });
+  });
 });

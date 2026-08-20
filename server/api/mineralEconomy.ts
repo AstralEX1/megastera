@@ -44,13 +44,14 @@ export function calculateConstantRateSegment(input: {
   rateMicrosPerDay: bigint;
   from: Date;
   to: Date;
-  anchor?: Date;
+  anchor: Date;
 }): bigint {
   assertNonNegative('rateMicrosPerDay', input.rateMicrosPerDay);
   const from = timestamp(input.from, 'Production start');
   const to = timestamp(input.to, 'Production end');
   if (to < from) throw new Error('Production interval cannot end before it starts.');
-  const anchor = timestamp(input.anchor ?? input.from, 'Production anchor');
+  if (!input.anchor) throw new Error('Production anchor is required.');
+  const anchor = timestamp(input.anchor, 'Production anchor');
   if (anchor > from) throw new Error('Production anchor cannot be after the interval start.');
   return (
     (input.rateMicrosPerDay * BigInt(to - anchor)) / MILLISECONDS_PER_DAY -
@@ -62,9 +63,10 @@ export function calculateConstantRateSegment(input: {
 export function calculateProductionSegments(input: {
   rateMicrosPerDay?: bigint;
   segments: readonly MineralProductionSegment[];
-  anchor?: Date;
+  anchor: Date;
 }): bigint {
-  const anchor = input.anchor ?? input.segments[0]?.from;
+  if (!input.anchor) throw new Error('Production anchor is required.');
+  const anchor = input.anchor;
   let total = 0n;
   for (const segment of input.segments) {
     const rateMicrosPerDay = segment.rateMicrosPerDay ?? input.rateMicrosPerDay;
@@ -131,7 +133,7 @@ export function calculateCollectionProduction(input: {
   planets: readonly MineralCollectionPlanet[];
   from: Date;
   to: Date;
-  anchor?: Date;
+  anchor: Date;
 }): bigint {
   const fromMilliseconds = timestamp(input.from, 'Production start');
   const toMilliseconds = timestamp(input.to, 'Production end');
@@ -139,9 +141,10 @@ export function calculateCollectionProduction(input: {
     throw new Error('Production interval cannot end before it starts.');
   }
   const activatedAt = timestamp(activationAt(input.planet), `Planet ${input.planet.id} activation`);
+  if (!input.anchor) throw new Error('Production anchor is required.');
   const startMilliseconds = Math.max(fromMilliseconds, activatedAt);
   if (startMilliseconds >= toMilliseconds) return 0n;
-  const anchor = input.anchor ?? new Date(startMilliseconds);
+  const anchor = input.anchor;
   const group = matchingPlanets(input.planet, input.planets);
   let cursor = new Date(startMilliseconds);
   let activeCount = 0;
