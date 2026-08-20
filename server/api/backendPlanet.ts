@@ -415,16 +415,29 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
       const generatedAt = current?.status === 'READY' ? current.generatedAt : error.effectiveAt;
       const data = planetPersistenceData(ticket.id, draft, generatedAt);
       try {
-        const row = current
-          ? await this.prisma.backendPlanet.update({
-              where: { id: current.id },
-              data,
-              include: { ticketPurchase: true },
-            })
-          : await this.prisma.backendPlanet.create({
-              data,
-              include: { ticketPurchase: true },
-            });
+        if (current) {
+          const updated = await this.prisma.backendPlanet.updateMany({
+            where: {
+              id: current.id,
+              status: current.status === 'READY' ? 'READY' : { not: 'READY' },
+            },
+            data,
+          });
+          const row = await this.prisma.backendPlanet.findUnique({
+            where: { id: current.id },
+            include: { ticketPurchase: true },
+          });
+          if (updated.count === 0) {
+            if (row?.status === 'READY') return serializeRecord(row as PrismaBackendPlanetRow);
+            throw new Error('Backend Planet fallback update lost its row.');
+          }
+          if (!row) throw new Error('Backend Planet fallback update lost its row.');
+          return serializeRecord(row as PrismaBackendPlanetRow);
+        }
+        const row = await this.prisma.backendPlanet.create({
+          data,
+          include: { ticketPurchase: true },
+        });
         return serializeRecord(row as PrismaBackendPlanetRow);
       } catch (error) {
         if (!current && isUniqueConstraintError(error)) {

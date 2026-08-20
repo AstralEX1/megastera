@@ -192,6 +192,102 @@ describe('PrismaBackendPlanetStore', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  it('does not overwrite a row that becomes READY after the fallback read', async () => {
+    const cutoverAt = new Date('2026-08-20T00:00:00.000Z');
+    const effectiveAt = new Date('2026-08-19T00:00:00.000Z');
+    const generatedAt = new Date('2026-08-18T12:00:00.000Z');
+    const persistedTicket = {
+      id: 'ticket-row',
+      ticketId: { toFixed: () => '1' },
+      drawingId: { toFixed: () => '1' },
+      recipient: proof.recipient,
+      bonusBall: proof.bonusBall,
+      normals: proof.normals,
+      originTxHash: proof.originTxHash,
+      logIndex: 0,
+      purchasedAt: new Date('2026-08-18T11:00:00.000Z'),
+    };
+    const failed = {
+      id: 'planet-row',
+      chainId: 8453,
+      ticketId: { toFixed: () => '1' },
+      ownerAddress: proof.recipient,
+      planetName: 'Failed Planet',
+      seed: `0x${'11'.repeat(32)}`,
+      traitsHash: `0x${'22'.repeat(32)}`,
+      generatorVersion: 1,
+      planetType: 'Gaia',
+      terrain: 'Plains',
+      rarity: 'Common',
+      satelliteCount: 0,
+      hasRing: false,
+      baseMineralsPerDay: 1n,
+      generatedAt,
+      status: 'FAILED' as const,
+      gifData: null,
+      gifHash: null,
+      ticketPurchase: persistedTicket,
+    };
+    const ready = {
+      ...failed,
+      planetName: 'Ready Planet',
+      status: 'READY' as const,
+      gifData: Buffer.from('gif'),
+      gifHash: `0x${'33'.repeat(32)}`,
+    };
+    const transaction = {
+      mineralEconomyCutover: {
+        findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt }),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      $queryRaw: vi.fn().mockResolvedValue([{ now: effectiveAt }]),
+      mineralAccount: {
+        findUnique: vi.fn().mockResolvedValue({
+          ownerAddress: proof.recipient.toLowerCase(),
+          balanceMicros: 0n,
+          lastSettledAt: cutoverAt,
+        }),
+        upsert: vi.fn().mockResolvedValue({
+          ownerAddress: proof.recipient.toLowerCase(),
+          balanceMicros: 0n,
+          lastSettledAt: cutoverAt,
+        }),
+      },
+      backendPlanet: { findUnique: vi.fn().mockResolvedValue(failed) },
+    };
+    let outerFindCalls = 0;
+    const update = vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
+      ...failed,
+      ...data,
+      ticketId: failed.ticketId,
+      ticketPurchase: persistedTicket,
+    }));
+    const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+    const prisma = {
+      ticketPurchase: { findUnique: vi.fn().mockResolvedValue(persistedTicket) },
+      backendPlanet: {
+        findUnique: vi.fn().mockImplementation(async () => {
+          outerFindCalls += 1;
+          return outerFindCalls < 3 ? failed : ready;
+        }),
+        update,
+        updateMany,
+      },
+      $transaction: vi.fn(async (callback: (value: typeof transaction) => unknown) => callback(transaction)),
+    } as unknown as PrismaClient;
+    const store = new PrismaBackendPlanetStore(prisma, () => effectiveAt, cutoverAt);
+
+    const result = await store.generatePlanet(proof);
+
+    expect(result.generatedAt).toBe(generatedAt.toISOString());
+    expect(result.gifHash).toBe(ready.gifHash);
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'planet-row', status: { not: 'READY' } },
+    }));
+    expect(update).not.toHaveBeenCalled();
+    expect(prisma.backendPlanet.findUnique).toHaveBeenCalledTimes(3);
+  });
+
   it('returns the row won by a concurrent create instead of overwriting its generation time', async () => {
     const persistedTicket = {
       id: 'ticket-row',
