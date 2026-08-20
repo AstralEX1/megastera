@@ -49,10 +49,17 @@ app.all('/api/megapot/*', async (c) => {
       c.req.method === 'GET' || c.req.method === 'HEAD' ? undefined : await c.req.raw.arrayBuffer(),
   });
 
-  // Forward status + body verbatim — keeps `Retry-After`, error envelopes,
-  // and 4xx semantics intact for the kit's TanStack Query retry helper.
+  // Buffer the upstream response before returning it. Vercel's Web handler can
+  // otherwise close a fetch-owned stream before the function response drains.
+  // Node fetch may also transparently decode the body while retaining the
+  // upstream transport headers, so forwarding those headers can make Vercel
+  // decode the already-decoded bytes a second time and produce an empty body.
   const responseHeaders = new Headers(upstreamResponse.headers);
-  return new Response(upstreamResponse.body, {
+  const responseBody = await upstreamResponse.arrayBuffer();
+  responseHeaders.delete('content-encoding');
+  responseHeaders.delete('content-length');
+  responseHeaders.delete('transfer-encoding');
+  return new Response(responseBody, {
     status: upstreamResponse.status,
     statusText: upstreamResponse.statusText,
     headers: responseHeaders,
