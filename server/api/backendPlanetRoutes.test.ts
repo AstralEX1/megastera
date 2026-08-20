@@ -83,6 +83,20 @@ describe('backend Planet routes', () => {
     expect((await gif.arrayBuffer()).byteLength).toBeGreaterThan(6);
   });
 
+  it('retires the per-Planet mining route', async () => {
+    const getPrisma = vi.fn();
+    const app = new Hono();
+    app.route('/api', createBackendPlanetRoutes({
+      ...makeAppDependencies(),
+      getPrisma,
+    }));
+
+    const response = await app.request('/api/planets/planet-1/mining');
+
+    expect(response.status).toBe(404);
+    expect(getPrisma).not.toHaveBeenCalled();
+  });
+
   it('validates upgrade payloads before touching the database', async () => {
     const getPrisma = vi.fn();
     const app = new Hono();

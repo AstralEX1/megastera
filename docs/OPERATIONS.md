@@ -61,7 +61,7 @@ The start time is the backend generation timestamp. Same-type collection milesto
 
 When `MINERAL_ECONOMY_CUTOVER_AT` is set and the current time is at or after it, the wallet mining route settles `MineralAccount` balance in integer micros from the cutover forward. New Planet generation settles the owner's account before inserting the new Planet. `MINERAL_UPGRADES_ENABLED=true` additionally enables `POST /api/planets/:planetId/upgrade`; level 1/2/3 target bonuses are +10%/+25%/+50%, and purchases are charged from the settled balance inside a transaction with account/Planet locking. Repeating the same `(planetId, targetLevel)` purchase is idempotent. The route derives the account from the persisted Planet owner and currently has no request-wallet signature/authorization check, so it is not a public ownership boundary.
 
-The cutover migration must be applied before setting the environment variable. The current frontend has no upgrade action; the per-Planet mining route and leaderboard remain V1 calculations, so V2 wallet balances/upgrades must not be treated as leaderboard scores.
+The cutover migration must be applied before setting the environment variable. The current frontend has no upgrade action; the leaderboard remains a V1 calculation, so V2 wallet balances/upgrades must not be treated as leaderboard scores.
 
 ### Mineral account backfill
 

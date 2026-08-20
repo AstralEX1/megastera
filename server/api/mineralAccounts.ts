@@ -348,6 +348,13 @@ function serializePurchase(row: {
   };
 }
 
+function serializeUpgradeResult(
+  purchase: Parameters<typeof serializePurchase>[0],
+  currentBalanceMicros: bigint,
+) {
+  return { ...serializePurchase(purchase), currentBalanceMicros: currentBalanceMicros.toString() };
+}
+
 export async function purchasePlanetUpgrade(
   prisma: PrismaClient,
   input: {
@@ -372,7 +379,7 @@ export async function purchasePlanetUpgrade(
     const existing = await transaction.planetUpgradePurchase.findUnique({
       where: { planetId_targetLevel: { planetId: input.planetId, targetLevel: input.targetLevel } },
     });
-    if (existing) return serializePurchase(existing);
+    if (existing) return serializeUpgradeResult(existing, account.balanceMicros);
     if (planet.ownerAddress.toLowerCase() !== ownerAddress) throw new Error('Planet owner changed.');
     if (planet.status !== 'READY') throw new Error('Planet is not ready for upgrades.');
     if (input.targetLevel !== planet.upgradeLevel + 1) {
@@ -432,6 +439,6 @@ export async function purchasePlanetUpgrade(
         purchasedAt,
       },
     });
-    return { ...serializePurchase(purchase), currentBalanceMicros: balanceMicros.toString() };
+    return serializeUpgradeResult(purchase, balanceMicros);
   });
 }

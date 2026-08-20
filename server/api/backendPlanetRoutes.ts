@@ -11,7 +11,7 @@ import {
 } from './backendPlanet.js';
 import type { MegasteraProof } from './eligibility.js';
 import { readBoundedJson } from './http.js';
-import { getBackendPlanetMiningSnapshot, getBackendWalletMiningSnapshot } from './miningStore.js';
+import { getBackendWalletMiningSnapshot } from './miningStore.js';
 import { findTicketFromReceipt, parseReceiptReference, type ReceiptReference } from './receiptVerification.js';
 import { saveMegasteraProof } from './prismaTicketPurchase.js';
 import { reportBackendError } from './errorDiagnostics.js';
@@ -52,15 +52,6 @@ function serializeCollectionRow(row: BackendPlanetCollectionRecord) {
     planet: row.planet ? serializePlanet(row.planet) : null,
     generationError: row.generationError ?? null,
   };
-}
-
-function serializeMining(mining: Awaited<ReturnType<typeof getBackendPlanetMiningSnapshot>>) {
-  return mining
-    ? {
-        ...mining,
-        planetId: mining.planetId,
-      }
-    : undefined;
 }
 
 function defaultDependencies(): BackendPlanetRouteDependencies {
@@ -216,28 +207,6 @@ export function createBackendPlanetRoutes(
         { error: 'The backend Planet API is not configured.' },
         503,
         reportBackendError('GET /api/planets/:planetId/gif', error),
-      );
-    }
-  });
-
-  app.get('/planets/:planetId/mining', async (c) => {
-    const rawPlanetId = c.req.param('planetId');
-    if (isRetiredPlanetPath(rawPlanetId)) return c.json({ error: 'Planet not found.' }, 404);
-    const parsed = planetIdSchema.safeParse(rawPlanetId);
-    if (!parsed.success) return c.json({ error: 'A valid Planet ID is required.' }, 400);
-    try {
-      const config = dependencies.loadConfig();
-      const mining = await getBackendPlanetMiningSnapshot(
-        (dependencies.getPrisma ?? ((value) => getPrismaClient(value.databaseUrl)))(config),
-        parsed.data,
-        dependencies.now(),
-      );
-      return mining ? c.json({ mining: serializeMining(mining) }) : c.json({ error: 'Mining data is not available for this Planet.' }, 404);
-    } catch (error) {
-      return c.json(
-        { error: 'The mining API is not configured.' },
-        503,
-        reportBackendError('GET /api/planets/:planetId/mining', error),
       );
     }
   });

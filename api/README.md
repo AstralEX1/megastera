@@ -11,7 +11,6 @@ The active API verifies finalized Megapot `TicketPurchased` receipt logs, persis
 - `GET /api/planets?owner=...`
 - `GET /api/planets/:planetId`
 - `GET /api/planets/:planetId/gif`
-- `GET /api/planets/:planetId/mining`
 - `GET /api/wallets/:address/mining`
 - `GET /api/leaderboard/current`, `/current/:address`, `/history`, `/days/:periodId`
 

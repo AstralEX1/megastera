@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from './generated/prisma/client.js';
-import { getBackendPlanetMiningSnapshot, getBackendWalletMiningSnapshot } from './miningStore.js';
+import { getBackendWalletMiningSnapshot } from './miningStore.js';
 
 describe('backend Planet mining snapshots', () => {
   it('calculates lifetime production from backend-generatedAt', async () => {
@@ -14,7 +14,7 @@ describe('backend Planet mining snapshots', () => {
     } as unknown as PrismaClient;
     const snapshot = await getBackendWalletMiningSnapshot(prisma, '0x0000000000000000000000000000000000000001', new Date('2026-08-10T00:00:01.000Z'));
     expect(snapshot.ownedPlanetCount).toBe(2);
-    expect(snapshot.earnedMicros).toBe('172803000000');
+    expect((snapshot as { earnedMicros: string }).earnedMicros).toBe('172803000000');
     expect(snapshot).toMatchObject({ currentBalanceMicros: '172803000000', upgradesEnabled: false });
     expect(snapshot.planets[0]?.planetId).toBe('planet-1');
     expect(snapshot.planets[0]).toMatchObject({ planetType: 'Nebula', sameTypeCount: 2, collectionBonusBps: 0 });
@@ -48,24 +48,6 @@ describe('backend Planet mining snapshots', () => {
       ]),
     );
     expect(snapshot.planets.find((planet) => planet.planetId === 'planet-4')).toMatchObject({ sameTypeCount: 1, collectionBonusBps: 0, effectiveMineralsPerDayMicros: '100000000' });
-  });
-
-  it('reads one backend Planet by id with its wallet collection context', async () => {
-    const prisma = {
-      backendPlanet: {
-        findFirst: async () => ({
-          id: 'planet-7', ownerAddress: '0x0000000000000000000000000000000000000002',
-          planetType: 'Gaia', baseMineralsPerDay: 10n, generatedAt: new Date('2026-08-10T00:00:00.000Z'),
-        }),
-        findMany: async () => [
-          { id: 'planet-7', ownerAddress: '0x0000000000000000000000000000000000000002', planetType: 'Gaia', baseMineralsPerDay: 10n, generatedAt: new Date('2026-08-10T00:00:00.000Z') },
-          { id: 'planet-8', ownerAddress: '0x0000000000000000000000000000000000000002', planetType: 'Gaia', baseMineralsPerDay: 10n, generatedAt: new Date('2026-08-11T00:00:00.000Z') },
-          { id: 'planet-9', ownerAddress: '0x0000000000000000000000000000000000000002', planetType: 'Gaia', baseMineralsPerDay: 10n, generatedAt: new Date('2026-08-12T00:00:00.000Z') },
-        ],
-      },
-    } as unknown as PrismaClient;
-    const snapshot = await getBackendPlanetMiningSnapshot(prisma, 'planet-7', new Date('2026-08-13T00:00:00.000Z'));
-    expect(snapshot).toMatchObject({ planetId: 'planet-7', earnedMicros: '30500000', planetType: 'Gaia', sameTypeCount: 3, collectionBonusBps: 500, effectiveMineralsPerDayMicros: '10500000' });
   });
 
   it('reads a virtual post-cutover account without creating or settling it', async () => {
@@ -121,6 +103,7 @@ describe('backend Planet mining snapshots', () => {
       ownedPlanetCount: 1,
       upgradesEnabled: true,
     });
+    expect(snapshot).not.toHaveProperty('earnedMicros');
     expect(snapshot.planets[0]).toMatchObject({
       planetId: 'planet-v2',
       upgradeLevel: 0,

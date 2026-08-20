@@ -309,7 +309,7 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
     if (this.mineralEconomyCutoverAt) {
       return this.generatePostCutoverPlanet(ticket, draft, existing as PrismaBackendPlanetRow | null);
     }
-    const candidateAt = new Date(draft.generatedAt);
+    const candidateAt = existing?.status === 'READY' ? existing.generatedAt : new Date(draft.generatedAt);
     const data = planetPersistenceData(ticket.id, draft, candidateAt);
     try {
       const row = existing
@@ -380,7 +380,8 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
           settledAt: effectiveAt,
           anchor: cutoverAt,
         });
-        const data = planetPersistenceData(ticket.id, draft, effectiveAt);
+        const generatedAt = current?.status === 'READY' ? current.generatedAt : effectiveAt;
+        const data = planetPersistenceData(ticket.id, draft, generatedAt);
         const persisted = current
           ? await transaction.backendPlanet.update({
               where: { id: current.id },
@@ -405,7 +406,8 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
         }
       }
       if (!(error instanceof PreCutoverGeneration)) throw error;
-      const data = planetPersistenceData(ticket.id, draft, error.effectiveAt);
+      const generatedAt = existing?.status === 'READY' ? existing.generatedAt : error.effectiveAt;
+      const data = planetPersistenceData(ticket.id, draft, generatedAt);
       try {
         const row = existing
           ? await this.prisma.backendPlanet.update({

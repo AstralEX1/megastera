@@ -145,13 +145,19 @@ describe('mineral upgrade mutations', () => {
     expect(first.tx.mineralAccount.update).toHaveBeenCalledTimes(2);
     expect(first.tx.planetUpgradePurchase.create).toHaveBeenCalledOnce();
 
-    const retry = makePrisma({ existingPurchase: persisted });
+    const retry = makePrisma({
+      existingPurchase: persisted,
+      account: {
+        balanceMicros: BigInt((result as { currentBalanceMicros: string }).currentBalanceMicros),
+        lastSettledAt: PURCHASED_AT,
+      },
+    });
     const retryResult = await purchasePlanetUpgrade(retry.prisma, {
       planetId: 'planet-1',
       targetLevel: 1,
       cutoverAt: CUTOVER,
     });
-    expect(retryResult).toMatchObject({ targetLevel: 1, costMicros: '200000' });
+    expect(retryResult).toEqual(result);
     expect(retry.tx.mineralAccount.update).not.toHaveBeenCalled();
     expect(retry.tx.backendPlanet.update).not.toHaveBeenCalled();
     expect(retry.tx.planetUpgradePurchase.create).not.toHaveBeenCalled();

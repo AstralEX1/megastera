@@ -21,35 +21,6 @@ export type WalletMiningEconomyOptions = {
   mineralUpgradesEnabled?: boolean;
 };
 
-export async function getBackendPlanetMiningSnapshot(
-  prisma: PrismaClient,
-  planetId: string,
-  now: Date,
-) {
-  const planet = await prisma.backendPlanet.findFirst({
-    where: { id: planetId, status: 'READY' },
-    select: { id: true, ownerAddress: true, planetType: true, baseMineralsPerDay: true, generatedAt: true },
-  });
-  if (!planet) return undefined;
-  const planets = await prisma.backendPlanet.findMany({
-    where: { ownerAddress: planet.ownerAddress, status: 'READY' },
-    select: { id: true, ownerAddress: true, planetType: true, baseMineralsPerDay: true, generatedAt: true },
-  });
-  const calculated = calculateCollectionMining({ planets: planets as BackendMiningPlanetRow[], asOf: now }).get(planet.id);
-  if (!calculated) return undefined;
-  return {
-    planetId: planet.id,
-    ownerAddress: planet.ownerAddress,
-    baseMineralsPerDay: planet.baseMineralsPerDay.toString(),
-    planetType: calculated.planetType,
-    sameTypeCount: calculated.sameTypeCount,
-    collectionBonusBps: calculated.collectionBonusBps,
-    effectiveMineralsPerDayMicros: calculated.effectiveMineralsPerDayMicros.toString(),
-    earnedMicros: calculated.earnedMicros.toString(),
-    activeSince: planet.generatedAt.toISOString(),
-  };
-}
-
 export async function getBackendWalletMiningSnapshot(
   prisma: PrismaClient,
   ownerAddress: string,
@@ -187,7 +158,6 @@ export async function getBackendWalletMiningSnapshot(
         ownerAddress: ownerAddress.toLowerCase(),
         asOf: asOf.toISOString(),
         ownedPlanetCount: snapshots.length,
-        earnedMicros: currentBalanceMicros.toString(),
         currentBalanceMicros: currentBalanceMicros.toString(),
         effectiveMineralsPerDayMicros: effectiveMineralsPerDayMicros.toString(),
         upgradesEnabled: options.mineralUpgradesEnabled === true,

@@ -10,7 +10,7 @@ This document describes the active Megastera architecture on Base mainnet. Histo
 | Ticket eligibility | Finalized receipt containing canonical `MEGASTERA` `TicketPurchased` | `server/api/receiptVerification.ts` |
 | Historical ticket status and winnings | Base mainnet Megapot Data API wallet ticket feed | `src/lib/api.ts` / `useWalletTickets` |
 | Planet identity and media | Shared deterministic generator plus `BackendPlanet` row | API and My Planets |
-| Planet ownership | `BackendPlanet.ownerAddress`, copied from the verified receipt recipient | API list/mining routes |
+| Planet ownership | `BackendPlanet.ownerAddress`, copied from the verified receipt recipient | API list/wallet mining route |
 | Planet mining | `baseMineralsPerDay` and `generatedAt` | `server/api/miningStore.ts` |
 | Leaderboard | Ready `BackendPlanet.generatedAt` + `baseMineralsPerDay` rows | Live read route with an approximately 60-second backend cache |
 
@@ -36,7 +36,7 @@ The source tag is always `MEGASTERA`. It is a Megapot attribution value and does
 
 The Vercel entrypoint `api/index.ts` delegates to `server/api/index.ts`, which mounts only:
 
-- backend Planet generation, collection, GIF, and mining routes;
+- backend Planet generation, collection, GIF, and wallet mining routes;
 - live leaderboard routes; and
 - liveness/metrics routes.
 

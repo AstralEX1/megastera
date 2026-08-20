@@ -46,6 +46,60 @@ describe('PrismaBackendPlanetStore', () => {
     await expect(store.generatePlanet(proof)).rejects.toThrow('conflicts with persisted ticket');
   });
 
+  it('repairs a READY Planet without moving its persisted generation time', async () => {
+    const generatedAt = new Date('2026-08-13T12:00:00.000Z');
+    const persistedTicket = {
+      id: 'ticket-row',
+      ticketId: { toFixed: () => '1' },
+      drawingId: { toFixed: () => '1' },
+      recipient: proof.recipient,
+      bonusBall: proof.bonusBall,
+      normals: proof.normals,
+      originTxHash: proof.originTxHash,
+      logIndex: 0,
+      purchasedAt: new Date('2026-08-13T11:00:00.000Z'),
+    };
+    const existingPlanet = {
+      id: 'planet-row',
+      chainId: 8453,
+      ticketId: { toFixed: () => '1' },
+      ownerAddress: proof.recipient,
+      planetName: 'Existing Planet',
+      seed: `0x${'11'.repeat(32)}`,
+      traitsHash: `0x${'22'.repeat(32)}`,
+      generatorVersion: 1,
+      planetType: 'Gaia',
+      terrain: 'Plains',
+      rarity: 'Common',
+      satelliteCount: 0,
+      hasRing: false,
+      baseMineralsPerDay: 1n,
+      generatedAt,
+      status: 'READY' as const,
+      gifData: null,
+      gifHash: null,
+      ticketPurchase: persistedTicket,
+    };
+    const update = vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
+      ...existingPlanet,
+      ...data,
+      ticketId: existingPlanet.ticketId,
+      ticketPurchase: persistedTicket,
+    }));
+    const prisma = {
+      ticketPurchase: { findUnique: vi.fn().mockResolvedValue(persistedTicket) },
+      backendPlanet: { findUnique: vi.fn().mockResolvedValue(existingPlanet), update },
+    } as unknown as PrismaClient;
+    const store = new PrismaBackendPlanetStore(prisma, () => new Date('2026-08-14T12:00:00.000Z'));
+
+    const repaired = await store.generatePlanet(proof);
+
+    expect(repaired.generatedAt).toBe(generatedAt.toISOString());
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ generatedAt }),
+    }));
+  });
+
   it('returns the row won by a concurrent create instead of overwriting its generation time', async () => {
     const persistedTicket = {
       id: 'ticket-row',
