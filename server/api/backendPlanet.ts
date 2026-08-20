@@ -362,20 +362,20 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
         await acquireMineralEconomySharedBarrier(transaction);
         const economy = await resolveMineralEconomyCutover(transaction, cutoverAt);
         if (!economy.cutoverAt) throw new Error('Mineral economy cutover is missing.');
-        const effectiveAt = await getPostgresClockTimestamp(transaction);
+        const boundaryAt = await getPostgresClockTimestamp(transaction);
         const current = await transaction.backendPlanet.findUnique({
           where: { ticketPurchaseId: ticket.id },
           include: { ticketPurchase: true },
         });
         if (current?.status === 'READY' && current.gifData) return current as PrismaBackendPlanetRow;
-        if (effectiveAt < cutoverAt) {
+        if (boundaryAt < cutoverAt) {
           const canPersist = current
             ? typeof transaction.backendPlanet.update === 'function'
             : typeof transaction.backendPlanet.create === 'function';
-          if (!canPersist) throw new PreCutoverGeneration(effectiveAt);
+          if (!canPersist) throw new PreCutoverGeneration(boundaryAt);
           const data = current?.status === 'READY'
             ? planetMediaRepairData(draft)
-            : planetPersistenceData(ticket.id, draft, effectiveAt);
+            : planetPersistenceData(ticket.id, draft, boundaryAt);
           const persisted = current
             ? await transaction.backendPlanet.update({
                 where: { id: current.id },
@@ -389,6 +389,7 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
           return persisted as PrismaBackendPlanetRow;
         }
         const account = await ensureAndLockMineralAccount(transaction, draft.ownerAddress, cutoverAt);
+        const effectiveAt = await getPostgresClockTimestamp(transaction);
         const currentAfterAccount = await transaction.backendPlanet.findUnique({
           where: { ticketPurchaseId: ticket.id },
           include: { ticketPurchase: true },
