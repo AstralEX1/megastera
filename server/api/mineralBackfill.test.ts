@@ -10,8 +10,8 @@ function makePrisma(dbNow: Date) {
   const transaction = {
     $queryRaw: vi.fn().mockResolvedValue([{ now: dbNow }]),
     mineralEconomyCutover: {
-      findUnique: vi.fn().mockResolvedValue(null),
-      create: vi.fn().mockResolvedValue({ id: 1, cutoverAt: CUTOVER }),
+      findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt: CUTOVER }),
+      createMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     mineralAccount: { createMany },
   };

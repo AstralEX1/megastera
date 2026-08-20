@@ -34,10 +34,6 @@ function assertCutover(cutoverAt: Date): void {
 type MineralEconomyCutoverClient = Pick<Prisma.TransactionClient, 'mineralEconomyCutover'>;
 type PostgresClockClient = Pick<Prisma.TransactionClient, '$queryRaw'>;
 
-function isUniqueConstraintError(error: unknown): boolean {
-  return Boolean(error && typeof error === 'object' && (error as { code?: unknown }).code === 'P2002');
-}
-
 export async function getPostgresClockTimestamp(prisma: PostgresClockClient): Promise<Date> {
   const rows = await prisma.$queryRaw<Array<{ now: Date }>>(
     Prisma.sql`SELECT clock_timestamp()::timestamptz(3) AS "now"`,
@@ -63,24 +59,16 @@ export async function ensureMineralEconomyCutover(
 ) {
   if (!cutoverAt) return null;
   assertCutover(cutoverAt);
-  const existing = await readMineralEconomyCutover(prisma);
-  if (existing) {
-    if (existing.getTime() !== cutoverAt.getTime()) {
-      throw new Error('Configured mineral economy cutover conflicts with the persisted database cutover.');
-    }
-    return { id: 1, cutoverAt: existing };
+  await prisma.mineralEconomyCutover.createMany({
+    data: [{ id: 1, cutoverAt }],
+    skipDuplicates: true,
+  });
+  const persisted = await prisma.mineralEconomyCutover.findUnique({ where: { id: 1 } });
+  if (!persisted) throw new Error('Mineral economy cutover could not be persisted.');
+  if (persisted.cutoverAt.getTime() !== cutoverAt.getTime()) {
+    throw new Error('Configured mineral economy cutover conflicts with the persisted database cutover.');
   }
-  try {
-    return await prisma.mineralEconomyCutover.create({ data: { id: 1, cutoverAt } });
-  } catch (error) {
-    if (!isUniqueConstraintError(error)) throw error;
-    const concurrent = await readMineralEconomyCutover(prisma);
-    if (!concurrent) throw error;
-    if (concurrent.getTime() !== cutoverAt.getTime()) {
-      throw new Error('Configured mineral economy cutover conflicts with the persisted database cutover.');
-    }
-    return { id: 1, cutoverAt: concurrent };
-  }
+  return persisted;
 }
 
 /**
@@ -366,7 +354,6 @@ export async function purchasePlanetUpgrade(
     planetId: string;
     targetLevel: number;
     cutoverAt: Date;
-    now: () => Date;
   },
 ) {
   assertTimestamp(input.cutoverAt, 'Mineral economy cutover');

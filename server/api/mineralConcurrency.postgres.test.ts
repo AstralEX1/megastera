@@ -104,7 +104,6 @@ describePostgres('Mineral upgrade PostgreSQL concurrency', () => {
         planetId: planet.id,
         targetLevel: 1,
         cutoverAt: CUTOVER,
-        now: () => PURCHASED_AT,
       }).then((result) => {
         completed += 1;
         return result;
@@ -113,7 +112,6 @@ describePostgres('Mineral upgrade PostgreSQL concurrency', () => {
         planetId: planet.id,
         targetLevel: 1,
         cutoverAt: CUTOVER,
-        now: () => PURCHASED_AT,
       }).then((result) => {
         completed += 1;
         return result;

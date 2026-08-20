@@ -148,7 +148,7 @@ describe('PrismaBackendPlanetStore', () => {
     const transaction = {
       mineralEconomyCutover: {
         findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt }),
-        create: vi.fn().mockResolvedValue({ id: 1, cutoverAt }),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
       $queryRaw: vi.fn().mockResolvedValue([{ now: draftAt }]),
       mineralAccount: {
@@ -245,7 +245,7 @@ describe('PrismaBackendPlanetStore', () => {
     const transaction = {
       mineralEconomyCutover: {
         findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt }),
-        create: vi.fn().mockResolvedValue({ id: 1, cutoverAt }),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
       $queryRaw: vi.fn().mockResolvedValue([{ now: effectiveAt }]),
       mineralAccount: {
@@ -331,7 +331,7 @@ describe('PrismaBackendPlanetStore', () => {
     const transaction = {
       mineralEconomyCutover: {
         findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt }),
-        create: vi.fn().mockResolvedValue({ id: 1, cutoverAt }),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
       $queryRaw: vi.fn().mockResolvedValue([{ now: effectiveAt }]),
       mineralAccount: {

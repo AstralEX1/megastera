@@ -43,7 +43,7 @@ function makePrisma(overrides: {
       .mockResolvedValueOnce([{ now: clockAt }]),
     mineralEconomyCutover: {
       findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt: CUTOVER }),
-      create: vi.fn().mockResolvedValue({ id: 1, cutoverAt: CUTOVER }),
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     mineralAccount: {
       findUnique: vi.fn().mockResolvedValue(account),
@@ -122,7 +122,6 @@ describe('mineral upgrade mutations', () => {
         planetId: 'planet-1',
         targetLevel: 1,
         cutoverAt: CUTOVER,
-        now: () => CUTOVER,
       }),
     ).rejects.toThrow('Insufficient mineral balance');
 
@@ -135,17 +134,14 @@ describe('mineral upgrade mutations', () => {
 
   it('returns an existing purchase on retry without debiting again', async () => {
     const first = makePrisma();
-    const appClock = vi.fn(() => new Date('2099-01-01T00:00:00.000Z'));
     const result = await purchasePlanetUpgrade(first.prisma, {
       planetId: 'planet-1',
       targetLevel: 1,
       cutoverAt: CUTOVER,
-      now: appClock,
     });
     const persisted = first.tx.planetUpgradePurchase.create.mock.results[0]?.value;
     expect(result).toMatchObject({ targetLevel: 1, costMicros: '200000' });
     expect(persisted.purchasedAt).toBe(PURCHASED_AT);
-    expect(appClock).not.toHaveBeenCalled();
     expect(first.tx.mineralAccount.update).toHaveBeenCalledTimes(2);
     expect(first.tx.planetUpgradePurchase.create).toHaveBeenCalledOnce();
 
@@ -154,7 +150,6 @@ describe('mineral upgrade mutations', () => {
       planetId: 'planet-1',
       targetLevel: 1,
       cutoverAt: CUTOVER,
-      now: () => new Date('2026-08-21T00:00:01.000Z'),
     });
     expect(retryResult).toMatchObject({ targetLevel: 1, costMicros: '200000' });
     expect(retry.tx.mineralAccount.update).not.toHaveBeenCalled();

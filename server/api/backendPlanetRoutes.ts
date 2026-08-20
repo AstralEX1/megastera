@@ -282,8 +282,7 @@ export function createBackendPlanetRoutes(
       return c.json({ error: 'targetLevel must be an integer between 1 and 3.' }, 400);
     }
     const config = dependencies.loadConfig();
-    const now = dependencies.now();
-    if (!config.mineralUpgradesEnabled || !config.mineralEconomyCutoverAt || now < config.mineralEconomyCutoverAt) {
+    if (!config.mineralUpgradesEnabled || !config.mineralEconomyCutoverAt) {
       return c.json({ error: 'Planet upgrades are disabled.' }, 404);
     }
     try {
@@ -293,7 +292,6 @@ export function createBackendPlanetRoutes(
           planetId: parsedPlanetId.data,
           targetLevel,
           cutoverAt: config.mineralEconomyCutoverAt,
-          now: dependencies.now,
         },
       );
       return c.json({ upgrade }, 200);
