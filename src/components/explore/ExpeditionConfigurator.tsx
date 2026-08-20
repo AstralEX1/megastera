@@ -24,6 +24,7 @@ export function ExpeditionConfigurator({
   tickets,
   disabled,
   exploreLabel,
+  purchaseError,
   approvalSpender,
   approvalAmount,
   onApproved,
@@ -40,6 +41,7 @@ export function ExpeditionConfigurator({
   tickets: readonly CustomTicket[];
   disabled: boolean;
   exploreLabel?: ReactNode;
+  purchaseError?: Error | null;
   approvalSpender?: `0x${string}`;
   approvalAmount?: bigint;
   onApproved?: () => void;
@@ -137,6 +139,14 @@ export function ExpeditionConfigurator({
                     onClick={onExplore}
                   />
                 )}
+                {purchaseError ? (
+                  <p
+                    role="alert"
+                    className="mt-3 text-center text-sm text-rose-600 dark:text-rose-400"
+                  >
+                    Ticket purchase failed. Please try again.
+                  </p>
+                ) : null}
               </div>
             </div>
           </div>

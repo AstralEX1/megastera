@@ -143,6 +143,18 @@ describe('Play backend generation flow', () => {
     expect(draft.customTickets).toHaveLength(3);
   });
 
+  it('keeps the Play configurator visible while ticket purchase is pending', async () => {
+    mocks.buy.mockImplementation(() => new Promise<void>(() => {}));
+    const user = userEvent.setup();
+    render(<Play />);
+
+    await user.click(screen.getByRole('button', { name: /^Explore 3/ }));
+
+    expect(screen.getByRole('heading', { name: 'Win up to $0' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Transaction…' })).toBeDisabled();
+    expect(screen.queryByText('Confirming your tickets…')).not.toBeInTheDocument();
+  });
+
   it('populates concrete Coordinates rows while the disclosure is closed', async () => {
     render(<Play />);
 

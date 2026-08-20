@@ -4,8 +4,8 @@
  * @customize  Generic USDC approve flow. Pass any `spender` so one wrapper
  *             works across Jackpot / BatchPurchaseFacilitator /
  *             JackpotAutoSubscription / JackpotLPManager. The gate compares
- *             allowance with the exact next purchase, and approves only that
- *             amount so unused USDC is not left authorized.
+ *             allowance with the next purchase, then creates a reusable
+ *             allowance for that spender.
  *
  *             Children-passthrough pattern. Wrap the downstream submit
  *             button inside `<ApprovalButton>`; when allowance is
@@ -19,17 +19,15 @@
  *             Children show through whenever:
  *               - wallet is disconnected
  *               - amount is 0n (nothing to approve yet)
- *               - allowance query is still loading
- *               - allowance is already ≥ amount
+ *               - allowance is resolved and already ≥ amount
  *
- *             so the submit CTA stays visible (and the parent can keep it
- *             disabled via its own guard) in every state except the brief
- *             "approval required" gate.
+ *             While the allowance is unresolved, the CTA is disabled until
+ *             the current on-chain value is known.
  * ---
  */
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { erc20Abi } from 'viem';
+import { erc20Abi, maxUint256 } from 'viem';
 import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
 import { USDC_ADDRESS } from '@/config/contracts';
 import { useUsdcAllowance } from '@/hooks/useUsdcAllowance';
@@ -94,14 +92,6 @@ export function ApprovalButton({
   }, [approvalKey, isSuccess, txHash, refetch, onApproved, reset]);
 
   const requiresAllowance = !!address && amount > 0n;
-  if (requiresAllowance && isAllowanceLoading) {
-    return (
-      <Button variant="secondary" size="md" disabled className="w-full">
-        Checking USDC approval…
-      </Button>
-    );
-  }
-
   if (requiresAllowance && allowanceError) {
     return (
       <div className="space-y-1">
@@ -112,6 +102,14 @@ export function ApprovalButton({
           Retry after your RPC connection recovers.
         </p>
       </div>
+    );
+  }
+
+  if (requiresAllowance && (isAllowanceLoading || allowance === undefined)) {
+    return (
+      <Button variant="secondary" size="md" disabled className="w-full">
+        Checking USDC approval…
+      </Button>
     );
   }
 
@@ -138,7 +136,7 @@ export function ApprovalButton({
       address: USDC_ADDRESS,
       abi: erc20Abi,
       functionName: 'approve',
-      args: [spender, amount],
+      args: [spender, maxUint256],
     });
 
   const busy = isPending || isLoading || isRefreshingAllowance;

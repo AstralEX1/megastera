@@ -2,6 +2,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { maxUint256 } from 'viem';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApprovalButton } from './ApprovalButton';
 
@@ -71,7 +72,19 @@ describe('ApprovalButton', () => {
     expect(screen.queryByRole('button', { name: /approve/i })).not.toBeInTheDocument();
   });
 
-  it('approves exactly the current purchase amount when allowance is insufficient', async () => {
+  it('does not expose the purchase action until the allowance has been read', () => {
+    state.allowance = undefined;
+    render(
+      <ApprovalButton spender={spender} amount={1_000_000n}>
+        <button type="button">Explore</button>
+      </ApprovalButton>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Checking USDC approval…' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Explore' })).not.toBeInTheDocument();
+  });
+
+  it('approves a reusable allowance when the current allowance is insufficient', async () => {
     const user = userEvent.setup();
     render(
       <ApprovalButton spender={spender} amount={1_000_000n}>
@@ -84,7 +97,7 @@ describe('ApprovalButton', () => {
     expect(state.writeContract).toHaveBeenCalledWith(
       expect.objectContaining({
         functionName: 'approve',
-        args: [spender, 1_000_000n],
+        args: [spender, maxUint256],
       }),
     );
   });

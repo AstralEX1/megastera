@@ -166,6 +166,7 @@ export function Play() {
   };
 
   const purchaseConfirmed = purchasedTickets.length > 0;
+  const purchaseFailed = flowActive && Boolean(purchase.error);
   const expectedCount = count;
   const ready = generatedPlanets.length >= expectedCount;
   const progress = `${Math.min(generatedPlanets.length, expectedCount)} / ${expectedCount} planets generated`;
@@ -179,8 +180,9 @@ export function Play() {
       onRetryJackpot={refetchJackpot}
       bounds={bounds}
       tickets={configuredTickets}
-      disabled={flowActive ? true : checkoutDisabled}
-      exploreLabel={flowActive ? 'Generating planets…' : undefined}
+      disabled={purchaseFailed ? false : flowActive ? true : checkoutDisabled}
+      exploreLabel={purchaseFailed ? 'Try again' : flowActive ? 'Transaction…' : undefined}
+      purchaseError={purchaseFailed ? purchase.error : null}
       approvalSpender={approvalSpender}
       approvalAmount={approvalAmount}
       onApproved={refetchJackpot}
@@ -196,21 +198,7 @@ export function Play() {
     />
   );
 
-  if (flowActive && purchase.error) {
-    content = (
-      <ExpeditionStatusScreen
-        step="configure"
-        eyebrow="PURCHASE FAILED"
-        title="The ticket purchase can be retried"
-        description={purchase.error.message}
-        action={
-          <Button variant="primary" onClick={exploreAgain}>
-            Try again
-          </Button>
-        }
-      />
-    );
-  } else if (flowActive && ready) {
+  if (flowActive && ready) {
     content = (
       <RevealCompleteScreen
         drawingId={drawingId}
@@ -268,15 +256,6 @@ export function Play() {
         title="Exploring planets…"
         description="Your ticket receipt is confirmed. We are waiting for finality, generating the Planet, and saving it to the Megastera backend."
         progress={progress}
-      />
-    );
-  } else if (flowActive) {
-    content = (
-      <ExpeditionStatusScreen
-        step="configure"
-        eyebrow="BUYING TICKETS"
-        title="Confirming your tickets…"
-        description="Approve the purchase in your wallet and wait for the receipt. Your Planet generation starts automatically after confirmation."
       />
     );
   }

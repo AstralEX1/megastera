@@ -22,7 +22,10 @@ export function useUsdcAllowance(
     abi: erc20Abi,
     functionName: 'allowance',
     args: user && spender ? [user, spender] : undefined,
-    query: { enabled: !!user && !!spender },
+    query: {
+      enabled: !!user && !!spender,
+      refetchOnMount: 'always',
+    },
   });
 
   return {
