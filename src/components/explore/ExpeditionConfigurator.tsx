@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { formatUnits } from 'viem';
 import { ApprovalButton } from '@/components/common/ApprovalButton';
 import { DepthText } from '@/components/common/DepthText';
@@ -21,15 +21,13 @@ export function ExpeditionConfigurator({
   jackpotStatus = 'ready',
   onRetryJackpot,
   bounds,
-  manuallyEditedTickets,
-  automaticQuickPick,
+  tickets,
   disabled,
   exploreLabel,
   approvalSpender,
   approvalAmount,
   onApproved,
   onQuantityChange,
-  onAutomaticQuickPickChange,
   onTicketsChange,
   onExplore,
 }: {
@@ -39,15 +37,13 @@ export function ExpeditionConfigurator({
   jackpotStatus?: JackpotStatus;
   onRetryJackpot?: () => void;
   bounds: TicketBounds | null;
-  manuallyEditedTickets: readonly CustomTicket[];
-  automaticQuickPick: boolean;
+  tickets: readonly CustomTicket[];
   disabled: boolean;
   exploreLabel?: ReactNode;
   approvalSpender?: `0x${string}`;
   approvalAmount?: bigint;
   onApproved?: () => void;
   onQuantityChange: (value: number) => void;
-  onAutomaticQuickPickChange: (value: boolean) => void;
   onTicketsChange: (tickets: readonly CustomTicket[]) => void;
   onExplore: () => void;
 }) {
@@ -97,10 +93,17 @@ export function ExpeditionConfigurator({
                 )}
               </h1>
               {jackpotStatus === 'error' ? (
-                <div role="alert" className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-[var(--text-secondary)]">
+                <div
+                  role="alert"
+                  className="mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-[var(--text-secondary)]"
+                >
                   <span>Drawing data unavailable.</span>
                   {onRetryJackpot ? (
-                    <button type="button" onClick={onRetryJackpot} className="font-semibold text-[var(--rare)] underline-offset-4 hover:underline">
+                    <button
+                      type="button"
+                      onClick={onRetryJackpot}
+                      className="font-semibold text-[var(--rare)] underline-offset-4 hover:underline"
+                    >
                       Retry
                     </button>
                   ) : null}
@@ -147,7 +150,9 @@ export function ExpeditionConfigurator({
           style={{ left: 'calc(50% + 472px)' }}
         >
           <span className="relative flex h-full w-full items-center justify-center" aria-hidden>
-            <span className="-rotate-90 whitespace-nowrap telemetry text-[1rem] font-bold">Coordinates</span>
+            <span className="-rotate-90 whitespace-nowrap telemetry text-[1rem] font-bold">
+              Coordinates
+            </span>
             <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[2.25rem] leading-none">
               {coordinatesOpen ? '›' : '‹'}
             </span>
@@ -160,15 +165,13 @@ export function ExpeditionConfigurator({
           aria-hidden={!coordinatesOpen}
           inert={!coordinatesOpen || undefined}
           className={`absolute top-0 z-30 hidden h-full max-h-[calc(100svh-7rem)] overflow-hidden transition-[width,opacity,transform] duration-300 ease-out xl:block ${coordinatesOpen ? 'pointer-events-auto w-[380px] translate-x-0 opacity-100' : 'pointer-events-none w-0 translate-x-3 opacity-0'}`}
-          style={{ left: 'min(calc(50% + 472px), calc(50% + 50vw - 396px))' }}
+          style={{ left: 'min(calc(50% + 552px), calc(50% + 50vw - 316px))' }}
         >
           <div className="h-full w-[380px] overflow-y-auto">
             <CoordinatesPanel
               quantity={quantity}
               bounds={bounds}
-              manuallyEditedTickets={manuallyEditedTickets}
-              automaticQuickPick={automaticQuickPick}
-              onAutomaticQuickPickChange={onAutomaticQuickPickChange}
+              tickets={tickets}
               onTicketsChange={onTicketsChange}
             />
           </div>
@@ -192,9 +195,7 @@ export function ExpeditionConfigurator({
             <CoordinatesPanel
               quantity={quantity}
               bounds={bounds}
-              manuallyEditedTickets={manuallyEditedTickets}
-              automaticQuickPick={automaticQuickPick}
-              onAutomaticQuickPickChange={onAutomaticQuickPickChange}
+              tickets={tickets}
               onTicketsChange={onTicketsChange}
             />
           </div>

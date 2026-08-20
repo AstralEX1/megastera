@@ -12,11 +12,9 @@ describe('ExpeditionConfigurator', () => {
     quantity: 3,
     total: 3_000_000n,
     bounds: null,
-    manuallyEditedTickets: [],
-    automaticQuickPick: true,
+    tickets: [],
     disabled: false,
     onQuantityChange: vi.fn(),
-    onAutomaticQuickPickChange: vi.fn(),
     onTicketsChange: vi.fn(),
     onExplore: vi.fn(),
   };
@@ -45,11 +43,9 @@ describe('ExpeditionConfigurator', () => {
         quantity={1}
         total={1_000_000n}
         bounds={null}
-        manuallyEditedTickets={[]}
-        automaticQuickPick
+        tickets={[]}
         disabled={false}
         onQuantityChange={vi.fn()}
-        onAutomaticQuickPickChange={vi.fn()}
         onTicketsChange={vi.fn()}
         onExplore={vi.fn()}
       />,
@@ -89,7 +85,9 @@ describe('ExpeditionConfigurator', () => {
   it('offers a retry when drawing data is unavailable', async () => {
     const user = userEvent.setup();
     const onRetryJackpot = vi.fn();
-    render(<ExpeditionConfigurator {...props} jackpotStatus="error" onRetryJackpot={onRetryJackpot} />);
+    render(
+      <ExpeditionConfigurator {...props} jackpotStatus="error" onRetryJackpot={onRetryJackpot} />,
+    );
 
     expect(screen.getByRole('heading', { name: 'Jackpot unavailable' })).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Drawing data unavailable.');
@@ -104,11 +102,9 @@ describe('ExpeditionConfigurator', () => {
         quantity={3}
         total={3_000_000n}
         bounds={null}
-        manuallyEditedTickets={[]}
-        automaticQuickPick
+        tickets={[]}
         disabled={false}
         onQuantityChange={vi.fn()}
-        onAutomaticQuickPickChange={vi.fn()}
         onTicketsChange={vi.fn()}
         onExplore={vi.fn()}
       />,
@@ -129,6 +125,10 @@ describe('ExpeditionConfigurator', () => {
     expect(toggle).toHaveStyle({ left: 'calc(50% + 472px)' });
     expect(toggle.querySelector('.text-\\[1rem\\]')).toBeInTheDocument();
     expect(toggle.querySelector('.text-\\[2\\.25rem\\]')).toBeInTheDocument();
+    expect(screen.getByTestId('coordinates-disclosure')).toHaveStyle({
+      left: 'min(calc(50% + 552px), calc(50% + 50vw - 316px))',
+    });
+    expect(screen.getAllByText('Bonus Ball influences Planet generation.')).toHaveLength(1);
 
     await user.click(toggle);
     expect(screen.getAllByRole('region', { name: 'Coordinates' })).toHaveLength(2);
