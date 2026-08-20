@@ -307,7 +307,7 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
     if (existing?.status === 'READY' && existing.gifData) return serializeRecord(existing as PrismaBackendPlanetRow);
     const draft = deriveBackendPlanet(normalized, this.now());
     if (this.mineralEconomyCutoverAt) {
-      return this.generatePostCutoverPlanet(ticket, draft, existing as PrismaBackendPlanetRow | null);
+      return this.generatePostCutoverPlanet(ticket, draft);
     }
     const candidateAt = existing?.status === 'READY' ? existing.generatedAt : new Date(draft.generatedAt);
     const data = planetPersistenceData(ticket.id, draft, candidateAt);
@@ -340,7 +340,6 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
   private async generatePostCutoverPlanet(
     ticket: PersistedTicketRow & { id: string },
     draft: BackendPlanetDraft,
-    existing: PrismaBackendPlanetRow | null,
   ): Promise<BackendPlanetRecord> {
     const cutoverAt = this.mineralEconomyCutoverAt;
     if (!cutoverAt) throw new Error('Mineral economy cutover is missing.');
@@ -406,12 +405,19 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
         }
       }
       if (!(error instanceof PreCutoverGeneration)) throw error;
-      const generatedAt = existing?.status === 'READY' ? existing.generatedAt : error.effectiveAt;
+      const current = await this.prisma.backendPlanet.findUnique({
+        where: { ticketPurchaseId: ticket.id },
+        include: { ticketPurchase: true },
+      });
+      if (current?.status === 'READY' && current.gifData) {
+        return serializeRecord(current as PrismaBackendPlanetRow);
+      }
+      const generatedAt = current?.status === 'READY' ? current.generatedAt : error.effectiveAt;
       const data = planetPersistenceData(ticket.id, draft, generatedAt);
       try {
-        const row = existing
+        const row = current
           ? await this.prisma.backendPlanet.update({
-              where: { id: existing.id },
+              where: { id: current.id },
               data,
               include: { ticketPurchase: true },
             })
@@ -421,7 +427,7 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
             });
         return serializeRecord(row as PrismaBackendPlanetRow);
       } catch (error) {
-        if (!existing && isUniqueConstraintError(error)) {
+        if (!current && isUniqueConstraintError(error)) {
           const concurrent = await this.prisma.backendPlanet.findUnique({
             where: { ticketPurchaseId: ticket.id },
             include: { ticketPurchase: true },
