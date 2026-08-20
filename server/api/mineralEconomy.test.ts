@@ -105,7 +105,7 @@ describe('Minerals Economy v2 temporal calculations', () => {
     const input = {
       planet,
       planets: [planet],
-      purchases: [{ planetId: planet.id, bonusBpsAfter: 1_000, purchasedAt: purchaseAt }],
+      purchases: [{ planetId: planet.id, targetLevel: 1, bonusBpsAfter: 1_000, purchasedAt: purchaseAt }],
       anchor: ANCHOR,
     };
     const whole = calculateHistoricalPlanetProduction({ ...input, from: ANCHOR, to });
@@ -114,6 +114,35 @@ describe('Minerals Economy v2 temporal calculations', () => {
 
     expect(first + second).toBe(whole);
     expect(whole).toBe(1_047_573n);
+  });
+
+  it('uses the highest upgrade sequence when L1 and L2 share a millisecond boundary', () => {
+    const upgradeAt = new Date('2026-08-10T12:00:00.000Z');
+    const to = new Date('2026-08-11T00:00:00.000Z');
+    const planet: MineralCollectionPlanet = {
+      id: 'same-millisecond-upgrades',
+      ownerAddress: '0xabc',
+      planetType: 'Gaia',
+      baseMineralsPerDay: 1n,
+      activatedAt: ANCHOR,
+    };
+    const input = {
+      planet,
+      planets: [planet],
+      purchases: [
+        { planetId: planet.id, targetLevel: 2, bonusBpsAfter: 2_500, purchasedAt: upgradeAt },
+        { planetId: planet.id, targetLevel: 1, bonusBpsAfter: 1_000, purchasedAt: upgradeAt },
+      ],
+      anchor: ANCHOR,
+    };
+    const whole = calculateHistoricalPlanetProduction({ ...input, from: ANCHOR, to });
+    const first = calculateHistoricalPlanetProduction({ ...input, from: ANCHOR, to: upgradeAt });
+    const second = calculateHistoricalPlanetProduction({ ...input, from: upgradeAt, to });
+
+    expect(first).toBe(500_000n);
+    expect(second).toBe(625_000n);
+    expect(whole).toBe(1_125_000n);
+    expect(first + second).toBe(whole);
   });
 
   it('activates collection bonuses at the historical third activation', () => {

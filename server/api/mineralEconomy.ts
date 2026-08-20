@@ -22,6 +22,7 @@ export type MineralCollectionPlanet = {
 
 export type MineralUpgradePurchase = {
   planetId: string;
+  targetLevel: number;
   bonusBpsAfter: number;
   purchasedAt: Date;
 };
@@ -199,14 +200,20 @@ function upgradeBonusBpsAt(
 ): number {
   let bonusBps = 0;
   let latestPurchaseAt = Number.NEGATIVE_INFINITY;
+  let latestTargetLevel = -1;
   for (const purchase of purchases) {
     const purchaseTime = purchase.purchasedAt.getTime();
     if (purchase.planetId !== planetId || purchaseTime > atMilliseconds) continue;
     if (!Number.isInteger(purchase.bonusBpsAfter) || purchase.bonusBpsAfter < 0) {
       throw new Error('Upgrade purchase bonus must be a non-negative integer.');
     }
-    if (purchaseTime >= latestPurchaseAt) {
+    const targetLevel = purchase.targetLevel;
+    if (
+      purchaseTime > latestPurchaseAt ||
+      (purchaseTime === latestPurchaseAt && targetLevel > latestTargetLevel)
+    ) {
       latestPurchaseAt = purchaseTime;
+      latestTargetLevel = targetLevel;
       bonusBps = purchase.bonusBpsAfter;
     }
   }

@@ -73,7 +73,7 @@ describe('mineral upgrade mutations', () => {
     const firstAt = new Date('2026-08-20T12:34:56.789Z');
     const endAt = new Date('2026-08-21T00:00:00.001Z');
     const planet = makePlanet();
-    const purchases = [{ planetId: planet.id, bonusBpsAfter: 1_000, purchasedAt: firstAt }];
+    const purchases = [{ planetId: planet.id, targetLevel: 1, bonusBpsAfter: 1_000, purchasedAt: firstAt }];
     const first = await settleMineralAccount({
       prisma: fixture.tx as never,
       account: fixture.account,
