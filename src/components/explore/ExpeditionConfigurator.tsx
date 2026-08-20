@@ -12,6 +12,25 @@ function formatJackpot(amount: bigint) {
   return Number(formatUnits(amount, 6)).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
+function formatPurchaseError(error: Error) {
+  const message = error.message.toLowerCase();
+  if (
+    /(insufficient|not enough|exceeds balance|balance too low)/.test(message) &&
+    /(balance|fund|usdc|transfer)/.test(message)
+  ) {
+    return 'Not enough USDC balance for this purchase.';
+  }
+  if (
+    /(user rejected|user denied|rejected the request|denied transaction|cancelled)/.test(message)
+  ) {
+    return 'Transaction cancelled. Try again when you’re ready.';
+  }
+  if (/(network|rpc|chain|disconnected)/.test(message)) {
+    return 'Wallet connection or network error. Check your wallet and try again.';
+  }
+  return 'We couldn’t complete the ticket purchase. Check your USDC balance and try again.';
+}
+
 export type JackpotStatus = 'loading' | 'ready' | 'error';
 
 export function ExpeditionConfigurator({
@@ -140,12 +159,20 @@ export function ExpeditionConfigurator({
                   />
                 )}
                 {purchaseError ? (
-                  <p
-                    role="alert"
-                    className="mt-3 text-center text-sm text-rose-600 dark:text-rose-400"
-                  >
-                    Ticket purchase failed. Please try again.
-                  </p>
+                  <div className="mt-3 space-y-1 text-center text-sm text-rose-600 dark:text-rose-400">
+                    <p role="alert">{formatPurchaseError(purchaseError)}</p>
+                    <p className="text-xs text-[var(--text-secondary)]">
+                      Need help?{' '}
+                      <a
+                        href="https://t.me/astralex163"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline underline-offset-2 hover:text-[var(--text-primary)]"
+                      >
+                        Message support if you have any issues
+                      </a>
+                    </p>
+                  </div>
                 ) : null}
               </div>
             </div>
