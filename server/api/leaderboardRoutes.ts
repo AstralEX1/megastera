@@ -7,7 +7,7 @@ import {
   getCurrentLeaderboard,
   getWalletLeaderboardPosition,
 } from './leaderboardStore.js';
-import { loadBackendPlanetConfig } from './backendConfig.js';
+import { loadBackendPlanetConfig, loadMineralEconomyConfig } from './backendConfig.js';
 import { reportBackendError } from './errorDiagnostics.js';
 
 const paginationSchema = z.object({
@@ -25,8 +25,15 @@ type LeaderboardDependencies = {
 const defaultDependencies: LeaderboardDependencies = {
   getPrisma: () => getPrismaClient(loadBackendPlanetConfig(process.env).databaseUrl),
   now: () => new Date(),
-  getCurrent: getCurrentLeaderboard,
-  getWalletPosition: getWalletLeaderboardPosition,
+  getCurrent: (prisma, now, pagination) =>
+    getCurrentLeaderboard(prisma, now, pagination, loadMineralEconomyConfig(process.env)),
+  getWalletPosition: (prisma, walletAddress, now) =>
+    getWalletLeaderboardPosition(
+      prisma,
+      walletAddress,
+      now,
+      loadMineralEconomyConfig(process.env),
+    ),
 };
 
 function parsePagination(query: (name: string) => string | undefined) {

@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import type { PrismaClient } from './generated/prisma/client.js';
+import { describe, expect, it, vi } from 'vitest';
+import { Prisma, type PrismaClient } from './generated/prisma/client.js';
 import {
+  calculatePostCutoverLeaderboardRows,
   calculateLiveLeaderboardRows,
   calculateLeaderboardRows,
-  createLiveLeaderboardCache,
+  ensureOverdueLeaderboardPeriodsFinalized,
   finalizeLeaderboardPeriod,
+  getCurrentLeaderboard,
   paginateLeaderboardRows,
 } from './leaderboardStore.js';
 
@@ -14,6 +16,12 @@ const PERIOD = {
   id: '2026-08-10',
   startsAt: new Date('2026-08-10T00:00:00.000Z'),
   endsAt: new Date('2026-08-17T00:00:00.000Z'),
+};
+const CUTOVER = new Date('2026-08-20T00:00:00.000Z');
+const POST_CUTOVER_PERIOD = {
+  id: '2026-08-20',
+  startsAt: CUTOVER,
+  endsAt: new Date('2026-08-21T00:00:00.000Z'),
 };
 
 describe('calculateLeaderboardRows', () => {
@@ -162,23 +170,214 @@ describe('live leaderboard', () => {
     ]);
   });
 
-  it('refreshes a cached live snapshot only after its TTL expires', async () => {
-    const cache = createLiveLeaderboardCache(60_000);
-    let loads = 0;
-    const load = async (asOf: Date) => {
-      loads += 1;
-      return { asOf, rows: [] };
+  it('shows a spend immediately after the next leaderboard read', async () => {
+    const purchases: Array<Record<string, unknown>> = [];
+    const findMany = vi.fn().mockImplementation(async () => [
+      {
+        id: 'planet-1',
+        ownerAddress: ADDRESS_A,
+        planetType: 'Gaia',
+        baseMineralsPerDay: 100n,
+        generatedAt: CUTOVER,
+      },
+    ]);
+    const accounts = vi.fn().mockResolvedValue([
+      { ownerAddress: ADDRESS_A, openingBalanceMicros: 100_000_000n },
+    ]);
+    const purchaseRows = vi.fn().mockImplementation(async () => purchases);
+    const readTransactionOptions: unknown[] = [];
+    const transaction = {
+      backendPlanet: { findMany },
+      mineralAccount: { findMany: accounts },
+      planetUpgradePurchase: { findMany: purchaseRows },
     };
-    const firstNow = new Date('2026-08-20T00:00:00.000Z');
+    const prisma = {
+      ...transaction,
+      $transaction: vi.fn(async (
+        operation: (value: typeof transaction) => unknown,
+        options?: unknown,
+      ) => {
+        readTransactionOptions.push(options);
+        return operation(transaction);
+      }),
+    } as unknown as PrismaClient;
+    const now = new Date('2026-08-20T12:00:00.000Z');
 
-    const first = await cache.get(firstNow, load);
-    const withinTtl = await cache.get(new Date(firstNow.getTime() + 59_999), load);
-    const afterTtl = await cache.get(new Date(firstNow.getTime() + 60_000), load);
+    const before = await getCurrentLeaderboard(
+      prisma,
+      now,
+      { offset: 0, limit: 50 },
+      { mineralEconomyCutoverAt: CUTOVER },
+    );
+    purchases.push({
+      planetId: 'planet-1',
+      walletAddress: ADDRESS_A,
+      targetLevel: 1,
+      bonusBpsAfter: 1_000,
+      costMicros: 200_000n,
+      purchasedAt: now,
+    });
+    const after = await getCurrentLeaderboard(
+      prisma,
+      now,
+      { offset: 0, limit: 50 },
+      { mineralEconomyCutoverAt: CUTOVER },
+    );
 
-    expect(loads).toBe(2);
-    expect(withinTtl).toBe(first);
-    expect(afterTtl).not.toBe(first);
-    expect(afterTtl.asOf).toEqual(new Date('2026-08-20T00:01:00.000Z'));
+    expect(before.rows[0]?.scoreMicros).toBeGreaterThan(after.rows[0]?.scoreMicros ?? 0n);
+    expect(findMany).toHaveBeenCalledTimes(2);
+    expect(accounts).toHaveBeenCalledTimes(2);
+    expect(purchaseRows).toHaveBeenCalledTimes(2);
+    expect(readTransactionOptions[0]).toEqual({
+      isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+    });
+  });
+});
+
+describe('post-cutover spendable leaderboard', () => {
+  it('reconstructs balance from opening balance, canonical production, and purchase costs', () => {
+    const rows = calculatePostCutoverLeaderboardRows({
+      period: POST_CUTOVER_PERIOD,
+      asOf: POST_CUTOVER_PERIOD.endsAt,
+      cutoverAt: CUTOVER,
+      accounts: [{ ownerAddress: ADDRESS_A, openingBalanceMicros: 100_000_000n }],
+      planets: [{
+        id: 'planet-1',
+        ownerAddress: ADDRESS_A,
+        planetType: 'Gaia',
+        baseMineralsPerDay: 100n,
+        generatedAt: CUTOVER,
+      }],
+      purchases: [{
+        planetId: 'planet-1',
+        walletAddress: ADDRESS_A,
+        targetLevel: 1,
+        bonusBpsAfter: 1_000,
+        costMicros: 200_000n,
+        purchasedAt: new Date('2026-08-20T12:00:00.000Z'),
+      }],
+    });
+
+    expect(rows).toEqual([{
+      rank: 1,
+      walletAddress: ADDRESS_A,
+      scoreMicros: 204_800_000n,
+      effectiveMineralsPerDayMicros: 110_000_000n,
+    }]);
+  });
+
+  it('keeps activation and purchase events at period end in the next period', () => {
+    const rows = calculatePostCutoverLeaderboardRows({
+      period: POST_CUTOVER_PERIOD,
+      asOf: POST_CUTOVER_PERIOD.endsAt,
+      cutoverAt: CUTOVER,
+      accounts: [{ ownerAddress: ADDRESS_A, openingBalanceMicros: 0n }],
+      planets: [
+        {
+          id: 'planet-1',
+          ownerAddress: ADDRESS_A,
+          planetType: 'Gaia',
+          baseMineralsPerDay: 100n,
+          generatedAt: CUTOVER,
+        },
+        {
+          id: 'planet-2',
+          ownerAddress: ADDRESS_A,
+          planetType: 'Gaia',
+          baseMineralsPerDay: 100n,
+          generatedAt: POST_CUTOVER_PERIOD.endsAt,
+        },
+      ],
+      purchases: [{
+        planetId: 'planet-1',
+        walletAddress: ADDRESS_A,
+        targetLevel: 1,
+        bonusBpsAfter: 1_000,
+        costMicros: 200_000n,
+        purchasedAt: POST_CUTOVER_PERIOD.endsAt,
+      }],
+    });
+
+    expect(rows[0]?.scoreMicros).toBe(100_000_000n);
+    expect(rows[0]?.effectiveMineralsPerDayMicros).toBe(100_000_000n);
+  });
+});
+
+describe('overdue leaderboard finalization', () => {
+  it('finalizes overdue post-cutover periods with spendable balances', async () => {
+    const finalized = new Map<string, Date>();
+    const entries: Array<Record<string, unknown>> = [];
+    const periodFindUnique = vi.fn().mockImplementation(async ({ where }: { where: { id: string } }) =>
+      finalized.has(where.id) ? { id: where.id, finalizedAt: finalized.get(where.id) } : undefined,
+    );
+    const transaction = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      leaderboardPeriod: {
+        findUnique: periodFindUnique,
+        upsert: vi.fn().mockImplementation(async ({ create }: { create: { id: string; finalizedAt: Date } }) => {
+          finalized.set(create.id, create.finalizedAt);
+          return create;
+        }),
+      },
+      leaderboardEntry: {
+        createMany: vi.fn().mockImplementation(async ({ data }: { data: Array<Record<string, unknown>> }) => {
+          entries.push(...data);
+          return { count: data.length };
+        }),
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      backendPlanet: {
+        findFirst: vi.fn().mockResolvedValue({ generatedAt: CUTOVER }),
+        findMany: vi.fn().mockResolvedValue([{
+          id: 'planet-1',
+          ownerAddress: ADDRESS_A,
+          planetType: 'Gaia',
+          baseMineralsPerDay: 100n,
+          generatedAt: CUTOVER,
+        }]),
+      },
+      mineralAccount: {
+        findMany: vi.fn().mockResolvedValue([{ ownerAddress: ADDRESS_A, openingBalanceMicros: 0n }]),
+      },
+      planetUpgradePurchase: {
+        findMany: vi.fn().mockResolvedValue([{
+          planetId: 'planet-1',
+          walletAddress: ADDRESS_A,
+          targetLevel: 1,
+          bonusBpsAfter: 1_000,
+          costMicros: 200_000n,
+          purchasedAt: new Date('2026-08-20T12:00:00.000Z'),
+        }]),
+      },
+    };
+    const transactionOptions: unknown[] = [];
+    const prisma = {
+      leaderboardPeriod: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      backendPlanet: transaction.backendPlanet,
+      $transaction: vi.fn(async (
+        operation: (value: typeof transaction) => unknown,
+        options?: unknown,
+      ) => {
+        transactionOptions.push(options);
+        return operation(transaction);
+      }),
+    } as unknown as PrismaClient;
+
+    await ensureOverdueLeaderboardPeriodsFinalized(
+      prisma,
+      new Date('2026-08-22T00:00:00.000Z'),
+      { mineralEconomyCutoverAt: CUTOVER },
+    );
+
+    expect(entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ periodId: '2026-08-20', scoreMicros: 104_800_000n }),
+      expect.objectContaining({ periodId: '2026-08-21', scoreMicros: 214_800_000n }),
+    ]));
+    expect(transactionOptions[0]).toEqual({
+      isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+    });
   });
 });
 
@@ -259,6 +458,6 @@ describe('finalizeLeaderboardPeriod', () => {
     await finalizeLeaderboardPeriod(prisma, PERIOD, new Date('2026-08-17T00:01:00.000Z'));
 
     expect(periodWrites).toBe(1);
-    expect(lockCalls).toBe(2);
+    expect(lockCalls).toBe(3);
   });
 });

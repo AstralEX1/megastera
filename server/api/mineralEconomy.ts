@@ -193,7 +193,7 @@ export function calculateCollectionProduction(input: {
   return total;
 }
 
-function upgradeBonusBpsAt(
+export function upgradeBonusBpsAt(
   purchases: readonly MineralUpgradePurchase[],
   planetId: string,
   atMilliseconds: number,
