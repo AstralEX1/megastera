@@ -144,7 +144,110 @@ export async function initializeMineralAccounts(
   return { candidateCount: data.length, createdCount: created.count };
 }
 
-export const backfillMineralAccounts = initializeMineralAccounts;
+type MineralBackfillRow = {
+  ownerAddress: string;
+  openingBalanceMicros: bigint;
+};
+
+export type MineralAccountsBackfillResult = {
+  cutoverAt: Date;
+  candidateCount: number;
+  existingCount: number;
+  missingCount: number;
+  openingBalanceMicros: bigint;
+  missingOpeningBalanceMicros: bigint;
+  createdCount: number;
+};
+
+async function loadMineralBackfillRows(
+  prisma: PrismaClient,
+  cutoverAt: Date,
+): Promise<{ rows: MineralBackfillRow[]; existingOwners: Set<string> }> {
+  const planets = (await prisma.backendPlanet.findMany({
+    where: { status: 'READY', generatedAt: { lte: cutoverAt } },
+    select: {
+      id: true,
+      ownerAddress: true,
+      planetType: true,
+      baseMineralsPerDay: true,
+      generatedAt: true,
+    },
+  })) as MineralAccountPlanetRow[];
+  const byOwner = new Map<string, MineralAccountPlanet[]>();
+  for (const planet of planets) {
+    const ownerAddress = planet.ownerAddress.toLowerCase();
+    const ownerPlanets = byOwner.get(ownerAddress) ?? [];
+    ownerPlanets.push({ ...planet, ownerAddress });
+    byOwner.set(ownerAddress, ownerPlanets);
+  }
+  const rows = [...byOwner.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([ownerAddress, ownerPlanets]) => ({
+      ownerAddress,
+      openingBalanceMicros: calculateV1WalletOpeningBalance(ownerPlanets, cutoverAt),
+    }));
+  const existing = rows.length
+    ? await prisma.mineralAccount.findMany({
+        where: { ownerAddress: { in: rows.map((row) => row.ownerAddress) } },
+        select: { ownerAddress: true },
+      })
+    : [];
+  return {
+    rows,
+    existingOwners: new Set(existing.map((row) => row.ownerAddress.toLowerCase())),
+  };
+}
+
+export async function runMineralAccountsBackfill(
+  prisma: PrismaClient,
+  cutoverAt: Date | null | undefined,
+  options: { dryRun?: boolean } = {},
+): Promise<MineralAccountsBackfillResult> {
+  if (!cutoverAt) throw new Error('MINERAL_ECONOMY_CUTOVER_AT is required for mineral backfill.');
+  assertCutover(cutoverAt);
+  const { rows, existingOwners } = await loadMineralBackfillRows(prisma, cutoverAt);
+  const missing = rows.filter((row) => !existingOwners.has(row.ownerAddress));
+  const openingBalanceMicros = rows.reduce((total, row) => total + row.openingBalanceMicros, 0n);
+  const missingOpeningBalanceMicros = missing.reduce(
+    (total, row) => total + row.openingBalanceMicros,
+    0n,
+  );
+  const result = {
+    cutoverAt,
+    candidateCount: rows.length,
+    existingCount: rows.length - missing.length,
+    missingCount: missing.length,
+    openingBalanceMicros,
+    missingOpeningBalanceMicros,
+    createdCount: 0,
+  } satisfies MineralAccountsBackfillResult;
+  if (options.dryRun) {
+    const persisted = await readMineralEconomyCutover(prisma);
+    if (persisted && persisted.getTime() !== cutoverAt.getTime()) {
+      throw new Error('Configured mineral economy cutover conflicts with the persisted database cutover.');
+    }
+    return result;
+  }
+  const created = await prisma.$transaction(async (transaction) => {
+    const databaseNow = await getPostgresClockTimestamp(transaction);
+    if (databaseNow < cutoverAt) {
+      throw new Error('Mineral backfill cannot run before the configured cutover in PostgreSQL.');
+    }
+    await ensureMineralEconomyCutover(transaction, cutoverAt);
+    return transaction.mineralAccount.createMany({
+      data: missing.map((row) => ({
+        ownerAddress: row.ownerAddress,
+        openingBalanceMicros: row.openingBalanceMicros,
+        balanceMicros: row.openingBalanceMicros,
+        lastSettledAt: cutoverAt,
+      })),
+      skipDuplicates: true,
+    });
+  });
+  return { ...result, createdCount: created.count };
+}
+
+export const backfillMineralAccounts = runMineralAccountsBackfill;
 
 function normalizeOwner(ownerAddress: string): string {
   return ownerAddress.toLowerCase();
