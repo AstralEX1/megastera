@@ -31,6 +31,58 @@ function assertCutover(cutoverAt: Date): void {
     throw new Error('Mineral economy cutover timestamp is invalid.');
 }
 
+type MineralEconomyCutoverClient = Pick<Prisma.TransactionClient, 'mineralEconomyCutover'>;
+type PostgresClockClient = Pick<Prisma.TransactionClient, '$queryRaw'>;
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && (error as { code?: unknown }).code === 'P2002');
+}
+
+export async function getPostgresClockTimestamp(prisma: PostgresClockClient): Promise<Date> {
+  const rows = await prisma.$queryRaw<Array<{ now: Date }>>(
+    Prisma.sql`SELECT clock_timestamp()::timestamptz(3) AS "now"`,
+  );
+  const value = rows[0]?.now;
+  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+    throw new Error('PostgreSQL clock timestamp is invalid.');
+  }
+  return value;
+}
+
+export async function readMineralEconomyCutover(
+  prisma: MineralEconomyCutoverClient,
+): Promise<Date | null> {
+  const row = await prisma.mineralEconomyCutover.findUnique({ where: { id: 1 } });
+  return row?.cutoverAt ?? null;
+}
+
+/** Creates the immutable singleton on first use and rejects a configured conflict. */
+export async function ensureMineralEconomyCutover(
+  prisma: MineralEconomyCutoverClient,
+  cutoverAt: Date | null | undefined,
+) {
+  if (!cutoverAt) return null;
+  assertCutover(cutoverAt);
+  const existing = await readMineralEconomyCutover(prisma);
+  if (existing) {
+    if (existing.getTime() !== cutoverAt.getTime()) {
+      throw new Error('Configured mineral economy cutover conflicts with the persisted database cutover.');
+    }
+    return { id: 1, cutoverAt: existing };
+  }
+  try {
+    return await prisma.mineralEconomyCutover.create({ data: { id: 1, cutoverAt } });
+  } catch (error) {
+    if (!isUniqueConstraintError(error)) throw error;
+    const concurrent = await readMineralEconomyCutover(prisma);
+    if (!concurrent) throw error;
+    if (concurrent.getTime() !== cutoverAt.getTime()) {
+      throw new Error('Configured mineral economy cutover conflicts with the persisted database cutover.');
+    }
+    return { id: 1, cutoverAt: concurrent };
+  }
+}
+
 /**
  * Uses the existing V1 collection calculator unchanged for the cutover snapshot.
  * This is intentionally separate from v2 temporal settlement math.
@@ -217,6 +269,7 @@ export async function purchasePlanetUpgrade(
   assertTimestamp(input.cutoverAt, 'Mineral economy cutover');
   getMineralUpgradeConfig(input.targetLevel);
   return prisma.$transaction(async (transaction) => {
+    await ensureMineralEconomyCutover(transaction, input.cutoverAt);
     const ownerHint = await transaction.backendPlanet.findUnique({
       where: { id: input.planetId },
       select: { ownerAddress: true },
@@ -235,7 +288,7 @@ export async function purchasePlanetUpgrade(
     if (input.targetLevel !== planet.upgradeLevel + 1) {
       throw new Error('Upgrade target must be the next Planet level.');
     }
-    const purchasedAt = input.now();
+    const purchasedAt = await getPostgresClockTimestamp(transaction);
     assertTimestamp(purchasedAt, 'Upgrade purchase');
     if (purchasedAt < input.cutoverAt) throw new Error('Mineral economy is not active yet.');
 

@@ -146,6 +146,11 @@ describe('PrismaBackendPlanetStore', () => {
       lastSettledAt: cutoverAt,
     };
     const transaction = {
+      mineralEconomyCutover: {
+        findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt }),
+        create: vi.fn().mockResolvedValue({ id: 1, cutoverAt }),
+      },
+      $queryRaw: vi.fn().mockResolvedValue([{ now: draftAt }]),
       mineralAccount: {
         findUnique: vi.fn().mockResolvedValue(account),
         upsert: vi.fn().mockResolvedValue(account),
@@ -238,6 +243,11 @@ describe('PrismaBackendPlanetStore', () => {
       releaseCreates = resolve;
     });
     const transaction = {
+      mineralEconomyCutover: {
+        findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt }),
+        create: vi.fn().mockResolvedValue({ id: 1, cutoverAt }),
+      },
+      $queryRaw: vi.fn().mockResolvedValue([{ now: effectiveAt }]),
       mineralAccount: {
         findUnique: vi.fn().mockResolvedValue(account),
         upsert: vi.fn().mockResolvedValue(account),
@@ -287,6 +297,7 @@ describe('PrismaBackendPlanetStore', () => {
     const cutoverAt = new Date('2026-08-20T00:00:00.000Z');
     const draftAt = new Date('2026-08-19T00:00:00.000Z');
     const effectiveAt = new Date('2026-08-21T00:00:00.000Z');
+    const appClockAt = new Date('2099-01-01T00:00:00.000Z');
     const persistedTicket = {
       id: 'ticket-row',
       ticketId: { toFixed: () => '1' },
@@ -318,6 +329,11 @@ describe('PrismaBackendPlanetStore', () => {
     const events: string[] = [];
     let nowCalls = 0;
     const transaction = {
+      mineralEconomyCutover: {
+        findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt }),
+        create: vi.fn().mockResolvedValue({ id: 1, cutoverAt }),
+      },
+      $queryRaw: vi.fn().mockResolvedValue([{ now: effectiveAt }]),
       mineralAccount: {
         findUnique: vi.fn().mockResolvedValue(null),
         upsert: vi.fn().mockImplementation(async () => {
@@ -368,7 +384,7 @@ describe('PrismaBackendPlanetStore', () => {
       () => {
         nowCalls += 1;
         events.push(`now-${nowCalls}`);
-        return nowCalls === 1 ? draftAt : effectiveAt;
+        return nowCalls === 1 ? draftAt : appClockAt;
       },
       cutoverAt,
     );
@@ -378,7 +394,7 @@ describe('PrismaBackendPlanetStore', () => {
     expect(generated.generatedAt).toBe(effectiveAt.toISOString());
     expect(account.balanceMicros).toBe(1_000_000n);
     expect(account.lastSettledAt).toBe(effectiveAt);
-    expect(events).toEqual(['now-1', 'account-lock', 'now-2']);
+    expect(events).toEqual(['now-1', 'account-lock']);
     expect(transaction.mineralAccount.update).toHaveBeenCalledOnce();
     expect(transaction.backendPlanet.create).toHaveBeenCalledOnce();
   });

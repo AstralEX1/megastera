@@ -22,6 +22,7 @@ function makePlanet() {
 function makePrisma(overrides: {
   account?: Record<string, unknown>;
   existingPurchase?: Record<string, unknown> | null;
+  clockAt?: Date;
 } = {}) {
   const planet = makePlanet();
   const balanceMicros = typeof overrides.account?.balanceMicros === 'bigint' ? overrides.account.balanceMicros : 500_000n;
@@ -34,7 +35,16 @@ function makePrisma(overrides: {
     lastSettledAt,
   };
   const purchase = overrides.existingPurchase ?? null;
+  const clockAt = overrides.clockAt ?? PURCHASED_AT;
   const tx = {
+    $queryRaw: vi
+      .fn()
+      .mockResolvedValueOnce([{ id: planet.id }])
+      .mockResolvedValueOnce([{ now: clockAt }]),
+    mineralEconomyCutover: {
+      findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt: CUTOVER }),
+      create: vi.fn().mockResolvedValue({ id: 1, cutoverAt: CUTOVER }),
+    },
     mineralAccount: {
       findUnique: vi.fn().mockResolvedValue(account),
       upsert: vi.fn().mockResolvedValue(account),
@@ -105,7 +115,7 @@ describe('mineral upgrade mutations', () => {
   });
 
   it('leaves account, Planet, and purchase unchanged when funds are insufficient', async () => {
-    const fixture = makePrisma({ account: { balanceMicros: 0n } });
+    const fixture = makePrisma({ account: { balanceMicros: 0n }, clockAt: CUTOVER });
 
     await expect(
       purchasePlanetUpgrade(fixture.prisma, {
@@ -125,14 +135,17 @@ describe('mineral upgrade mutations', () => {
 
   it('returns an existing purchase on retry without debiting again', async () => {
     const first = makePrisma();
+    const appClock = vi.fn(() => new Date('2099-01-01T00:00:00.000Z'));
     const result = await purchasePlanetUpgrade(first.prisma, {
       planetId: 'planet-1',
       targetLevel: 1,
       cutoverAt: CUTOVER,
-      now: () => PURCHASED_AT,
+      now: appClock,
     });
     const persisted = first.tx.planetUpgradePurchase.create.mock.results[0]?.value;
     expect(result).toMatchObject({ targetLevel: 1, costMicros: '200000' });
+    expect(persisted.purchasedAt).toBe(PURCHASED_AT);
+    expect(appClock).not.toHaveBeenCalled();
     expect(first.tx.mineralAccount.update).toHaveBeenCalledTimes(2);
     expect(first.tx.planetUpgradePurchase.create).toHaveBeenCalledOnce();
 

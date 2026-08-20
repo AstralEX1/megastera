@@ -11,6 +11,8 @@ import { BASE_JACKPOT, normalizeMegasteraProof, type MegasteraProof } from './el
 import { BASE_CHAIN_ID as CONFIGURED_CHAIN_ID, MEGASTERA_SOURCE } from './config.js';
 import {
   ensureAndLockMineralAccount,
+  ensureMineralEconomyCutover,
+  getPostgresClockTimestamp,
   settleMineralAccount,
   type MineralSettlementPlanet,
   type MineralSettlementPurchase,
@@ -150,7 +152,11 @@ function planetPersistenceData(
   };
 }
 
-class PreCutoverGeneration extends Error {}
+class PreCutoverGeneration extends Error {
+  public constructor(public readonly effectiveAt: Date) {
+    super('Generation is before mineral economy cutover.');
+  }
+}
 
 /** Derives deterministic traits and GIF bytes without accessing browser globals. */
 export function deriveBackendPlanet(
@@ -340,15 +346,15 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
     if (!cutoverAt) throw new Error('Mineral economy cutover is missing.');
     try {
       const row = await this.prisma.$transaction(async (transaction) => {
+        await ensureMineralEconomyCutover(transaction, cutoverAt);
         const account = await ensureAndLockMineralAccount(transaction, draft.ownerAddress, cutoverAt);
         const current = await transaction.backendPlanet.findUnique({
           where: { ticketPurchaseId: ticket.id },
           include: { ticketPurchase: true },
         });
         if (current?.status === 'READY' && current.gifData) return current as PrismaBackendPlanetRow;
-        const effectiveAt = this.now();
-        assertNow(effectiveAt);
-        if (effectiveAt < cutoverAt) throw new PreCutoverGeneration('Generation is before mineral economy cutover.');
+        const effectiveAt = await getPostgresClockTimestamp(transaction);
+        if (effectiveAt < cutoverAt) throw new PreCutoverGeneration(effectiveAt);
         const planets = (await transaction.backendPlanet.findMany({
           where: { ownerAddress: draft.ownerAddress.toLowerCase(), status: 'READY' },
           select: {
@@ -399,7 +405,7 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
         }
       }
       if (!(error instanceof PreCutoverGeneration)) throw error;
-      const data = planetPersistenceData(ticket.id, draft, new Date(draft.generatedAt));
+      const data = planetPersistenceData(ticket.id, draft, error.effectiveAt);
       try {
         const row = existing
           ? await this.prisma.backendPlanet.update({

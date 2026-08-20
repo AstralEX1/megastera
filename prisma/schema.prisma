@@ -167,6 +167,13 @@ model MineralAccount {
   @@map("mineral_accounts")
 }
 
+model MineralEconomyCutover {
+  id        Int      @id @default(1)
+  cutoverAt DateTime @db.Timestamptz(3)
+
+  @@map("mineral_economy_cutover")
+}
+
 model PlanetUpgradePurchase {
   id             String       @id @default(uuid()) @db.Uuid
   planetId       String       @db.Uuid

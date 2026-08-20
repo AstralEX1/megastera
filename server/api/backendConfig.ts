@@ -29,6 +29,12 @@ function parseMineralEconomyCutoverAt(env: Record<string, string | undefined>): 
   if (!Number.isFinite(value.getTime())) {
     throw new Error('MINERAL_ECONOMY_CUTOVER_AT must be a valid timestamp.');
   }
+  if (!/^\d{4}-\d{2}-\d{2}T00:00:00\.000Z$/.test(raw)) {
+    throw new Error('MINERAL_ECONOMY_CUTOVER_AT must be an exact UTC midnight timestamp.');
+  }
+  if (value.toISOString() !== raw) {
+    throw new Error('MINERAL_ECONOMY_CUTOVER_AT must be a valid timestamp.');
+  }
   return value;
 }
 

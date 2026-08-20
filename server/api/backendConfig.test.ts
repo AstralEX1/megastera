@@ -26,6 +26,12 @@ describe('Minerals Economy configuration', () => {
     expect(() => loadMineralEconomyConfig({ MINERAL_ECONOMY_CUTOVER_AT: 'not-a-date' })).toThrow(
       'MINERAL_ECONOMY_CUTOVER_AT must be a valid timestamp',
     );
+    expect(() => loadMineralEconomyConfig({ MINERAL_ECONOMY_CUTOVER_AT: '2026-08-20T00:00:00Z' })).toThrow(
+      'MINERAL_ECONOMY_CUTOVER_AT must be an exact UTC midnight timestamp',
+    );
+    expect(() => loadMineralEconomyConfig({ MINERAL_ECONOMY_CUTOVER_AT: '2026-02-30T00:00:00.000Z' })).toThrow(
+      'MINERAL_ECONOMY_CUTOVER_AT must be a valid timestamp',
+    );
     expect(() => loadMineralEconomyConfig({ MINERAL_UPGRADES_ENABLED: 'sometimes' })).toThrow(
       'MINERAL_UPGRADES_ENABLED must be a boolean',
     );
