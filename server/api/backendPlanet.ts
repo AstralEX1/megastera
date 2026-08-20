@@ -391,17 +391,30 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
     } catch (error) {
       if (!(error instanceof PreCutoverGeneration)) throw error;
       const data = planetPersistenceData(ticket.id, draft, new Date(draft.generatedAt));
-      const row = existing
-        ? await this.prisma.backendPlanet.update({
-            where: { id: existing.id },
-            data,
-            include: { ticketPurchase: true },
-          })
-        : await this.prisma.backendPlanet.create({
-            data,
+      try {
+        const row = existing
+          ? await this.prisma.backendPlanet.update({
+              where: { id: existing.id },
+              data,
+              include: { ticketPurchase: true },
+            })
+          : await this.prisma.backendPlanet.create({
+              data,
+              include: { ticketPurchase: true },
+            });
+        return serializeRecord(row as PrismaBackendPlanetRow);
+      } catch (error) {
+        if (!existing && isUniqueConstraintError(error)) {
+          const concurrent = await this.prisma.backendPlanet.findUnique({
+            where: { ticketPurchaseId: ticket.id },
             include: { ticketPurchase: true },
           });
-      return serializeRecord(row as PrismaBackendPlanetRow);
+          if (concurrent?.status === 'READY' && concurrent.gifData) {
+            return serializeRecord(concurrent as PrismaBackendPlanetRow);
+          }
+        }
+        throw error;
+      }
     }
   }
 

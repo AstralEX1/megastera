@@ -105,6 +105,93 @@ describe('PrismaBackendPlanetStore', () => {
     expect(prisma.backendPlanet.create).toHaveBeenCalledOnce();
   });
 
+  it('returns the concurrent winner when configured future cutover falls back to V1 creation', async () => {
+    const cutoverAt = new Date('2026-08-20T00:00:00.000Z');
+    const draftAt = new Date('2026-08-19T00:00:00.000Z');
+    const persistedTicket = {
+      id: 'ticket-row',
+      ticketId: { toFixed: () => '1' },
+      drawingId: { toFixed: () => '1' },
+      recipient: proof.recipient,
+      bonusBall: proof.bonusBall,
+      normals: proof.normals,
+      originTxHash: proof.originTxHash,
+      logIndex: 0,
+      purchasedAt: new Date('2026-08-19T00:00:00.000Z'),
+    };
+    const winner = {
+      id: 'winner-planet',
+      chainId: 8453,
+      ticketId: { toFixed: () => '1' },
+      ownerAddress: proof.recipient,
+      planetName: 'Winner Planet',
+      seed: `0x${'11'.repeat(32)}`,
+      traitsHash: `0x${'22'.repeat(32)}`,
+      generatorVersion: 1,
+      planetType: 'Gaia',
+      terrain: 'Plains',
+      rarity: 'Common',
+      satelliteCount: 0,
+      hasRing: false,
+      baseMineralsPerDay: 1n,
+      generatedAt: draftAt,
+      status: 'READY' as const,
+      gifData: Buffer.from('gif'),
+      gifHash: `0x${'33'.repeat(32)}`,
+      ticketPurchase: persistedTicket,
+    };
+    const account = {
+      ownerAddress: proof.recipient.toLowerCase(),
+      balanceMicros: 0n,
+      lastSettledAt: cutoverAt,
+    };
+    const transaction = {
+      mineralAccount: {
+        findUnique: vi.fn().mockResolvedValue(account),
+        upsert: vi.fn().mockResolvedValue(account),
+      },
+      backendPlanet: { findUnique: vi.fn().mockResolvedValue(null) },
+    };
+    let findCalls = 0;
+    let createCalls = 0;
+    let releaseCreates!: () => void;
+    const bothCreates = new Promise<void>((resolve) => {
+      releaseCreates = resolve;
+    });
+    const prisma = {
+      ticketPurchase: { findUnique: vi.fn().mockResolvedValue(persistedTicket) },
+      backendPlanet: {
+        findUnique: vi.fn().mockImplementation(async () => {
+          findCalls += 1;
+          return findCalls <= 2 ? null : winner;
+        }),
+        create: vi.fn(async () => {
+          const call = ++createCalls;
+          if (call === 2) releaseCreates();
+          await bothCreates;
+          if (call === 1) return winner;
+          throw { code: 'P2002' };
+        }),
+      },
+      $transaction: vi.fn(async (callback: (value: typeof transaction) => unknown) => callback(transaction)),
+    } as unknown as PrismaClient;
+    const createNow = () => {
+      let calls = 0;
+      return () => (calls++ === 0 ? draftAt : draftAt);
+    };
+    const firstStore = new PrismaBackendPlanetStore(prisma, createNow(), cutoverAt);
+    const secondStore = new PrismaBackendPlanetStore(prisma, createNow(), cutoverAt);
+
+    const results = await Promise.all([
+      firstStore.generatePlanet(proof),
+      secondStore.generatePlanet(proof),
+    ]);
+
+    expect(results.map((result) => result.planetId)).toEqual(['winner-planet', 'winner-planet']);
+    expect(prisma.backendPlanet.create).toHaveBeenCalledTimes(2);
+    expect(prisma.backendPlanet.findUnique).toHaveBeenCalledTimes(3);
+  });
+
   it('settles existing production before activating a generated Planet at the locked effective time', async () => {
     const cutoverAt = new Date('2026-08-20T00:00:00.000Z');
     const draftAt = new Date('2026-08-19T00:00:00.000Z');
