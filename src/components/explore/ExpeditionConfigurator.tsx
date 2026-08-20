@@ -146,8 +146,8 @@ export function ExpeditionConfigurator({
           aria-label={coordinatesLabel}
           aria-expanded={coordinatesOpen}
           onClick={() => setCoordinatesOpen((open) => !open)}
-          className="absolute top-1/2 z-40 hidden h-60 w-20 -translate-y-1/2 items-center justify-center border-x border-[var(--border)] bg-[var(--background)] text-[var(--text-primary)] transition-colors duration-300 ease-out hover:bg-[var(--surface-raised)] xl:flex"
-          style={{ left: 'calc(50% + 472px)' }}
+          className="fixed top-1/2 right-0 z-40 hidden h-60 w-20 -translate-y-1/2 items-center justify-center border-x border-[var(--border)] bg-[var(--background)] text-[var(--text-primary)] transition-[right,background-color] duration-300 ease-out hover:bg-[var(--surface-raised)] xl:flex"
+          style={{ right: coordinatesOpen ? '380px' : '0px' }}
         >
           <span className="relative flex h-full w-full items-center justify-center" aria-hidden>
             <span className="-rotate-90 whitespace-nowrap telemetry text-[1rem] font-bold">
@@ -164,8 +164,8 @@ export function ExpeditionConfigurator({
           data-state={coordinatesOpen ? 'open' : 'closed'}
           aria-hidden={!coordinatesOpen}
           inert={!coordinatesOpen || undefined}
-          className={`absolute top-0 z-30 hidden h-full max-h-[calc(100svh-7rem)] overflow-hidden transition-[width,opacity,transform] duration-300 ease-out xl:block ${coordinatesOpen ? 'pointer-events-auto w-[380px] translate-x-0 opacity-100' : 'pointer-events-none w-0 translate-x-3 opacity-0'}`}
-          style={{ left: 'min(calc(50% + 552px), calc(50% + 50vw - 316px))' }}
+          className={`fixed top-[7rem] right-0 z-30 hidden h-[calc(100svh-7rem)] overflow-hidden transition-[width,opacity,transform] duration-300 ease-out xl:block ${coordinatesOpen ? 'pointer-events-auto w-[380px] translate-x-0 opacity-100' : 'pointer-events-none w-0 translate-x-3 opacity-0'}`}
+          style={{ right: '0px' }}
         >
           <div className="h-full w-[380px] overflow-y-auto">
             <CoordinatesPanel

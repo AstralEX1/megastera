@@ -15,12 +15,19 @@ import { Layout } from './Layout';
 describe('Layout', () => {
   afterEach(cleanup);
 
-  it('does not render the global disclaimer footer', () => {
+  it('renders the global footer with external links only', () => {
     render(<Layout active="play" onSelect={vi.fn()}><p>Page content</p></Layout>);
 
     expect(screen.getByText('Page content')).toBeInTheDocument();
-    expect(screen.queryByText(/Participating assets may be lost/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /full disclaimer/i })).not.toBeInTheDocument();
+    const footer = screen.getByRole('contentinfo');
+
+    expect(footer).toBeInTheDocument();
+    expect(footer).not.toHaveTextContent(/Participating assets may be lost/i);
+    expect(screen.queryByRole('link', { name: 'full disclaimer' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'X Megastera' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Megapot Docs' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Megapot site' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Support' })).toBeInTheDocument();
   });
 
   it('renders an uppercase text-only brand in the shell', () => {

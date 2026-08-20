@@ -6,6 +6,9 @@ import { LeaderboardTable } from '@/components/leaderboard/LeaderboardTable';
 import { WalletRankCard } from '@/components/leaderboard/WalletRankCard';
 import { useCurrentLeaderboard, useWalletLeaderboardPosition } from '@/hooks/useLeaderboard';
 
+const SEASON_END_AT = Date.parse('2026-08-28T23:59:00.000Z');
+const SEASON_REWARDS = ['USDC', '1/1 NFT Planets'] as const;
+
 function relativeTimeLabel(timestamp: number | undefined, now: number) {
   if (!timestamp || !Number.isFinite(timestamp)) return 'waiting for first refresh';
 
@@ -17,6 +20,18 @@ function relativeTimeLabel(timestamp: number | undefined, now: number) {
 
   const hours = Math.floor(minutes / 60);
   return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+}
+
+function seasonCountdownLabel(now: number) {
+  const remainingSeconds = Math.max(0, Math.floor((SEASON_END_AT - now) / 1000));
+  if (remainingSeconds === 0) return 'Season ended';
+
+  const days = Math.floor(remainingSeconds / 86_400);
+  const hours = Math.floor((remainingSeconds % 86_400) / 3_600);
+  const minutes = Math.floor((remainingSeconds % 3_600) / 60);
+  const seconds = remainingSeconds % 60;
+
+  return `${String(days).padStart(2, '0')}d ${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
 }
 
 export function Leaderboard() {
@@ -60,25 +75,38 @@ export function Leaderboard() {
       </section>
     );
   }
-  if (current.error || !data) return (
-    <section role="alert" className="card-pad mx-auto max-w-2xl space-y-4 text-center">
-      <h1 className="font-hud text-2xl font-bold">Leaderboard unavailable</h1>
-      <p className="text-sm text-[var(--text-secondary)]">The live mining backend could not return current standings.</p>
-      <Button variant="secondary" onClick={() => void handleRefresh()}>Retry</Button>
+  const refreshing = current.isFetching || manualRefreshing;
+  const lastRefreshAt = current.dataUpdatedAt || (data?.asOf ? Date.parse(data.asOf) : undefined);
+  const seasonOverview = (
+    <section aria-label="Season overview" className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
+      <div className="space-y-4">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-secondary)]">Season prizes</p>
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-[var(--text-primary)]">
+            {SEASON_REWARDS.map((reward) => <span key={reward}>{reward}</span>)}
+          </div>
+        </div>
+        <div className="border-t border-[var(--border)] pt-4">
+          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-secondary)]">Season ends in</p>
+          <output aria-label="Season ends in" className="mt-1 block font-mono text-sm tabular-nums text-[var(--text-primary)]" role="timer" title="28 August 2026, 23:59 UTC">
+            {seasonCountdownLabel(now)}
+          </output>
+        </div>
+      </div>
     </section>
   );
-
-  const refreshing = current.isFetching || manualRefreshing;
-  const lastRefreshAt = current.dataUpdatedAt || (data.asOf ? Date.parse(data.asOf) : undefined);
 
   return (
     <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-[var(--border)] pb-5">
         <div>
           <h1 className="font-hud text-3xl font-bold tracking-[-0.04em] text-[var(--text-primary)]">Leaderboard</h1>
-          <p className="mt-2 max-w-xl text-sm text-[var(--text-secondary)]">Current lifetime mining from every backend Planet. Standings refresh automatically every minute.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <div className="min-w-[5.5rem] text-right">
+            <span className="block font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-secondary)]">Active players</span>
+            <span className="block font-mono text-sm tabular-nums text-[var(--text-primary)]">{data?.total.toLocaleString() ?? '—'}</span>
+          </div>
           <span className="font-mono text-xs text-[var(--text-secondary)]">Last refresh: {relativeTimeLabel(lastRefreshAt, now)}</span>
           <Button
             variant="secondary"
@@ -97,12 +125,27 @@ export function Leaderboard() {
         </div>
       </header>
 
-      {data.rows.length === 0 ? (
-        <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center"><h2 className="font-hud text-xl font-bold">No mineral production yet</h2><p className="mt-2 text-sm text-[var(--text-secondary)]">Standings appear after the first backend Planet begins mining.</p></section>
+      {current.error || !data ? (
+        <div className="space-y-5">
+          {seasonOverview}
+          <section role="alert" className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
+            <h2 className="font-hud text-xl font-bold">Leaderboard unavailable</h2>
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">The live mining backend could not return current standings.</p>
+            <Button variant="secondary" onClick={() => void handleRefresh()}>Retry</Button>
+          </section>
+        </div>
+      ) : data.rows.length === 0 ? (
+        <div className="space-y-5">
+          {seasonOverview}
+          <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center"><h2 className="font-hud text-xl font-bold">No mineral production yet</h2><p className="mt-2 text-sm text-[var(--text-secondary)]">Standings appear after the first backend Planet begins mining.</p></section>
+        </div>
       ) : (
         <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_17rem]">
           <LeaderboardTable rows={data.rows} walletAddress={address} />
-          {address && wallet.data ? <WalletRankCard position={wallet.data} /> : null}
+          <aside aria-label="Leaderboard details" className="space-y-5">
+            {seasonOverview}
+            {address && wallet.data ? <WalletRankCard position={wallet.data} /> : null}
+          </aside>
         </div>
       )}
     </div>
