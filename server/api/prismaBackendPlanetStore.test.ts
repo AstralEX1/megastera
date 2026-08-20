@@ -104,4 +104,103 @@ describe('PrismaBackendPlanetStore', () => {
     });
     expect(prisma.backendPlanet.create).toHaveBeenCalledOnce();
   });
+
+  it('settles existing production before activating a generated Planet at the locked effective time', async () => {
+    const cutoverAt = new Date('2026-08-20T00:00:00.000Z');
+    const effectiveAt = new Date('2026-08-21T00:00:00.000Z');
+    const persistedTicket = {
+      id: 'ticket-row',
+      ticketId: { toFixed: () => '1' },
+      drawingId: { toFixed: () => '1' },
+      recipient: proof.recipient,
+      bonusBall: proof.bonusBall,
+      normals: proof.normals,
+      originTxHash: proof.originTxHash,
+      logIndex: 0,
+      purchasedAt: new Date('2026-08-19T00:00:00.000Z'),
+    };
+    const oldPlanet = {
+      id: 'old-planet',
+      ownerAddress: proof.recipient.toLowerCase(),
+      planetType: 'Gaia',
+      baseMineralsPerDay: 1n,
+      generatedAt: cutoverAt,
+      upgradeLevel: 0,
+      upgradeBonusBps: 0,
+      status: 'READY' as const,
+    };
+    const account = {
+      id: 'account-row',
+      ownerAddress: proof.recipient.toLowerCase(),
+      openingBalanceMicros: 0n,
+      balanceMicros: 0n,
+      lastSettledAt: cutoverAt,
+    };
+    const events: string[] = [];
+    let nowCalls = 0;
+    const transaction = {
+      mineralAccount: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        upsert: vi.fn().mockImplementation(async () => {
+          events.push('account-lock');
+          return account;
+        }),
+        update: vi.fn().mockImplementation(async ({ data }: { data: Partial<typeof account> }) => {
+          Object.assign(account, data);
+          return account;
+        }),
+      },
+      backendPlanet: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([oldPlanet]),
+        create: vi.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+          id: 'new-planet',
+          chainId: 8453,
+          ticketId: { toFixed: () => '1' },
+          ownerAddress: data.ownerAddress,
+          planetName: data.planetName,
+          seed: data.seed,
+          traitsHash: data.traitsHash,
+          generatorVersion: data.generatorVersion,
+          planetType: data.planetType,
+          terrain: data.terrain,
+          rarity: data.rarity,
+          satelliteCount: data.satelliteCount,
+          hasRing: data.hasRing,
+          baseMineralsPerDay: data.baseMineralsPerDay,
+          generatedAt: data.generatedAt,
+          status: data.status,
+          gifData: data.gifData,
+          gifHash: data.gifHash,
+          ticketPurchase: persistedTicket,
+        })),
+      },
+      planetUpgradePurchase: { findMany: vi.fn().mockResolvedValue([]) },
+    };
+    const prisma = {
+      ticketPurchase: { findUnique: vi.fn().mockResolvedValue(persistedTicket) },
+      backendPlanet: {
+        findUnique: vi.fn().mockResolvedValue(null),
+      },
+      $transaction: vi.fn(async (callback: (value: typeof transaction) => unknown) => callback(transaction)),
+    } as unknown as PrismaClient;
+    const store = new PrismaBackendPlanetStore(
+      prisma,
+      () => {
+        nowCalls += 1;
+        events.push(`now-${nowCalls}`);
+        return effectiveAt;
+      },
+      cutoverAt,
+    );
+
+    const generated = await store.generatePlanet(proof);
+
+    expect(generated.generatedAt).toBe(effectiveAt.toISOString());
+    expect(account.balanceMicros).toBe(1_000_000n);
+    expect(account.lastSettledAt).toBe(effectiveAt);
+    expect(events).toEqual(['now-1', 'account-lock', 'now-2']);
+    expect(transaction.mineralAccount.update).toHaveBeenCalledOnce();
+    expect(transaction.backendPlanet.create).toHaveBeenCalledOnce();
+  });
 });

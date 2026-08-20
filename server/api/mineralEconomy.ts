@@ -20,6 +20,12 @@ export type MineralCollectionPlanet = {
   generatedAt?: Date;
 };
 
+export type MineralUpgradePurchase = {
+  planetId: string;
+  bonusBpsAfter: number;
+  purchasedAt: Date;
+};
+
 function activationAt(planet: MineralCollectionPlanet): Date {
   const value = planet.activatedAt ?? planet.generatedAt;
   if (!value) throw new Error(`Planet ${planet.id} activation timestamp is missing.`);
@@ -183,5 +189,109 @@ export function calculateCollectionProduction(input: {
     to: input.to,
     anchor,
   });
+  return total;
+}
+
+function upgradeBonusBpsAt(
+  purchases: readonly MineralUpgradePurchase[],
+  planetId: string,
+  atMilliseconds: number,
+): number {
+  let bonusBps = 0;
+  let latestPurchaseAt = Number.NEGATIVE_INFINITY;
+  for (const purchase of purchases) {
+    const purchaseTime = purchase.purchasedAt.getTime();
+    if (purchase.planetId !== planetId || purchaseTime > atMilliseconds) continue;
+    if (!Number.isInteger(purchase.bonusBpsAfter) || purchase.bonusBpsAfter < 0) {
+      throw new Error('Upgrade purchase bonus must be a non-negative integer.');
+    }
+    if (purchaseTime >= latestPurchaseAt) {
+      latestPurchaseAt = purchaseTime;
+      bonusBps = purchase.bonusBpsAfter;
+    }
+  }
+  return bonusBps;
+}
+
+/** Calculates historical production with collection and upgrade events over [from, to). */
+export function calculateHistoricalPlanetProduction(input: {
+  planet: MineralCollectionPlanet;
+  planets: readonly MineralCollectionPlanet[];
+  purchases: readonly MineralUpgradePurchase[];
+  from: Date;
+  to: Date;
+  anchor: Date;
+}): bigint {
+  const fromMilliseconds = timestamp(input.from, 'Production start');
+  const toMilliseconds = timestamp(input.to, 'Production end');
+  if (toMilliseconds < fromMilliseconds) {
+    throw new Error('Production interval cannot end before it starts.');
+  }
+  if (!input.anchor) throw new Error('Production anchor is required.');
+  const activatedAt = timestamp(activationAt(input.planet), `Planet ${input.planet.id} activation`);
+  const startMilliseconds = Math.max(fromMilliseconds, activatedAt);
+  if (startMilliseconds >= toMilliseconds) return 0n;
+
+  const group = matchingPlanets(input.planet, input.planets);
+  const eventTimes = new Set<number>();
+  for (const candidate of group) {
+    const candidateTime = activationAt(candidate).getTime();
+    if (candidateTime > startMilliseconds && candidateTime < toMilliseconds) eventTimes.add(candidateTime);
+  }
+  for (const purchase of input.purchases) {
+    const purchaseTime = timestamp(purchase.purchasedAt, 'Upgrade purchase');
+    if (purchase.planetId === input.planet.id && purchaseTime > startMilliseconds && purchaseTime < toMilliseconds) {
+      eventTimes.add(purchaseTime);
+    }
+  }
+
+  const orderedEvents = [...eventTimes].sort((left, right) => left - right);
+  let cursor = new Date(startMilliseconds);
+  let activeCount = group.filter((candidate) => activationAt(candidate).getTime() <= startMilliseconds).length;
+  let activeBonusBps = collectionBonusBpsForCount(activeCount);
+  let activeUpgradeBonusBps = upgradeBonusBpsAt(input.purchases, input.planet.id, startMilliseconds);
+  let total = 0n;
+
+  for (const eventTime of orderedEvents) {
+    total += calculateConstantRateSegment({
+      rateMicrosPerDay: calculateEffectiveMineralsPerDayMicros(
+        input.planet.baseMineralsPerDay,
+        activeBonusBps + activeUpgradeBonusBps,
+      ),
+      from: cursor,
+      to: new Date(eventTime),
+      anchor: input.anchor,
+    });
+    const eventActivations = group.filter((candidate) => activationAt(candidate).getTime() === eventTime).length;
+    activeCount += eventActivations;
+    activeBonusBps = collectionBonusBpsForCount(activeCount);
+    activeUpgradeBonusBps = upgradeBonusBpsAt(input.purchases, input.planet.id, eventTime);
+    cursor = new Date(eventTime);
+  }
+
+  total += calculateConstantRateSegment({
+    rateMicrosPerDay: calculateEffectiveMineralsPerDayMicros(
+      input.planet.baseMineralsPerDay,
+      activeBonusBps + activeUpgradeBonusBps,
+    ),
+    from: cursor,
+    to: input.to,
+    anchor: input.anchor,
+  });
+  return total;
+}
+
+/** Sums historical production for one owner's bounded Planet batch. */
+export function calculateHistoricalProduction(input: {
+  planets: readonly MineralCollectionPlanet[];
+  purchases: readonly MineralUpgradePurchase[];
+  from: Date;
+  to: Date;
+  anchor: Date;
+}): bigint {
+  let total = 0n;
+  for (const planet of input.planets) {
+    total += calculateHistoricalPlanetProduction({ ...input, planet });
+  }
   return total;
 }

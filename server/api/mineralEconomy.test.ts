@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   calculateCollectionProduction,
   calculateConstantRateSegment,
+  calculateHistoricalPlanetProduction,
   calculateProductionSegments,
   collectionBonusBpsAt,
   type MineralCollectionPlanet,
@@ -89,6 +90,30 @@ describe('Minerals Economy v2 temporal calculations', () => {
         ],
       }),
     ).toBe(150n);
+  });
+
+  it('keeps split settlement exact across an upgrade boundary with a nontrivial remainder', () => {
+    const purchaseAt = new Date('2026-08-10T12:34:56.789Z');
+    const to = new Date('2026-08-11T00:00:00.001Z');
+    const planet: MineralCollectionPlanet = {
+      id: 'upgraded',
+      ownerAddress: '0xabc',
+      planetType: 'Gaia',
+      baseMineralsPerDay: 1n,
+      activatedAt: ANCHOR,
+    };
+    const input = {
+      planet,
+      planets: [planet],
+      purchases: [{ planetId: planet.id, bonusBpsAfter: 1_000, purchasedAt: purchaseAt }],
+      anchor: ANCHOR,
+    };
+    const whole = calculateHistoricalPlanetProduction({ ...input, from: ANCHOR, to });
+    const first = calculateHistoricalPlanetProduction({ ...input, from: ANCHOR, to: purchaseAt });
+    const second = calculateHistoricalPlanetProduction({ ...input, from: purchaseAt, to });
+
+    expect(first + second).toBe(whole);
+    expect(whole).toBe(1_047_573n);
   });
 
   it('activates collection bonuses at the historical third activation', () => {

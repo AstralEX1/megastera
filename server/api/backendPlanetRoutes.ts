@@ -15,6 +15,8 @@ import { getBackendPlanetMiningSnapshot, getBackendWalletMiningSnapshot } from '
 import { findTicketFromReceipt, parseReceiptReference, type ReceiptReference } from './receiptVerification.js';
 import { saveMegasteraProof } from './prismaTicketPurchase.js';
 import { reportBackendError } from './errorDiagnostics.js';
+import { purchasePlanetUpgrade } from './mineralAccounts.js';
+import type { PrismaClient } from './generated/prisma/client.js';
 
 export type BackendPlanetReference = ReceiptReference;
 
@@ -25,6 +27,7 @@ export type BackendPlanetRouteDependencies = {
   getStore: (config: BackendPlanetConfig) => BackendPlanetStore;
   allows: (key: string) => boolean;
   now: () => Date;
+  getPrisma?: (config: BackendPlanetConfig) => PrismaClient;
 };
 
 const MAX_BATCH = 50;
@@ -65,7 +68,13 @@ function defaultDependencies(): BackendPlanetRouteDependencies {
     loadConfig: () => loadBackendPlanetConfig(process.env),
     findTicket: (config, reference) => findTicketFromReceipt(config, reference),
     saveProof: (config, proof) => saveMegasteraProof(getPrismaClient(config.databaseUrl), proof),
-    getStore: (config) => new PrismaBackendPlanetStore(getPrismaClient(config.databaseUrl)),
+    getStore: (config) =>
+      new PrismaBackendPlanetStore(
+        getPrismaClient(config.databaseUrl),
+        () => new Date(),
+        config.mineralEconomyCutoverAt ?? null,
+      ),
+    getPrisma: (config) => getPrismaClient(config.databaseUrl),
     allows: createRateLimiter(),
     now: () => new Date(),
   };
@@ -219,7 +228,7 @@ export function createBackendPlanetRoutes(
     try {
       const config = dependencies.loadConfig();
       const mining = await getBackendPlanetMiningSnapshot(
-        getPrismaClient(config.databaseUrl),
+        (dependencies.getPrisma ?? ((value) => getPrismaClient(value.databaseUrl)))(config),
         parsed.data,
         dependencies.now(),
       );
@@ -239,9 +248,13 @@ export function createBackendPlanetRoutes(
     try {
       const config = dependencies.loadConfig();
       const mining = await getBackendWalletMiningSnapshot(
-        getPrismaClient(config.databaseUrl),
+        (dependencies.getPrisma ?? ((value) => getPrismaClient(value.databaseUrl)))(config),
         getAddress(owner).toLowerCase(),
         dependencies.now(),
+        {
+          mineralEconomyCutoverAt: config.mineralEconomyCutoverAt,
+          mineralUpgradesEnabled: config.mineralUpgradesEnabled,
+        },
       );
       return c.json({ mining });
     } catch (error) {
@@ -249,6 +262,51 @@ export function createBackendPlanetRoutes(
         { error: 'The mining API is not configured.' },
         503,
         reportBackendError('GET /api/wallets/:address/mining', error),
+      );
+    }
+  });
+
+  app.post('/planets/:planetId/upgrade', async (c) => {
+    const rawPlanetId = c.req.param('planetId');
+    if (isRetiredPlanetPath(rawPlanetId)) return c.json({ error: 'Planet not found.' }, 404);
+    const parsedPlanetId = planetIdSchema.safeParse(rawPlanetId);
+    if (!parsedPlanetId.success) return c.json({ error: 'A valid Planet ID is required.' }, 400);
+    let body: unknown;
+    try {
+      body = await readBoundedJson(c.req.raw);
+    } catch {
+      return c.json({ error: 'Request body is invalid or too large.' }, 400);
+    }
+    const targetLevel = body && typeof body === 'object' ? (body as { targetLevel?: unknown }).targetLevel : undefined;
+    if (typeof targetLevel !== 'number' || !Number.isInteger(targetLevel) || targetLevel < 1 || targetLevel > 3) {
+      return c.json({ error: 'targetLevel must be an integer between 1 and 3.' }, 400);
+    }
+    const config = dependencies.loadConfig();
+    const now = dependencies.now();
+    if (!config.mineralUpgradesEnabled || !config.mineralEconomyCutoverAt || now < config.mineralEconomyCutoverAt) {
+      return c.json({ error: 'Planet upgrades are disabled.' }, 404);
+    }
+    try {
+      const upgrade = await purchasePlanetUpgrade(
+        (dependencies.getPrisma ?? ((value) => getPrismaClient(value.databaseUrl)))(config),
+        {
+          planetId: parsedPlanetId.data,
+          targetLevel,
+          cutoverAt: config.mineralEconomyCutoverAt,
+          now: dependencies.now,
+        },
+      );
+      return c.json({ upgrade }, 200);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (message === 'Planet not found.') return c.json({ error: message }, 404);
+      if (/disabled|Insufficient|next Planet level|not ready|backwards|positive/.test(message)) {
+        return c.json({ error: message }, 409);
+      }
+      return c.json(
+        { error: 'Planet upgrade failed.' },
+        422,
+        reportBackendError('POST /api/planets/:planetId/upgrade', error),
       );
     }
   });
