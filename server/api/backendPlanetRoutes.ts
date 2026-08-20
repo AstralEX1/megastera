@@ -14,7 +14,6 @@ import { readBoundedJson } from './http.js';
 import { getBackendPlanetMiningSnapshot, getBackendWalletMiningSnapshot } from './miningStore.js';
 import { findTicketFromReceipt, parseReceiptReference, type ReceiptReference } from './receiptVerification.js';
 import { saveMegasteraProof } from './prismaTicketPurchase.js';
-import { reportBackendError } from './errorDiagnostics.js';
 
 export type BackendPlanetReference = ReceiptReference;
 
@@ -158,12 +157,8 @@ export function createBackendPlanetRoutes(
     try {
       const planets = await dependencies.getStore(dependencies.loadConfig()).listPlanets(getAddress(owner));
       return c.json({ planets: planets.map(serializePlanet) });
-    } catch (error) {
-      return c.json(
-        { error: 'The backend Planet API is not configured.' },
-        503,
-        reportBackendError('GET /api/planets', error),
-      );
+    } catch {
+      return c.json({ error: 'The backend Planet API is not configured.' }, 503);
     }
   });
 
@@ -173,12 +168,8 @@ export function createBackendPlanetRoutes(
     try {
       const collection = await dependencies.getStore(dependencies.loadConfig()).listCollection(getAddress(owner));
       return c.json({ planets: collection.map(serializeCollectionRow) });
-    } catch (error) {
-      return c.json(
-        { error: 'The backend Planet collection is not configured.' },
-        503,
-        reportBackendError('GET /api/planets/collection', error),
-      );
+    } catch {
+      return c.json({ error: 'The backend Planet collection is not configured.' }, 503);
     }
   });
 
@@ -190,9 +181,7 @@ export function createBackendPlanetRoutes(
     try {
       const gif = await dependencies.getStore(dependencies.loadConfig()).getGif(parsed.data);
       if (!gif) return c.json({ error: 'Planet GIF not found.' }, 404);
-      const responseBody = new ArrayBuffer(gif.bytes.byteLength);
-      new Uint8Array(responseBody).set(gif.bytes);
-      return new Response(responseBody, {
+      return new Response(gif.bytes, {
         status: 200,
         headers: {
           'content-type': 'image/gif',
@@ -202,12 +191,8 @@ export function createBackendPlanetRoutes(
           'x-content-type-options': 'nosniff',
         },
       });
-    } catch (error) {
-      return c.json(
-        { error: 'The backend Planet API is not configured.' },
-        503,
-        reportBackendError('GET /api/planets/:planetId/gif', error),
-      );
+    } catch {
+      return c.json({ error: 'The backend Planet API is not configured.' }, 503);
     }
   });
 
@@ -224,12 +209,8 @@ export function createBackendPlanetRoutes(
         dependencies.now(),
       );
       return mining ? c.json({ mining: serializeMining(mining) }) : c.json({ error: 'Mining data is not available for this Planet.' }, 404);
-    } catch (error) {
-      return c.json(
-        { error: 'The mining API is not configured.' },
-        503,
-        reportBackendError('GET /api/planets/:planetId/mining', error),
-      );
+    } catch {
+      return c.json({ error: 'The mining API is not configured.' }, 503);
     }
   });
 
@@ -244,12 +225,8 @@ export function createBackendPlanetRoutes(
         dependencies.now(),
       );
       return c.json({ mining });
-    } catch (error) {
-      return c.json(
-        { error: 'The mining API is not configured.' },
-        503,
-        reportBackendError('GET /api/wallets/:address/mining', error),
-      );
+    } catch {
+      return c.json({ error: 'The mining API is not configured.' }, 503);
     }
   });
 
@@ -261,12 +238,8 @@ export function createBackendPlanetRoutes(
     try {
       const planet = await dependencies.getStore(dependencies.loadConfig()).getPlanet(parsed.data);
       return planet ? c.json({ planet: serializePlanet(planet) }) : c.json({ error: 'Planet not found.' }, 404);
-    } catch (error) {
-      return c.json(
-        { error: 'The backend Planet API is not configured.' },
-        503,
-        reportBackendError('GET /api/planets/:planetId', error),
-      );
+    } catch {
+      return c.json({ error: 'The backend Planet API is not configured.' }, 503);
     }
   });
 

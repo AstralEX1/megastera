@@ -8,7 +8,6 @@ import {
   getWalletLeaderboardPosition,
 } from './leaderboardStore.js';
 import { loadBackendPlanetConfig } from './backendConfig.js';
-import { reportBackendError } from './errorDiagnostics.js';
 
 const paginationSchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
@@ -83,12 +82,8 @@ export function createLeaderboardRoutes(overrides: Partial<LeaderboardDependenci
         limit: result.limit,
         rows: result.rows.map(serializeRow),
       });
-    } catch (error) {
-      return c.json(
-        { error: 'The leaderboard API is not configured.' },
-        503,
-        reportBackendError('GET /api/leaderboard/current', error),
-      );
+    } catch {
+      return c.json({ error: 'The leaderboard API is not configured.' }, 503);
     }
   });
 
@@ -109,12 +104,8 @@ export function createLeaderboardRoutes(overrides: Partial<LeaderboardDependenci
         row: result.row ? serializeRow(result.row) : null,
         distanceToNextRankMicros: result.distanceToNextRankMicros,
       });
-    } catch (error) {
-      return c.json(
-        { error: 'The leaderboard API is not configured.' },
-        503,
-        reportBackendError('GET /api/leaderboard/current/:address', error),
-      );
+    } catch {
+      return c.json({ error: 'The leaderboard API is not configured.' }, 503);
     }
   });
 

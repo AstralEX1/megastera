@@ -51,10 +51,7 @@ export function getBulkOrderShape(args: { count: number; staticTicketCount: numb
  *
  * @returns bigint in raw 6-decimal USDC units (multiply by 10**-6 for display).
  */
-export function totalCost(args: {
-  ticketPriceUsdcRaw: bigint;
-  count: number;
-}): bigint {
+export function totalCost(args: { ticketPriceUsdcRaw: bigint; count: number }): bigint {
   return args.ticketPriceUsdcRaw * BigInt(args.count);
 }
 
@@ -68,7 +65,9 @@ export function randomTicket(args: { ballMax: number; bonusballMax: number }): C
     args.bonusballMax < BONUSBALL_MIN ||
     args.bonusballMax > 255
   ) {
-    throw new RangeError('bonusballMax must be a safe integer between the protocol minimum and 255.');
+    throw new RangeError(
+      'bonusballMax must be a safe integer between the protocol minimum and 255.',
+    );
   }
   const normals = new Set<number>();
   while (normals.size < 5) {
@@ -79,36 +78,44 @@ export function randomTicket(args: { ballMax: number; bonusballMax: number }): C
   return { normals: [...normals].sort((a, b) => a - b), bonusball };
 }
 
+/** Keeps the concrete ticket prefix aligned with quantity and live bounds. */
+export function syncConfiguredTickets(args: {
+  count: number;
+  tickets: readonly CustomTicket[];
+  bounds: TicketBounds | null;
+  random?: (bounds: TicketBounds) => CustomTicket;
+}): readonly CustomTicket[] {
+  const targetCount = Math.min(MAX_CUSTOM_TICKETS, Math.max(0, Math.trunc(args.count)));
+  const tickets = args.tickets.slice(0, targetCount);
+  const bounds = args.bounds;
+  if (!bounds) return tickets;
+
+  const random = args.random ?? randomTicket;
+  const next = tickets.map((ticket) => (isValidTicket(ticket, bounds) ? ticket : random(bounds)));
+  while (next.length < targetCount) next.push(random(bounds));
+  return next;
+}
+
 /**
  * Produces the complete explicit ticket list required by `Jackpot.buyTickets`.
- * Users may configure up to `count` tickets; the remaining places are client-side
- * quick-picks, matching the MegaPlanets direct-purchase flow. Random picks are deliberately
- * made only at submission time, so preview rows never claim to be the final draw.
+ * The caller owns the complete synchronized ticket array so submission cannot
+ * replace values that were shown in Coordinates.
  */
 export function buildDirectTickets(args: {
   customTickets: readonly CustomTicket[];
   count: number;
   bounds: TicketBounds;
-  random?: (bounds: TicketBounds) => CustomTicket;
 }): readonly CustomTicket[] {
   if (!Number.isSafeInteger(args.count) || args.count < 1 || args.count > BULK_THRESHOLD) {
     throw new RangeError(`Direct purchases require between 1 and ${BULK_THRESHOLD} tickets.`);
   }
-  if (args.customTickets.length > args.count) {
-    throw new RangeError('Custom ticket count cannot exceed the purchase quantity.');
+  if (args.customTickets.length !== args.count) {
+    throw new RangeError('Direct purchases require a complete ticket array.');
   }
   if (!args.customTickets.every((ticket) => isValidTicket(ticket, args.bounds))) {
     throw new RangeError('Every custom ticket must use the current drawing bounds.');
   }
-
-  const random = args.random ?? randomTicket;
-  const tickets = [...args.customTickets];
-  while (tickets.length < args.count) tickets.push(random(args.bounds));
-
-  if (!tickets.every((ticket) => isValidTicket(ticket, args.bounds))) {
-    throw new RangeError('A generated quick-pick does not satisfy the current drawing bounds.');
-  }
-  return tickets;
+  return [...args.customTickets];
 }
 
 /** True iff the ticket has 5 unique normals in [1, ballMax] + a valid bonusball. */

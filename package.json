@@ -8,9 +8,6 @@
   "scripts": {
     "bootstrap": "pnpm install",
     "dev": "vite",
-    "prebuild": "pnpm --filter @megaplanets/planet-generator build",
-    "predev": "pnpm --filter @megaplanets/planet-generator build",
-    "pretest": "pnpm --filter @megaplanets/planet-generator build",
     "build": "prisma generate && tsc -b && vite build && node scripts/prepare-site-worker.mjs",
     "api:server": "node --import tsx/esm server/api/serverMain.ts",
     "api:leaderboard-worker": "node --import tsx/esm server/api/leaderboardWorker.ts",

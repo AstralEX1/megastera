@@ -9,12 +9,19 @@ const mocks = vi.hoisted(() => ({
   generate: vi.fn(),
   account: { address: '0x0000000000000000000000000000000000000001', isConnected: true },
   directTickets: [] as Array<Record<string, unknown>>,
+  bulkDraft: null as { dynamicCount: number; staticTickets: readonly unknown[] } | null,
 }));
 
 vi.mock('wagmi', () => ({
   useAccount: () => mocks.account,
   useReadContract: () => ({ data: 100_000_000n, error: null, isLoading: false, refetch: vi.fn() }),
-  useWriteContract: () => ({ writeContract: vi.fn(), data: undefined, isPending: false, error: null, reset: vi.fn() }),
+  useWriteContract: () => ({
+    writeContract: vi.fn(),
+    data: undefined,
+    isPending: false,
+    error: null,
+    reset: vi.fn(),
+  }),
   useWaitForTransactionReceipt: () => ({ data: undefined, isLoading: false }),
 }));
 vi.mock('@/hooks/useJackpotState', () => ({
@@ -39,17 +46,29 @@ vi.mock('@/hooks/useBuyTickets', () => ({
   }),
 }));
 vi.mock('@/hooks/useBulkPurchase', () => ({
-  useBulkPurchase: () => ({
-    minimumTicketCount: undefined,
-    hasActiveOrder: false,
-    createOrder: vi.fn(),
-    cancelOrder: vi.fn(),
-    reset: vi.fn(),
-    create: { isReady: false, isPending: false, isWaitingSignature: false, isPreparing: false, isMining: false, isSuccess: false, error: null, reset: vi.fn() },
-    cancel: { isPending: false },
-    confirmedTickets: [],
-    orderInfo: [],
-  }),
+  useBulkPurchase: (draft: typeof mocks.bulkDraft) => {
+    mocks.bulkDraft = draft;
+    return {
+      minimumTicketCount: undefined,
+      hasActiveOrder: false,
+      createOrder: vi.fn(),
+      cancelOrder: vi.fn(),
+      reset: vi.fn(),
+      create: {
+        isReady: false,
+        isPending: false,
+        isWaitingSignature: false,
+        isPreparing: false,
+        isMining: false,
+        isSuccess: false,
+        error: null,
+        reset: vi.fn(),
+      },
+      cancel: { isPending: false },
+      confirmedTickets: [],
+      orderInfo: [],
+    };
+  },
 }));
 vi.mock('@/lib/backendApi', async () => {
   const actual = await vi.importActual<typeof import('@/lib/backendApi')>('@/lib/backendApi');
@@ -86,7 +105,14 @@ const planet = (ticketId: string) => ({
   status: 'READY',
   gifHash: `0x${'33'.repeat(32)}`,
   gifUrl: `/api/planets/planet-${ticketId}/gif`,
-  ticket: { ticketId, drawingId: '218', normals: [1, 2, 3, 4, 5], bonusBall: 1, originTxHash: `0x${ticketId.padStart(64, '0')}`, logIndex: '0' },
+  ticket: {
+    ticketId,
+    drawingId: '218',
+    normals: [1, 2, 3, 4, 5],
+    bonusBall: 1,
+    originTxHash: `0x${ticketId.padStart(64, '0')}`,
+    logIndex: '0',
+  },
 });
 
 describe('Play backend generation flow', () => {
@@ -95,6 +121,7 @@ describe('Play backend generation flow', () => {
     mocks.buy.mockReset();
     mocks.generate.mockReset();
     mocks.directTickets = [];
+    mocks.bulkDraft = null;
     mocks.account.isConnected = true;
   });
 
@@ -110,12 +137,41 @@ describe('Play backend generation flow', () => {
     const user = userEvent.setup();
     render(<Play />);
     await user.click(screen.getByRole('button', { name: /^Explore 3/ }));
-    expect(mocks.buy).toHaveBeenCalledWith({ count: 3, bounds: { ballMax: 50, bonusballMax: 10 }, customTickets: [] });
+    expect(mocks.buy).toHaveBeenCalledOnce();
+    const [draft] = mocks.buy.mock.calls[0];
+    expect(draft).toMatchObject({ count: 3, bounds: { ballMax: 50, bonusballMax: 10 } });
+    expect(draft.customTickets).toHaveLength(3);
+  });
+
+  it('populates concrete Coordinates rows while the disclosure is closed', async () => {
+    render(<Play />);
+
+    expect(
+      await screen.findAllByRole('button', { name: /^Edit ticket/, hidden: true }),
+    ).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: 'Open coordinates' })[0]).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
+  it('passes ten concrete tickets plus the derived dynamic count to bulk checkout', async () => {
+    const user = userEvent.setup();
+    render(<Play />);
+
+    await user.click(screen.getByRole('button', { name: 'Custom quantity' }));
+    await user.type(screen.getByLabelText('Custom planet count'), '11{enter}');
+
+    expect(mocks.bulkDraft).toEqual(expect.objectContaining({ dynamicCount: 1 }));
+    expect(mocks.bulkDraft?.staticTickets).toHaveLength(10);
+    expect(await screen.findAllByTestId('dynamic-ticket')).toHaveLength(1);
   });
 
   it('shows the exploring state and then full Planet cards with exactly two next actions', async () => {
     mocks.directTickets = [ticket(34n), ticket(35n, 1n), ticket(36n, 2n)];
-    mocks.generate.mockImplementation(async ({ transactionHash }: { transactionHash: string }) => planet(String(BigInt(transactionHash))));
+    mocks.generate.mockImplementation(async ({ transactionHash }: { transactionHash: string }) =>
+      planet(String(BigInt(transactionHash))),
+    );
     const user = userEvent.setup();
     render(<Play />);
     await user.click(screen.getByRole('button', { name: /^Explore 3/ }));
@@ -140,7 +196,9 @@ describe('Play backend generation flow', () => {
     await user.click(screen.getByRole('button', { name: /^Explore 3/ }));
 
     expect(await screen.findByText('Exploring planets…')).toBeInTheDocument();
-    expect(await screen.findByText('Your planets are ready.', undefined, { timeout: 4_000 })).toBeInTheDocument();
+    expect(
+      await screen.findByText('Your planets are ready.', undefined, { timeout: 4_000 }),
+    ).toBeInTheDocument();
     expect(mocks.buy).toHaveBeenCalledTimes(1);
     expect(mocks.generate).toHaveBeenCalledTimes(4);
   });

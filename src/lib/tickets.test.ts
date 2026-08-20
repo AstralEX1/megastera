@@ -4,6 +4,7 @@ import {
   getBulkOrderShape,
   isValidTicket,
   randomTicket,
+  syncConfiguredTickets,
   totalCost,
 } from './tickets';
 
@@ -35,17 +36,15 @@ describe('purchase routing', () => {
     expect(() => randomTicket({ ballMax: 30, bonusballMax: 0 })).toThrow(/bonusballMax/i);
   });
 
-  it('fills only the unconfigured direct tickets with client-side quick-picks', () => {
+  it('requires the direct purchase array to already be complete', () => {
     const configured = { normals: [1, 2, 3, 4, 5], bonusball: 6 };
-    const generated = { normals: [6, 7, 8, 9, 10], bonusball: 11 };
-    expect(
+    expect(() =>
       buildDirectTickets({
         customTickets: [configured],
         count: 2,
         bounds: { ballMax: 30, bonusballMax: 12 },
-        random: () => generated,
       }),
-    ).toEqual([configured, generated]);
+    ).toThrow(/complete/i);
   });
 
   it('rejects incomplete direct purchase input before simulating the write', () => {
@@ -56,5 +55,51 @@ describe('purchase routing', () => {
         bounds: { ballMax: 30, bonusballMax: 12 },
       }),
     ).toThrow(/custom ticket/i);
+  });
+
+  it('fills the configured ticket array before Coordinates opens', () => {
+    expect(
+      syncConfiguredTickets({
+        count: 3,
+        tickets: [],
+        bounds: { ballMax: 30, bonusballMax: 12 },
+        random: () => ({ normals: [1, 2, 3, 4, 5], bonusball: 6 }),
+      }),
+    ).toHaveLength(3);
+  });
+
+  it('preserves the configured prefix when quantity changes', () => {
+    const first = { normals: [1, 2, 3, 4, 5], bonusball: 6 };
+    const second = { normals: [6, 7, 8, 9, 10], bonusball: 7 };
+    const result = syncConfiguredTickets({
+      count: 3,
+      tickets: [first, second],
+      bounds: { ballMax: 30, bonusballMax: 12 },
+      random: () => ({ normals: [11, 12, 13, 14, 15], bonusball: 8 }),
+    });
+
+    expect(result).toEqual([first, second, { normals: [11, 12, 13, 14, 15], bonusball: 8 }]);
+    expect(
+      syncConfiguredTickets({
+        count: 1,
+        tickets: result,
+        bounds: { ballMax: 30, bonusballMax: 12 },
+      }),
+    ).toEqual([first]);
+  });
+
+  it('replaces only tickets invalidated by new drawing bounds', () => {
+    const valid = { normals: [1, 2, 3, 4, 5], bonusball: 6 };
+    const invalid = { normals: [6, 7, 8, 9, 10], bonusball: 12 };
+    const replacement = { normals: [11, 12, 13, 14, 15], bonusball: 7 };
+
+    expect(
+      syncConfiguredTickets({
+        count: 2,
+        tickets: [valid, invalid],
+        bounds: { ballMax: 15, bonusballMax: 10 },
+        random: () => replacement,
+      }),
+    ).toEqual([valid, replacement]);
   });
 });

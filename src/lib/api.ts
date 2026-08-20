@@ -367,14 +367,7 @@ async function get<T>(
   params?: Record<string, string | number | undefined>,
   options?: { signal?: AbortSignal },
 ): Promise<T> {
-  // `VITE_API_BASE_URL=/api/megapot` is intentionally relative so the browser
-  // uses the same-origin Vercel proxy. `new URL(relativePath)` throws in the
-  // browser unless an origin is supplied, which made every wallet query fail
-  // before fetch could reach the working proxy.
-  const origin = typeof globalThis.location?.origin === 'string'
-    ? globalThis.location.origin
-    : 'http://localhost';
-  const url = new URL(`${API_BASE_URL}${path}`, origin);
+  const url = new URL(`${API_BASE_URL}${path}`);
   if (params) {
     for (const [k, v] of Object.entries(params)) {
       if (v !== undefined) url.searchParams.set(k, String(v));
