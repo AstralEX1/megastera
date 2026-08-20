@@ -107,6 +107,7 @@ describe('PrismaBackendPlanetStore', () => {
 
   it('settles existing production before activating a generated Planet at the locked effective time', async () => {
     const cutoverAt = new Date('2026-08-20T00:00:00.000Z');
+    const draftAt = new Date('2026-08-19T00:00:00.000Z');
     const effectiveAt = new Date('2026-08-21T00:00:00.000Z');
     const persistedTicket = {
       id: 'ticket-row',
@@ -189,7 +190,7 @@ describe('PrismaBackendPlanetStore', () => {
       () => {
         nowCalls += 1;
         events.push(`now-${nowCalls}`);
-        return effectiveAt;
+        return nowCalls === 1 ? draftAt : effectiveAt;
       },
       cutoverAt,
     );

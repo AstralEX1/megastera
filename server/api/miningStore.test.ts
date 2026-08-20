@@ -15,6 +15,7 @@ describe('backend Planet mining snapshots', () => {
     const snapshot = await getBackendWalletMiningSnapshot(prisma, '0x0000000000000000000000000000000000000001', new Date('2026-08-10T00:00:01.000Z'));
     expect(snapshot.ownedPlanetCount).toBe(2);
     expect(snapshot.earnedMicros).toBe('172803000000');
+    expect(snapshot).toMatchObject({ currentBalanceMicros: '172803000000', upgradesEnabled: false });
     expect(snapshot.planets[0]?.planetId).toBe('planet-1');
     expect(snapshot.planets[0]).toMatchObject({ planetType: 'Nebula', sameTypeCount: 2, collectionBonusBps: 0 });
   });

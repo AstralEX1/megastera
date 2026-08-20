@@ -225,7 +225,9 @@ async function getV1WalletMiningSnapshot(prisma: PrismaClient, ownerAddress: str
     asOf: now.toISOString(),
     ownedPlanetCount: snapshots.length,
     earnedMicros: earnedMicros.toString(),
+    currentBalanceMicros: earnedMicros.toString(),
     effectiveMineralsPerDayMicros: effectiveMineralsPerDayMicros.toString(),
+    upgradesEnabled: false,
     planets: snapshots,
   };
 }

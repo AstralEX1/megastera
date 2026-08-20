@@ -1,6 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { beforeAll, afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from './generated/prisma/client.js';
+import { Prisma, PrismaClient } from './generated/prisma/client.js';
 import { MEGASTERA_SOURCE } from './config.js';
 import { purchasePlanetUpgrade } from './mineralAccounts.js';
 
@@ -20,14 +20,16 @@ function createClient() {
 describePostgres('Mineral upgrade PostgreSQL concurrency', () => {
   let first: PrismaClient;
   let second: PrismaClient;
+  let blocker: PrismaClient;
 
   beforeAll(() => {
     first = createClient();
     second = createClient();
+    blocker = createClient();
   });
 
   afterAll(async () => {
-    await Promise.all([first.$disconnect(), second.$disconnect()]);
+    await Promise.all([first.$disconnect(), second.$disconnect(), blocker.$disconnect()]);
   });
 
   it('charges one concurrent upgrade exactly once', async () => {
@@ -80,19 +82,50 @@ describePostgres('Mineral upgrade PostgreSQL concurrency', () => {
     });
 
     try {
+      let releaseLock!: () => void;
+      const releasePromise = new Promise<void>((resolve) => {
+        releaseLock = resolve;
+      });
+      let lockHeld!: () => void;
+      const lockHeldPromise = new Promise<void>((resolve) => {
+        lockHeld = resolve;
+      });
+      const blockerTransaction = blocker.$transaction(async (transaction) => {
+        await transaction.$queryRaw(
+          Prisma.sql`SELECT "id" FROM "mineral_accounts" WHERE "ownerAddress" = ${OWNER} FOR UPDATE`,
+        );
+        lockHeld();
+        await releasePromise;
+      });
+      await lockHeldPromise;
+
+      let completed = 0;
+      const firstUpgrade = purchasePlanetUpgrade(first, {
+        planetId: planet.id,
+        targetLevel: 1,
+        cutoverAt: CUTOVER,
+        now: () => PURCHASED_AT,
+      }).then((result) => {
+        completed += 1;
+        return result;
+      });
+      const secondUpgrade = purchasePlanetUpgrade(second, {
+        planetId: planet.id,
+        targetLevel: 1,
+        cutoverAt: CUTOVER,
+        now: () => PURCHASED_AT,
+      }).then((result) => {
+        completed += 1;
+        return result;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      expect(completed).toBe(0);
+      releaseLock();
+      await blockerTransaction;
+
       const results = await Promise.all([
-        purchasePlanetUpgrade(first, {
-          planetId: planet.id,
-          targetLevel: 1,
-          cutoverAt: CUTOVER,
-          now: () => PURCHASED_AT,
-        }),
-        purchasePlanetUpgrade(second, {
-          planetId: planet.id,
-          targetLevel: 1,
-          cutoverAt: CUTOVER,
-          now: () => PURCHASED_AT,
-        }),
+        firstUpgrade,
+        secondUpgrade,
       ]);
 
       expect(results[0]?.targetLevel).toBe(1);

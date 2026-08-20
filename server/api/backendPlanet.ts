@@ -300,10 +300,10 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
     });
     if (existing?.status === 'READY' && existing.gifData) return serializeRecord(existing as PrismaBackendPlanetRow);
     const draft = deriveBackendPlanet(normalized, this.now());
-    const candidateAt = new Date(draft.generatedAt);
-    if (this.mineralEconomyCutoverAt && candidateAt >= this.mineralEconomyCutoverAt) {
+    if (this.mineralEconomyCutoverAt) {
       return this.generatePostCutoverPlanet(ticket, draft, existing as PrismaBackendPlanetRow | null);
     }
+    const candidateAt = new Date(draft.generatedAt);
     const data = planetPersistenceData(ticket.id, draft, candidateAt);
     try {
       const row = existing
