@@ -12,6 +12,25 @@ function formatJackpot(amount: bigint) {
   return Number(formatUnits(amount, 6)).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
+function formatPurchaseError(error: Error) {
+  const message = error.message.toLowerCase();
+  if (
+    /(insufficient|not enough|exceeds balance|balance too low)/.test(message) &&
+    /(balance|fund|usdc|transfer)/.test(message)
+  ) {
+    return 'Not enough USDC balance for this purchase.';
+  }
+  if (
+    /(user rejected|user denied|rejected the request|denied transaction|cancelled)/.test(message)
+  ) {
+    return 'Transaction cancelled. Try again when you’re ready.';
+  }
+  if (/(network|rpc|chain|disconnected)/.test(message)) {
+    return 'Wallet connection or network error. Check your wallet and try again.';
+  }
+  return 'We couldn’t complete the ticket purchase. Check your USDC balance and try again.';
+}
+
 export type JackpotStatus = 'loading' | 'ready' | 'error';
 
 export function ExpeditionConfigurator({
@@ -24,6 +43,7 @@ export function ExpeditionConfigurator({
   tickets,
   disabled,
   exploreLabel,
+  purchaseError,
   approvalSpender,
   approvalAmount,
   onApproved,
@@ -40,6 +60,7 @@ export function ExpeditionConfigurator({
   tickets: readonly CustomTicket[];
   disabled: boolean;
   exploreLabel?: ReactNode;
+  purchaseError?: Error | null;
   approvalSpender?: `0x${string}`;
   approvalAmount?: bigint;
   onApproved?: () => void;
@@ -137,6 +158,22 @@ export function ExpeditionConfigurator({
                     onClick={onExplore}
                   />
                 )}
+                {purchaseError ? (
+                  <div className="mt-3 space-y-1 text-center text-sm text-rose-600 dark:text-rose-400">
+                    <p role="alert">{formatPurchaseError(purchaseError)}</p>
+                    <p className="text-xs text-[var(--text-secondary)]">
+                      Need help?{' '}
+                      <a
+                        href="https://t.me/astralex163"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline underline-offset-2 hover:text-[var(--text-primary)]"
+                      >
+                        Message support if you have any issues
+                      </a>
+                    </p>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
@@ -146,8 +183,8 @@ export function ExpeditionConfigurator({
           aria-label={coordinatesLabel}
           aria-expanded={coordinatesOpen}
           onClick={() => setCoordinatesOpen((open) => !open)}
-          className="absolute top-1/2 z-40 hidden h-60 w-20 -translate-y-1/2 items-center justify-center border-x border-[var(--border)] bg-[var(--background)] text-[var(--text-primary)] transition-colors duration-300 ease-out hover:bg-[var(--surface-raised)] xl:flex"
-          style={{ left: 'calc(50% + 472px)' }}
+          className="fixed top-1/2 right-0 z-40 hidden h-60 w-20 -translate-y-1/2 items-center justify-center border-x border-[var(--border)] bg-[var(--background)] text-[var(--text-primary)] transition-[right,background-color] duration-300 ease-out hover:bg-[var(--surface-raised)] xl:flex"
+          style={{ right: coordinatesOpen ? '380px' : '0px' }}
         >
           <span className="relative flex h-full w-full items-center justify-center" aria-hidden>
             <span className="-rotate-90 whitespace-nowrap telemetry text-[1rem] font-bold">
@@ -164,8 +201,8 @@ export function ExpeditionConfigurator({
           data-state={coordinatesOpen ? 'open' : 'closed'}
           aria-hidden={!coordinatesOpen}
           inert={!coordinatesOpen || undefined}
-          className={`absolute top-0 z-30 hidden h-full max-h-[calc(100svh-7rem)] overflow-hidden transition-[width,opacity,transform] duration-300 ease-out xl:block ${coordinatesOpen ? 'pointer-events-auto w-[380px] translate-x-0 opacity-100' : 'pointer-events-none w-0 translate-x-3 opacity-0'}`}
-          style={{ left: 'min(calc(50% + 552px), calc(50% + 50vw - 316px))' }}
+          className={`fixed top-[7rem] right-0 z-30 hidden h-[calc(100svh-7rem)] overflow-hidden transition-[width,opacity,transform] duration-300 ease-out xl:block ${coordinatesOpen ? 'pointer-events-auto w-[380px] translate-x-0 opacity-100' : 'pointer-events-none w-0 translate-x-3 opacity-0'}`}
+          style={{ right: '0px' }}
         >
           <div className="h-full w-[380px] overflow-y-auto">
             <CoordinatesPanel

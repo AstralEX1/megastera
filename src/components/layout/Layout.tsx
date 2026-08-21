@@ -16,6 +16,7 @@ import { COPY } from '@/config/copy';
 import { MobileWalletBar } from './MobileWalletBar';
 import { MobileBottomNav, Nav, type NavKey } from './Nav';
 import { ProfileCard } from './ProfileCard';
+import { Footer } from './Footer';
 
 export function Layout({
   active,
@@ -42,6 +43,7 @@ export function Layout({
         <MobileWalletBar />
       </header>
       <main className={`relative z-10 mx-auto w-full px-4 pt-6 pb-6 ${active === 'planets' ? 'max-w-[1480px]' : 'max-w-5xl'}`}>{children}</main>
+      <Footer />
       <MobileBottomNav active={active} onSelect={onSelect} />
       <div
         aria-hidden

@@ -120,14 +120,14 @@ describe('ExpeditionConfigurator', () => {
 
     const [toggle] = screen.getAllByRole('button', { name: 'Open coordinates' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(toggle).toHaveClass('transition-colors');
+    expect(toggle).toHaveClass('transition-[right,background-color]');
     expect(toggle).toHaveClass('h-60', 'w-20');
-    expect(toggle).toHaveStyle({ left: 'calc(50% + 472px)' });
+    expect(toggle).toHaveClass('fixed');
+    expect(toggle).toHaveStyle({ right: '0px' });
     expect(toggle.querySelector('.text-\\[1rem\\]')).toBeInTheDocument();
     expect(toggle.querySelector('.text-\\[2\\.25rem\\]')).toBeInTheDocument();
-    expect(screen.getByTestId('coordinates-disclosure')).toHaveStyle({
-      left: 'min(calc(50% + 552px), calc(50% + 50vw - 316px))',
-    });
+    expect(screen.getByTestId('coordinates-disclosure')).toHaveClass('fixed');
+    expect(screen.getByTestId('coordinates-disclosure')).toHaveStyle({ right: '0px' });
     expect(screen.getAllByText('Bonus Ball influences Planet generation.')).toHaveLength(1);
 
     await user.click(toggle);
@@ -136,9 +136,7 @@ describe('ExpeditionConfigurator', () => {
     expect(screen.getByTestId('coordinates-disclosure')).toHaveClass('w-[380px]');
 
     const [closeToggle] = screen.getAllByRole('button', { name: 'Close coordinates' });
-    expect(closeToggle).toHaveStyle({
-      left: 'calc(50% + 472px)',
-    });
+    expect(closeToggle).toHaveStyle({ right: '380px' });
     await user.click(closeToggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });

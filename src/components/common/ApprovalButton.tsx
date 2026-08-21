@@ -4,8 +4,8 @@
  * @customize  Generic USDC approve flow. Pass any `spender` so one wrapper
  *             works across Jackpot / BatchPurchaseFacilitator /
  *             JackpotAutoSubscription / JackpotLPManager. The gate compares
- *             allowance with the exact next purchase, while approval uses
- *             `maxUint256` for the documented "approve once" UX.
+ *             allowance with the next purchase, then creates a reusable
+ *             allowance for that spender.
  *
  *             Children-passthrough pattern. Wrap the downstream submit
  *             button inside `<ApprovalButton>`; when allowance is
@@ -19,12 +19,10 @@
  *             Children show through whenever:
  *               - wallet is disconnected
  *               - amount is 0n (nothing to approve yet)
- *               - allowance query is still loading
- *               - allowance is already ≥ amount
+ *               - allowance is resolved and already ≥ amount
  *
- *             so the submit CTA stays visible (and the parent can keep it
- *             disabled via its own guard) in every state except the brief
- *             "approval required" gate.
+ *             While the allowance is unresolved, the CTA is disabled until
+ *             the current on-chain value is known.
  * ---
  */
 import type { ReactNode } from 'react';
@@ -33,8 +31,11 @@ import { erc20Abi, maxUint256 } from 'viem';
 import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
 import { USDC_ADDRESS } from '@/config/contracts';
 import { useUsdcAllowance } from '@/hooks/useUsdcAllowance';
+import {
+  getTransactionReceiptError,
+  isSuccessfulTransactionReceipt,
+} from '@/lib/transactionReceipt';
 import { Button } from './Button';
-import { getTransactionReceiptError, isSuccessfulTransactionReceipt } from '@/lib/transactionReceipt';
 
 export function ApprovalButton({
   spender,
@@ -49,10 +50,12 @@ export function ApprovalButton({
   children?: ReactNode;
 }) {
   const { address } = useAccount();
-  const { allowance, error: allowanceError, isLoading: isAllowanceLoading, refetch } = useUsdcAllowance(
-    address,
-    spender,
-  );
+  const {
+    allowance,
+    error: allowanceError,
+    isLoading: isAllowanceLoading,
+    refetch,
+  } = useUsdcAllowance(address, spender);
 
   const { writeContract, data: txHash, isPending, error, reset } = useWriteContract();
   const { data: receipt, isLoading } = useWaitForTransactionReceipt({
@@ -61,6 +64,10 @@ export function ApprovalButton({
   const isSuccess = isSuccessfulTransactionReceipt(receipt);
   const receiptError = getTransactionReceiptError(receipt);
   const [isRefreshingAllowance, setIsRefreshingAllowance] = useState(false);
+  const approvalKey = address
+    ? `${address.toLowerCase()}:${spender.toLowerCase()}:${amount.toString()}`
+    : null;
+  const [confirmedApprovalKey, setConfirmedApprovalKey] = useState<string | null>(null);
 
   // Fire-once gate keyed on `txHash`. The parent may pass a fresh
   // `onApproved` reference each render, which would otherwise re-run
@@ -73,31 +80,36 @@ export function ApprovalButton({
     if (!isSuccess || !txHash) return;
     if (firedHashRef.current === txHash) return;
     firedHashRef.current = txHash;
+    // A successful receipt is authoritative; the allowance read can lag the
+    // receipt briefly on the RPC provider and otherwise show Approve again.
+    setConfirmedApprovalKey(approvalKey);
     onApproved?.();
     setIsRefreshingAllowance(true);
     void Promise.resolve(refetch()).finally(() => {
       setIsRefreshingAllowance(false);
       reset();
     });
-  }, [isSuccess, txHash, refetch, onApproved, reset]);
+  }, [approvalKey, isSuccess, txHash, refetch, onApproved, reset]);
 
   const requiresAllowance = !!address && amount > 0n;
-  if (requiresAllowance && isAllowanceLoading) {
-    return (
-      <Button variant="secondary" size="md" disabled className="w-full">
-        Checking USDC approval…
-      </Button>
-    );
-  }
-
   if (requiresAllowance && allowanceError) {
     return (
       <div className="space-y-1">
         <Button variant="secondary" size="md" disabled className="w-full">
           Could not check USDC approval
         </Button>
-        <p className="text-xs text-rose-600 dark:text-rose-400">Retry after your RPC connection recovers.</p>
+        <p className="text-xs text-rose-600 dark:text-rose-400">
+          Retry after your RPC connection recovers.
+        </p>
       </div>
+    );
+  }
+
+  if (requiresAllowance && (isAllowanceLoading || allowance === undefined)) {
+    return (
+      <Button variant="secondary" size="md" disabled className="w-full">
+        Checking USDC approval…
+      </Button>
     );
   }
 
@@ -110,7 +122,12 @@ export function ApprovalButton({
   }
 
   // Only show the Approve CTA when the resolved allowance is insufficient.
-  const needsApproval = !!address && amount > 0n && allowance !== undefined && allowance < amount;
+  const needsApproval =
+    !!address &&
+    amount > 0n &&
+    allowance !== undefined &&
+    allowance < amount &&
+    confirmedApprovalKey !== approvalKey;
 
   if (!needsApproval) return <>{children}</>;
 
@@ -127,13 +144,7 @@ export function ApprovalButton({
   return (
     <div className="space-y-1">
       <Button variant="primary" size="md" onClick={onClick} disabled={busy} className="w-full">
-        {isPending ? (
-          'Sign in your wallet…'
-        ) : isLoading ? (
-          'Approving on-chain…'
-        ) : (
-          'Approve USDC'
-        )}
+        {isPending ? 'Sign in your wallet…' : isLoading ? 'Approving on-chain…' : 'Approve USDC'}
       </Button>
       {(error ?? receiptError) && (
         <p className="text-xs text-rose-600 dark:text-rose-400">

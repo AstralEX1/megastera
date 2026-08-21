@@ -34,7 +34,6 @@ export default function App() {
     const pathname = `/planet/${tokenId}`;
     window.history.pushState({}, '', pathname);
     setRoute(parseAppRoute(pathname));
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
   useEffect(() => {
