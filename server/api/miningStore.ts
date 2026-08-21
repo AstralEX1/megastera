@@ -6,15 +6,15 @@ import {
 } from './collectionMining.js';
 import {
   calculateHistoricalPlanetProduction,
-  calculateHistoricalProduction,
   collectionBonusBpsAt,
   type MineralCollectionPlanet,
   type MineralUpgradePurchase,
 } from './mineralEconomy.js';
 import {
+  calculateCurrentMineralBalanceMicros,
   calculateV1WalletOpeningBalance,
   getPostgresClockTimestamp,
-  resolveMineralEconomyCutover,
+  resolveMineralEconomyForOperation,
 } from './mineralAccounts.js';
 import { getNextMineralUpgrade } from './mineralUpgrades.js';
 
@@ -31,17 +31,32 @@ export async function getBackendWalletMiningSnapshot(
   now: Date,
   options: WalletMiningEconomyOptions = {},
 ) {
-  const resolution = await resolveMineralEconomyCutover(
+  const resolution = await resolveMineralEconomyForOperation(
     prisma,
     options.mineralEconomyCutoverAt,
   );
-  const cutoverAt = resolution.cutoverAt;
-  if (!cutoverAt) return getV1WalletMiningSnapshot(prisma, ownerAddress, now);
+  if (resolution.state === 'V1') return getV1WalletMiningSnapshot(prisma, ownerAddress, now);
 
   return prisma.$transaction(
     async (transaction) => {
       const hasPostgresClock = typeof transaction.$queryRaw === 'function';
       let asOf = hasPostgresClock ? await getPostgresClockTimestamp(transaction) : now;
+      const transactionResolution = await resolveMineralEconomyForOperation(
+        transaction,
+        options.mineralEconomyCutoverAt,
+        asOf,
+      );
+      // Unit-only Prisma doubles lack PostgreSQL's clock; production clients require a persisted row.
+      const cutoverAt = transactionResolution.state === 'V2' || !hasPostgresClock || !transaction.mineralEconomyCutover
+        ? transactionResolution.cutoverAt
+        : null;
+      if (!cutoverAt) {
+        return getV1WalletMiningSnapshot(
+          transaction as unknown as PrismaClient,
+          ownerAddress,
+          asOf,
+        );
+      }
       const account = await transaction.mineralAccount.findUnique({
         where: { ownerAddress: ownerAddress.toLowerCase() },
       });
@@ -95,17 +110,14 @@ export async function getBackendWalletMiningSnapshot(
         })),
         cutoverAt,
       );
-      const pendingFrom = account?.lastSettledAt && account.lastSettledAt > cutoverAt ? account.lastSettledAt : cutoverAt;
-      const pendingProductionMicros = calculateHistoricalProduction({
+      const currentBalanceMicros = calculateCurrentMineralBalanceMicros({
+        account,
+        openingBalanceMicros,
+        cutoverAt,
+        asOf,
         planets: economyPlanets,
         purchases,
-        from: pendingFrom,
-        to: asOf,
-        anchor: cutoverAt,
       });
-      const currentBalanceMicros = account
-        ? account.balanceMicros + pendingProductionMicros
-        : openingBalanceMicros + pendingProductionMicros;
       const preCutoverCalculations = calculateCollectionMining({
         planets: openingPlanets as BackendMiningPlanetRow[],
         asOf: cutoverAt,

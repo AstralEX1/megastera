@@ -3,6 +3,7 @@ import type { PrismaClient } from './generated/prisma/client.js';
 import {
   ensureMineralEconomyCutover,
   prepareMineralEconomyCutover,
+  resolveMineralEconomyForOperation,
   resolveMineralEconomyCutover,
 } from './mineralAccounts.js';
 
@@ -50,6 +51,29 @@ describe('Mineral economy cutover invariant', () => {
     await expect(resolveMineralEconomyCutover(prisma, CUTOVER)).rejects.toThrow(
       'conflicts with the persisted database cutover',
     );
+  });
+
+  it('fails a staged cutover once PostgreSQL reaches it instead of activating V2', async () => {
+    const prisma = {
+      mineralEconomyCutover: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([{ now: CUTOVER }]),
+    } as unknown as PrismaClient;
+
+    await expect(resolveMineralEconomyForOperation(prisma, CUTOVER)).rejects.toThrow(
+      'configured mineral economy cutover is not persisted',
+    );
+  });
+
+  it('keeps a configured staged cutover in V1 before PostgreSQL reaches it', async () => {
+    const prisma = {
+      mineralEconomyCutover: { findUnique: vi.fn().mockResolvedValue(null) },
+      $queryRaw: vi.fn().mockResolvedValue([{ now: new Date(CUTOVER.getTime() - 1) }]),
+    } as unknown as PrismaClient;
+
+    await expect(resolveMineralEconomyForOperation(prisma, CUTOVER)).resolves.toMatchObject({
+      state: 'STAGED_V2',
+      cutoverAt: CUTOVER,
+    });
   });
 
   it('persists a prepared future cutover only inside the explicit command', async () => {

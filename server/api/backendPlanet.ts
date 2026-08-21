@@ -11,9 +11,10 @@ import { BASE_JACKPOT, normalizeMegasteraProof, type MegasteraProof } from './el
 import { BASE_CHAIN_ID as CONFIGURED_CHAIN_ID, MEGASTERA_SOURCE } from './config.js';
 import {
   acquireMineralEconomySharedBarrier,
+  acquireMineralWalletLock,
   ensureAndLockMineralAccount,
   getPostgresClockTimestamp,
-  resolveMineralEconomyCutover,
+  resolveMineralEconomyForOperation,
   settleMineralAccount,
   type MineralSettlementPlanet,
   type MineralSettlementPurchase,
@@ -159,6 +160,45 @@ function planetMediaRepairData(draft: BackendPlanetDraft) {
     gifHash: draft.gifHash.toLowerCase(),
     generationError: null,
   };
+}
+
+function assertReadyPlanetIntegrity(
+  row: PrismaBackendPlanetRow,
+  draft: BackendPlanetDraft,
+): boolean {
+  if (
+    !Number.isInteger(row.generatorVersion) ||
+    row.generatorVersion !== GENERATOR_VERSION ||
+    row.generatorVersion !== draft.generatorVersion
+  ) {
+    throw new Error('Backend Planet generator version is unsupported or mismatched.');
+  }
+  if (row.gifData && row.gifHash) {
+    if (keccak256(new Uint8Array(row.gifData)) !== row.gifHash.toLowerCase()) {
+      throw new Error('Backend Planet GIF hash does not match GIF data.');
+    }
+    return true;
+  }
+  if (row.gifData || row.gifHash) {
+    throw new Error('Backend Planet GIF hash does not match GIF data.');
+  }
+  if (
+    row.chainId !== draft.chainId ||
+    row.ticketId.toFixed(0) !== draft.ticketId ||
+    row.ownerAddress.toLowerCase() !== draft.ownerAddress.toLowerCase() ||
+    row.seed.toLowerCase() !== draft.seed.toLowerCase() ||
+    row.traitsHash.toLowerCase() !== draft.traitsHash.toLowerCase() ||
+    row.planetName !== draft.name ||
+    row.planetType !== draft.planetType ||
+    row.terrain !== draft.terrain ||
+    row.rarity !== draft.rarity ||
+    row.satelliteCount !== draft.satelliteCount ||
+    row.hasRing !== draft.hasRing ||
+    row.baseMineralsPerDay !== BigInt(draft.baseMineralsPerDay)
+  ) {
+    throw new Error('Backend Planet identity or economic fields conflict with the current generator.');
+  }
+  return false;
 }
 
 class PreCutoverGeneration extends Error {
@@ -313,9 +353,11 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
       where: { ticketPurchaseId: ticket.id },
       include: { ticketPurchase: true },
     });
-    if (existing?.status === 'READY' && existing.gifData) return serializeRecord(existing as PrismaBackendPlanetRow);
     const draft = deriveBackendPlanet(normalized, this.now());
-    const economy = await resolveMineralEconomyCutover(
+    if (existing?.status === 'READY' && assertReadyPlanetIntegrity(existing as PrismaBackendPlanetRow, draft)) {
+      return serializeRecord(existing as PrismaBackendPlanetRow);
+    }
+    const economy = await resolveMineralEconomyForOperation(
       this.prisma,
       this.mineralEconomyCutoverAt,
     );
@@ -327,6 +369,25 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
       ? planetMediaRepairData(draft)
       : planetPersistenceData(ticket.id, draft, candidateAt);
     try {
+      if (existing && existing.status !== 'READY') {
+        const updated = await this.prisma.backendPlanet.updateMany({
+          where: { id: existing.id, status: { not: 'READY' } },
+          data,
+        });
+        const row = await this.prisma.backendPlanet.findUnique({
+          where: { id: existing.id },
+          include: { ticketPurchase: true },
+        });
+        if (updated.count === 0) {
+          if (row?.status === 'READY' && assertReadyPlanetIntegrity(row as PrismaBackendPlanetRow, draft)) {
+            return serializeRecord(row as PrismaBackendPlanetRow);
+          }
+          throw new Error('Backend Planet generation lost a concurrent update.');
+        }
+        if (!row) throw new Error('Backend Planet update lost its row.');
+        if (row.status === 'READY') assertReadyPlanetIntegrity(row as PrismaBackendPlanetRow, draft);
+        return serializeRecord(row as PrismaBackendPlanetRow);
+      }
       const row = existing
         ? await this.prisma.backendPlanet.update({
             where: { id: existing.id },
@@ -344,7 +405,7 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
           where: { ticketPurchaseId: ticket.id },
           include: { ticketPurchase: true },
         });
-        if (concurrent?.status === 'READY' && concurrent.gifData) {
+        if (concurrent?.status === 'READY' && assertReadyPlanetIntegrity(concurrent as PrismaBackendPlanetRow, draft)) {
           return serializeRecord(concurrent as PrismaBackendPlanetRow);
         }
       }
@@ -360,15 +421,23 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
     try {
       const row = await this.prisma.$transaction(async (transaction) => {
         await acquireMineralEconomySharedBarrier(transaction);
-        const economy = await resolveMineralEconomyCutover(transaction, cutoverAt);
-        if (!economy.cutoverAt) throw new Error('Mineral economy cutover is missing.');
+        await acquireMineralWalletLock(transaction, draft.ownerAddress);
         const boundaryAt = await getPostgresClockTimestamp(transaction);
+        const economy = await resolveMineralEconomyForOperation(
+          transaction,
+          cutoverAt,
+          boundaryAt,
+        );
+        if (!economy.cutoverAt) throw new Error('Mineral economy cutover is missing.');
+        const effectiveCutoverAt = economy.cutoverAt;
         const current = await transaction.backendPlanet.findUnique({
           where: { ticketPurchaseId: ticket.id },
           include: { ticketPurchase: true },
         });
-        if (current?.status === 'READY' && current.gifData) return current as PrismaBackendPlanetRow;
-        if (boundaryAt < cutoverAt) {
+        if (current?.status === 'READY' && assertReadyPlanetIntegrity(current as PrismaBackendPlanetRow, draft)) {
+          return current as PrismaBackendPlanetRow;
+        }
+        if (boundaryAt < effectiveCutoverAt) {
           const canPersist = current
             ? typeof transaction.backendPlanet.update === 'function'
             : typeof transaction.backendPlanet.create === 'function';
@@ -388,13 +457,16 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
               });
           return persisted as PrismaBackendPlanetRow;
         }
-        const account = await ensureAndLockMineralAccount(transaction, draft.ownerAddress, cutoverAt);
+        const account = await ensureAndLockMineralAccount(transaction, draft.ownerAddress, effectiveCutoverAt);
         const effectiveAt = await getPostgresClockTimestamp(transaction);
         const currentAfterAccount = await transaction.backendPlanet.findUnique({
           where: { ticketPurchaseId: ticket.id },
           include: { ticketPurchase: true },
         });
-        if (currentAfterAccount?.status === 'READY' && currentAfterAccount.gifData)
+        if (
+          currentAfterAccount?.status === 'READY' &&
+          assertReadyPlanetIntegrity(currentAfterAccount as PrismaBackendPlanetRow, draft)
+        )
           return currentAfterAccount as PrismaBackendPlanetRow;
         if (currentAfterAccount?.status === 'READY') {
           const repaired = await transaction.backendPlanet.update({
@@ -427,7 +499,7 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
           planets,
           purchases,
           settledAt: effectiveAt,
-          anchor: cutoverAt,
+          anchor: effectiveCutoverAt,
         });
         const generatedAt = effectiveAt;
         const data = planetPersistenceData(ticket.id, draft, generatedAt);
@@ -450,7 +522,7 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
           where: { ticketPurchaseId: ticket.id },
           include: { ticketPurchase: true },
         });
-        if (concurrent?.status === 'READY' && concurrent.gifData) {
+        if (concurrent?.status === 'READY' && assertReadyPlanetIntegrity(concurrent as PrismaBackendPlanetRow, draft)) {
           return serializeRecord(concurrent as PrismaBackendPlanetRow);
         }
       }
@@ -459,7 +531,7 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
         where: { ticketPurchaseId: ticket.id },
         include: { ticketPurchase: true },
       });
-      if (current?.status === 'READY' && current.gifData) {
+      if (current?.status === 'READY' && assertReadyPlanetIntegrity(current as PrismaBackendPlanetRow, draft)) {
         return serializeRecord(current as PrismaBackendPlanetRow);
       }
       const generatedAt = current?.status === 'READY' ? current.generatedAt : error.effectiveAt;
@@ -480,10 +552,13 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
             include: { ticketPurchase: true },
           });
           if (updated.count === 0) {
-            if (row?.status === 'READY') return serializeRecord(row as PrismaBackendPlanetRow);
+            if (row?.status === 'READY' && assertReadyPlanetIntegrity(row as PrismaBackendPlanetRow, draft)) {
+              return serializeRecord(row as PrismaBackendPlanetRow);
+            }
             throw new Error('Backend Planet fallback update lost its row.');
           }
           if (!row) throw new Error('Backend Planet fallback update lost its row.');
+          if (row.status === 'READY') assertReadyPlanetIntegrity(row as PrismaBackendPlanetRow, draft);
           return serializeRecord(row as PrismaBackendPlanetRow);
         }
         const row = await this.prisma.backendPlanet.create({
@@ -497,7 +572,7 @@ export class PrismaBackendPlanetStore implements BackendPlanetStore {
             where: { ticketPurchaseId: ticket.id },
             include: { ticketPurchase: true },
           });
-          if (concurrent?.status === 'READY' && concurrent.gifData) {
+          if (concurrent?.status === 'READY' && assertReadyPlanetIntegrity(concurrent as PrismaBackendPlanetRow, draft)) {
             return serializeRecord(concurrent as PrismaBackendPlanetRow);
           }
         }

@@ -19,9 +19,10 @@ import {
 } from './mineralEconomy.js';
 import {
   acquireMineralEconomyExclusiveBarrier,
+  calculateCurrentMineralBalanceMicros,
   calculateV1WalletOpeningBalance,
   getPostgresClockTimestamp,
-  resolveMineralEconomyCutover,
+  resolveMineralEconomyForOperation,
 } from './mineralAccounts.js';
 import { calculateLifetimeMinerals, MINERAL_SCALE } from './mining.js';
 
@@ -55,6 +56,8 @@ export type LeaderboardEconomyOptions = {
 type SpendableLeaderboardAccount = {
   ownerAddress: string;
   openingBalanceMicros: bigint;
+  balanceMicros?: bigint;
+  lastSettledAt?: Date;
 };
 
 type SpendableLeaderboardPlanet = MineralCollectionPlanet & {
@@ -211,6 +214,7 @@ export function calculatePostCutoverLeaderboardRows(input: {
   accounts: readonly SpendableLeaderboardAccount[];
   planets: readonly SpendableLeaderboardPlanet[];
   purchases: readonly SpendableLeaderboardPurchase[];
+  useCurrentBalance?: boolean;
 }): RankedLeaderboardRow[] {
   if (!Number.isFinite(input.cutoverAt.getTime()))
     throw new Error('Mineral economy cutover timestamp is invalid.');
@@ -272,7 +276,19 @@ export function calculatePostCutoverLeaderboardRows(input: {
       anchor: input.cutoverAt,
     });
     const purchaseCostsMicros = purchases.reduce((total, purchase) => total + purchase.costMicros, 0n);
-    const scoreMicros = openingBalanceMicros + producedMicros - purchaseCostsMicros;
+    const currentAccount = account && account.balanceMicros !== undefined && account.lastSettledAt instanceof Date
+      ? { balanceMicros: account.balanceMicros, lastSettledAt: account.lastSettledAt }
+      : null;
+    const scoreMicros = input.useCurrentBalance && (currentAccount || !account)
+      ? calculateCurrentMineralBalanceMicros({
+          account: currentAccount,
+          openingBalanceMicros,
+          cutoverAt: input.cutoverAt,
+          asOf: cutoff,
+          planets,
+          purchases,
+        })
+      : openingBalanceMicros + producedMicros - purchaseCostsMicros;
     if (scoreMicros < 0n) {
       throw new Error(`Reconstructed leaderboard balance is negative for ${ownerAddress}.`);
     }
@@ -349,12 +365,11 @@ async function getLiveLeaderboardSnapshot(
   now: Date,
   options: LeaderboardEconomyOptions,
 ): Promise<LiveLeaderboardSnapshot> {
-  const resolution = await resolveMineralEconomyCutover(
+  const resolution = await resolveMineralEconomyForOperation(
     prisma,
     options.mineralEconomyCutoverAt,
   );
-  const cutoverAt = resolution.cutoverAt;
-  if (!cutoverAt) {
+  if (resolution.state === 'V1') {
     const planets = await prisma.backendPlanet.findMany({
       where: { status: 'READY', baseMineralsPerDay: { gt: 0n } },
       select: { id: true, ownerAddress: true, planetType: true, baseMineralsPerDay: true, generatedAt: true },
@@ -364,19 +379,34 @@ async function getLiveLeaderboardSnapshot(
 
   return prisma.$transaction(
     async (transaction) => {
-      const asOf = typeof transaction.$queryRaw === 'function'
+      const hasPostgresClock = typeof transaction.$queryRaw === 'function';
+      const asOf = hasPostgresClock
         ? await getPostgresClockTimestamp(transaction)
         : now;
+      const transactionResolution = await resolveMineralEconomyForOperation(
+        transaction,
+        options.mineralEconomyCutoverAt,
+        asOf,
+      );
+      // Unit-only Prisma doubles lack PostgreSQL's clock; production clients require a persisted row.
+      const cutoverAt = transactionResolution.state === 'V2' || !hasPostgresClock || !transaction.mineralEconomyCutover
+        ? transactionResolution.cutoverAt
+        : null;
       const planets = await transaction.backendPlanet.findMany({
         where: { status: 'READY', baseMineralsPerDay: { gt: 0n }, generatedAt: { lte: asOf } },
         select: { id: true, ownerAddress: true, planetType: true, baseMineralsPerDay: true, generatedAt: true },
       });
-      if (asOf < cutoverAt) {
+      if (!cutoverAt || asOf < cutoverAt) {
         return { asOf, rows: calculateLiveLeaderboardRows({ asOf, planets }) };
       }
       const [accounts, purchases] = await Promise.all([
         transaction.mineralAccount.findMany({
-          select: { ownerAddress: true, openingBalanceMicros: true },
+          select: {
+            ownerAddress: true,
+            openingBalanceMicros: true,
+            balanceMicros: true,
+            lastSettledAt: true,
+          },
         }),
         transaction.planetUpgradePurchase.findMany({
           where: { purchasedAt: { lte: asOf } },
@@ -400,6 +430,7 @@ async function getLiveLeaderboardSnapshot(
           accounts,
           planets,
           purchases,
+          useCurrentBalance: true,
         }),
       };
     },
@@ -510,11 +541,12 @@ export async function finalizeLeaderboardPeriod(
     if (databaseNow < period.endsAt) {
       throw new Error('Leaderboard period has not ended in PostgreSQL.');
     }
-    const resolution = await resolveMineralEconomyCutover(
+    const resolution = await resolveMineralEconomyForOperation(
       transaction,
       options.mineralEconomyCutoverAt,
+      databaseNow,
     );
-    const cutoverAt = resolution.cutoverAt;
+    const cutoverAt = resolution.state === 'V2' ? resolution.cutoverAt : null;
     const postCutover = !!cutoverAt && period.startsAt >= cutoverAt;
     const existing = await transaction.leaderboardPeriod.findUnique({ where: { id: period.id } });
     if (existing?.finalizedAt) {
@@ -546,7 +578,7 @@ export async function finalizeLeaderboardPeriod(
       where: { periodId: period.id },
       orderBy: { rank: 'asc' },
     });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
 }
 
 /** Finalizes every completed UTC day in chronological order. */

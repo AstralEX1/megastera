@@ -170,6 +170,27 @@ describe('live leaderboard', () => {
     ]);
   });
 
+  it('rechecks a staged cutover after entering the PostgreSQL transaction', async () => {
+    const cutoverAt = new Date('2026-08-20T00:00:00.000Z');
+    const rootClock = vi.fn().mockResolvedValue([{ now: new Date(cutoverAt.getTime() - 1) }]);
+    const transactionClock = vi.fn().mockResolvedValue([{ now: cutoverAt }]);
+    const prisma = {
+      $queryRaw: rootClock,
+      mineralEconomyCutover: { findUnique: vi.fn().mockResolvedValue(null) },
+      backendPlanet: { findMany: vi.fn().mockResolvedValue([]) },
+      $transaction: vi.fn(async (callback: (client: unknown) => unknown) => callback({
+        $queryRaw: transactionClock,
+        mineralEconomyCutover: { findUnique: vi.fn().mockResolvedValue(null) },
+      })),
+    } as unknown as PrismaClient;
+
+    await expect(
+      getCurrentLeaderboard(prisma, new Date(), { offset: 0, limit: 50 }, {
+        mineralEconomyCutoverAt: cutoverAt,
+      }),
+    ).rejects.toThrow('configured mineral economy cutover is not persisted');
+  });
+
   it('shows a spend immediately after the next leaderboard read', async () => {
     const purchases: Array<Record<string, unknown>> = [];
     const findMany = vi.fn().mockImplementation(async () => [
@@ -360,6 +381,9 @@ describe('overdue leaderboard finalization', () => {
           generatedAt: CUTOVER,
         }]),
       },
+      mineralEconomyCutover: {
+        findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt: CUTOVER }),
+      },
       mineralAccount: {
         findMany: vi.fn().mockResolvedValue([{ ownerAddress: ADDRESS_A, openingBalanceMicros: 0n }]),
       },
@@ -400,7 +424,7 @@ describe('overdue leaderboard finalization', () => {
       expect.objectContaining({ periodId: '2026-08-21', scoreMicros: 214_800_000n }),
     ]));
     expect(transactionOptions[0]).toEqual({
-      isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+      isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
     });
   });
 });

@@ -64,38 +64,81 @@ function matches(record: PersistedTicket, candidate: ReturnType<typeof persisten
   );
 }
 
+function isUniqueConstraintError(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && (error as { code?: unknown }).code === 'P2002');
+}
+
+async function rereadCanonicalRows(
+  prisma: PrismaClient,
+  candidate: ReturnType<typeof persistenceData>,
+): Promise<void> {
+  const [byTicketId, byReceipt] = await Promise.all([
+    prisma.ticketPurchase.findUnique({
+      where: {
+        chainId_jackpotAddress_ticketId: {
+          chainId: candidate.chainId,
+          jackpotAddress: candidate.jackpotAddress,
+          ticketId: candidate.ticketId,
+        },
+      },
+    }),
+    prisma.ticketPurchase.findUnique({
+      where: {
+        chainId_originTxHash_logIndex: {
+          chainId: candidate.chainId,
+          originTxHash: candidate.originTxHash,
+          logIndex: candidate.logIndex,
+        },
+      },
+    }),
+  ]);
+  const ticketRecord = byTicketId as PersistedTicket | null;
+  const receiptRecord = byReceipt as PersistedTicket | null;
+  if (!ticketRecord || !receiptRecord || ticketRecord.id !== receiptRecord.id) {
+    throw new Error('Ticket proof conflicts with existing immutable provenance.');
+  }
+  if (!matches(ticketRecord, candidate) || !matches(receiptRecord, candidate)) {
+    throw new Error('Ticket proof conflicts with existing immutable provenance.');
+  }
+}
+
 /** Persists only the canonical receipt row needed by backend Planet generation. */
 export async function saveMegasteraProof(prisma: PrismaClient, proof: MegasteraProof): Promise<void> {
   const candidate = persistenceData(proof);
-  await prisma.$transaction(async (transaction) => {
-    const [byTicketId, byReceipt] = await Promise.all([
-      transaction.ticketPurchase.findUnique({
-        where: {
-          chainId_jackpotAddress_ticketId: {
-            chainId: candidate.chainId,
-            jackpotAddress: candidate.jackpotAddress,
-            ticketId: candidate.ticketId,
+  try {
+    await prisma.$transaction(async (transaction) => {
+      const [byTicketId, byReceipt] = await Promise.all([
+        transaction.ticketPurchase.findUnique({
+          where: {
+            chainId_jackpotAddress_ticketId: {
+              chainId: candidate.chainId,
+              jackpotAddress: candidate.jackpotAddress,
+              ticketId: candidate.ticketId,
+            },
           },
-        },
-      }),
-      transaction.ticketPurchase.findUnique({
-        where: {
-          chainId_originTxHash_logIndex: {
-            chainId: candidate.chainId,
-            originTxHash: candidate.originTxHash,
-            logIndex: candidate.logIndex,
+        }),
+        transaction.ticketPurchase.findUnique({
+          where: {
+            chainId_originTxHash_logIndex: {
+              chainId: candidate.chainId,
+              originTxHash: candidate.originTxHash,
+              logIndex: candidate.logIndex,
+            },
           },
-        },
-      }),
-    ]);
-    const ticketRecord = byTicketId as PersistedTicket | null;
-    const receiptRecord = byReceipt as PersistedTicket | null;
-    if (ticketRecord && receiptRecord && ticketRecord.id !== receiptRecord.id) {
-      throw new Error('Ticket proof conflicts with existing immutable provenance.');
-    }
-    for (const record of [ticketRecord, receiptRecord]) {
-      if (record && !matches(record, candidate)) throw new Error('Ticket proof conflicts with existing immutable provenance.');
-    }
-    if (!ticketRecord && !receiptRecord) await transaction.ticketPurchase.create({ data: candidate });
-  });
+        }),
+      ]);
+      const ticketRecord = byTicketId as PersistedTicket | null;
+      const receiptRecord = byReceipt as PersistedTicket | null;
+      if (ticketRecord && receiptRecord && ticketRecord.id !== receiptRecord.id) {
+        throw new Error('Ticket proof conflicts with existing immutable provenance.');
+      }
+      for (const record of [ticketRecord, receiptRecord]) {
+        if (record && !matches(record, candidate)) throw new Error('Ticket proof conflicts with existing immutable provenance.');
+      }
+      if (!ticketRecord && !receiptRecord) await transaction.ticketPurchase.create({ data: candidate });
+    });
+  } catch (error) {
+    if (!isUniqueConstraintError(error)) throw error;
+    await rereadCanonicalRows(prisma, candidate);
+  }
 }

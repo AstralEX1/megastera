@@ -40,8 +40,9 @@ function makePrisma(overrides: {
     $queryRaw: vi
       .fn()
       .mockResolvedValueOnce([{ locked: 1 }])
-      .mockResolvedValueOnce([{ id: planet.id }])
-      .mockResolvedValueOnce([{ now: clockAt }]),
+      .mockResolvedValueOnce([{ locked: 1 }])
+      .mockResolvedValueOnce([{ now: clockAt }])
+      .mockResolvedValueOnce([{ id: planet.id }]),
     mineralEconomyCutover: {
       findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt: CUTOVER }),
       createMany: vi.fn().mockResolvedValue({ count: 0 }),

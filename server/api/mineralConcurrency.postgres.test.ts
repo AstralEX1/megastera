@@ -4,9 +4,12 @@ import { PrismaBackendPlanetStore } from './backendPlanet.js';
 import { MEGASTERA_SOURCE } from './config.js';
 import { Prisma, PrismaClient } from './generated/prisma/client.js';
 import { finalizeLeaderboardPeriod } from './leaderboardStore.js';
+import { calculateHistoricalProduction } from './mineralEconomy.js';
+import { getBackendWalletMiningSnapshot } from './miningStore.js';
 import {
   acquireMineralEconomyExclusiveBarrier,
   acquireMineralEconomySharedBarrier,
+  acquireMineralWalletLock,
   purchasePlanetUpgrade,
   resolveMineralEconomyCutover,
   runMineralAccountsBackfill,
@@ -140,7 +143,8 @@ function proofForTicket(
 async function clearTestDatabase(prisma: PrismaClient): Promise<void> {
   await prisma.leaderboardEntry.deleteMany();
   await prisma.leaderboardPeriod.deleteMany();
-  await prisma.planetUpgradePurchase.deleteMany();
+  // Upgrade history is immutable in production; TRUNCATE keeps test cleanup read/write-safe without firing delete triggers.
+  await prisma.$executeRaw(Prisma.sql`TRUNCATE TABLE "planet_upgrade_purchases", "mineral_economy_cutover"`);
   await prisma.mineralAccount.deleteMany();
   await prisma.backendPlanet.deleteMany();
   await prisma.ticketPurchase.deleteMany();
@@ -174,9 +178,73 @@ describePostgres('Mineral upgrade PostgreSQL concurrency', () => {
     await Promise.all([first.$disconnect(), second.$disconnect(), blocker.$disconnect()]);
   });
 
-  it('charges one concurrent upgrade exactly once', async () => {
+  it('fails a configured but unpersisted cutover after PostgreSQL reaches T', async () => {
     const databaseNow = await postgresNow(first);
     const cutoverAt = utcMidnightBefore(databaseNow);
+
+    await expect(
+      getBackendWalletMiningSnapshot(first, OWNER, databaseNow, {
+        mineralEconomyCutoverAt: cutoverAt,
+      }),
+    ).rejects.toThrow('configured mineral economy cutover is not persisted');
+  });
+
+  it('enforces immutable history/account identity while allowing READY Planet upgrades and media repair', async () => {
+    const databaseNow = await postgresNow(first);
+    const cutoverAt = await ensurePersistedCutover(first, utcMidnightBefore(databaseNow));
+    const fixture = await createFixture(first, OWNER, cutoverAt);
+    await seedAccount(first, OWNER, databaseNow);
+    const purchase = await first.planetUpgradePurchase.create({
+      data: {
+        planetId: fixture.planet.id,
+        walletAddress: OWNER,
+        targetLevel: 1,
+        bonusBpsAfter: 1_000,
+        costMicros: 200_000n,
+        purchasedAt: databaseNow,
+      },
+    });
+
+    await expect(
+      first.planetUpgradePurchase.update({ where: { id: purchase.id }, data: { costMicros: 1n } }),
+    ).rejects.toThrow('immutable');
+    await expect(first.planetUpgradePurchase.delete({ where: { id: purchase.id } })).rejects.toThrow('immutable');
+    await expect(
+      first.mineralAccount.update({ where: { ownerAddress: OWNER }, data: { openingBalanceMicros: 1n } }),
+    ).rejects.toThrow('immutable');
+    await expect(
+      first.backendPlanet.update({ where: { id: fixture.planet.id }, data: { baseMineralsPerDay: 2n } }),
+    ).rejects.toThrow('immutable');
+    await expect(
+      first.backendPlanet.update({
+        where: { id: fixture.planet.id },
+        data: { upgradeLevel: 1, upgradeBonusBps: 1_000, gifData: Buffer.from('repaired') },
+      }),
+    ).resolves.toBeTruthy();
+  });
+
+  it('persists a pre-cutover generation without creating a V2 account', async () => {
+    const databaseNow = await postgresNow(first);
+    const cutoverAt = utcMidnightAfter(databaseNow);
+    const ticket = await createTicket(first, OWNER, databaseNow);
+
+    const generated = await new PrismaBackendPlanetStore(
+      first,
+      () => databaseNow,
+      cutoverAt,
+    ).generatePlanet(proofForTicket(ticket.ticket, OWNER));
+
+    expect(new Date(generated.generatedAt).getTime()).toBeLessThan(cutoverAt.getTime());
+    expect(await first.backendPlanet.count({ where: { ticketPurchaseId: ticket.ticket.id } })).toBe(
+      1,
+    );
+    expect(await first.mineralAccount.findUnique({ where: { ownerAddress: OWNER } })).toBeNull();
+    expect(await first.mineralEconomyCutover.findUnique({ where: { id: 1 } })).toBeNull();
+  });
+
+  it('charges one concurrent upgrade exactly once', async () => {
+    const databaseNow = await postgresNow(first);
+    const cutoverAt = await ensurePersistedCutover(first, utcMidnightBefore(databaseNow));
     const fixture = await createFixture(first, OWNER, cutoverAt);
     await seedAccount(first, OWNER, databaseNow);
 
@@ -240,7 +308,7 @@ describePostgres('Mineral upgrade PostgreSQL concurrency', () => {
 
   it('serializes different Planet upgrades for one wallet', async () => {
     const databaseNow = await postgresNow(first);
-    const cutoverAt = utcMidnightBefore(databaseNow);
+    const cutoverAt = await ensurePersistedCutover(first, utcMidnightBefore(databaseNow));
     const firstFixture = await createFixture(first, OWNER, cutoverAt);
     const secondFixture = await createFixture(first, OWNER, cutoverAt);
     await seedAccount(first, OWNER, databaseNow);
@@ -265,7 +333,7 @@ describePostgres('Mineral upgrade PostgreSQL concurrency', () => {
 
   it('orders generation and upgrade through the shared economy barrier', async () => {
     const databaseNow = await postgresNow(first);
-    const cutoverAt = utcMidnightBefore(databaseNow);
+    const cutoverAt = await ensurePersistedCutover(first, utcMidnightBefore(databaseNow));
     const existing = await createFixture(first, OWNER, cutoverAt);
     const generationTicket = await createTicket(first, OWNER, cutoverAt);
     await seedAccount(first, OWNER, databaseNow);
@@ -292,7 +360,7 @@ describePostgres('Mineral upgrade PostgreSQL concurrency', () => {
 
   it('serializes two concurrent generations for one wallet', async () => {
     const databaseNow = await postgresNow(first);
-    const cutoverAt = utcMidnightBefore(databaseNow);
+    const cutoverAt = await ensurePersistedCutover(first, utcMidnightBefore(databaseNow));
     const firstTicket = await createTicket(first, OWNER, cutoverAt);
     const secondTicket = await createTicket(first, OWNER, cutoverAt);
     await seedAccount(first, OWNER, databaseNow);
@@ -312,25 +380,90 @@ describePostgres('Mineral upgrade PostgreSQL concurrency', () => {
       await first.backendPlanet.count({ where: { ownerAddress: OWNER, status: 'READY' } }),
     ).toBe(2);
     expect(await first.mineralAccount.count({ where: { ownerAddress: OWNER } })).toBe(1);
+    const account = await first.mineralAccount.findUnique({ where: { ownerAddress: OWNER } });
+    const planets = await first.backendPlanet.findMany({
+      where: { ownerAddress: OWNER, status: 'READY' },
+      select: {
+        id: true,
+        ownerAddress: true,
+        planetType: true,
+        baseMineralsPerDay: true,
+        generatedAt: true,
+      },
+    });
+    expect(account?.balanceMicros).toBe(
+      10_000_000n + calculateHistoricalProduction({
+        planets,
+        purchases: [],
+        from: databaseNow,
+        to: account?.lastSettledAt ?? databaseNow,
+        anchor: cutoverAt,
+      }),
+    );
   });
 
-  it('persists a pre-cutover generation without creating a V2 account', async () => {
+  it('waits on the wallet lock across T before post-cutover generation', async () => {
     const databaseNow = await postgresNow(first);
-    const cutoverAt = utcMidnightAfter(databaseNow);
+    const cutoverAt = await ensurePersistedCutover(first, new Date(databaseNow.getTime() + 250));
     const ticket = await createTicket(first, OWNER, databaseNow);
+    await seedAccount(first, OWNER, databaseNow);
 
-    const generated = await new PrismaBackendPlanetStore(
-      first,
+    let releaseWallet!: () => void;
+    const release = new Promise<void>((resolve) => {
+      releaseWallet = resolve;
+    });
+    let walletHeld!: () => void;
+    const held = new Promise<void>((resolve) => {
+      walletHeld = resolve;
+    });
+    const blockerTransaction = blocker.$transaction(async (transaction) => {
+      await acquireMineralEconomySharedBarrier(transaction);
+      await acquireMineralWalletLock(transaction, OWNER);
+      walletHeld();
+      await release;
+    });
+    await held;
+
+    let completed = false;
+    const generation = new PrismaBackendPlanetStore(
+      second,
       () => databaseNow,
       cutoverAt,
-    ).generatePlanet(proofForTicket(ticket.ticket, OWNER));
+    ).generatePlanet(proofForTicket(ticket.ticket, OWNER)).then((result) => {
+      completed = true;
+      return result;
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(completed).toBe(false);
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      if ((await postgresNow(first)).getTime() >= cutoverAt.getTime()) break;
+      await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    }
+    expect((await postgresNow(first)).getTime()).toBeGreaterThanOrEqual(cutoverAt.getTime());
+    releaseWallet();
+    await Promise.all([blockerTransaction, generation]);
 
-    expect(new Date(generated.generatedAt).getTime()).toBeLessThan(cutoverAt.getTime());
-    expect(await first.backendPlanet.count({ where: { ticketPurchaseId: ticket.ticket.id } })).toBe(
-      1,
+    expect(new Date((await first.backendPlanet.findUnique({ where: { id: ticket.ticket.id } }))?.generatedAt ?? 0).getTime()).toBeGreaterThanOrEqual(cutoverAt.getTime());
+    const account = await first.mineralAccount.findUnique({ where: { ownerAddress: OWNER } });
+    const planets = await first.backendPlanet.findMany({
+      where: { ownerAddress: OWNER, status: 'READY' },
+      select: {
+        id: true,
+        ownerAddress: true,
+        planetType: true,
+        baseMineralsPerDay: true,
+        generatedAt: true,
+      },
+    });
+    expect(account?.balanceMicros).toBe(
+      10_000_000n + calculateHistoricalProduction({
+        planets,
+        purchases: [],
+        from: databaseNow,
+        to: account?.lastSettledAt ?? databaseNow,
+        anchor: cutoverAt,
+      }),
     );
-    expect(await first.mineralAccount.findUnique({ where: { ownerAddress: OWNER } })).toBeNull();
-    expect(await first.mineralEconomyCutover.findUnique({ where: { id: 1 } })).toBeNull();
   });
 
   it('keeps backfill and in-flight generation ordered by the economy barrier', async () => {
@@ -422,6 +555,10 @@ describePostgres('Mineral upgrade PostgreSQL concurrency', () => {
     expect(
       (await first.leaderboardPeriod.findUnique({ where: { id: period.id } }))?.finalizedAt,
     ).not.toBeNull();
+    const archived = await first.leaderboardEntry.findUnique({
+      where: { periodId_walletAddress: { periodId: period.id, walletAddress: OWNER } },
+    });
+    expect(archived?.scoreMicros).toBe(10_799_999n);
   });
 
   it('uses a persisted cutover when configuration is missing', async () => {

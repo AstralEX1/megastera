@@ -1,11 +1,64 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from './generated/prisma/client.js';
-import { calculateV1WalletOpeningBalance, initializeMineralAccounts } from './mineralAccounts.js';
+import {
+  acquireMineralWalletLock,
+  calculateCurrentMineralBalanceMicros,
+  calculateV1WalletOpeningBalance,
+  initializeMineralAccounts,
+} from './mineralAccounts.js';
 
 const OWNER = '0x1111111111111111111111111111111111111111';
 const CUTOVER = new Date('2026-08-20T00:00:00.000Z');
 
 describe('MineralAccount initialization', () => {
+  it('uses the persisted balance plus canonical post-cutover production', () => {
+    const planet = {
+      id: 'current-balance',
+      ownerAddress: OWNER,
+      planetType: 'Gaia',
+      baseMineralsPerDay: 1n,
+      generatedAt: CUTOVER,
+    };
+
+    expect(calculateCurrentMineralBalanceMicros({
+      account: {
+        balanceMicros: 100n,
+        lastSettledAt: CUTOVER,
+      },
+      openingBalanceMicros: 0n,
+      cutoverAt: CUTOVER,
+      asOf: new Date('2026-08-21T00:00:00.000Z'),
+      planets: [planet],
+      purchases: [],
+    })).toBe(1_000_100n);
+  });
+
+  it('rejects a missing account when spending history exists', () => {
+    expect(() => calculateCurrentMineralBalanceMicros({
+      account: null,
+      openingBalanceMicros: 100n,
+      cutoverAt: CUTOVER,
+      asOf: new Date('2026-08-21T00:00:00.000Z'),
+      planets: [],
+      purchases: [{
+        planetId: 'spent',
+        targetLevel: 1,
+        bonusBpsAfter: 1_000,
+        purchasedAt: new Date('2026-08-20T12:00:00.000Z'),
+      }],
+    })).toThrow('without a MineralAccount');
+  });
+
+  it('takes a transaction-scoped advisory lock for one wallet', async () => {
+    const queryRaw = vi.fn().mockResolvedValue([{ locked: 1 }]);
+
+    await acquireMineralWalletLock({ $queryRaw: queryRaw }, OWNER);
+
+    const query = queryRaw.mock.calls[0]?.[0] as readonly string[];
+    expect(query.join('')).toContain('pg_advisory_xact_lock');
+    expect(query.join('')).toContain('mineral-wallet');
+  });
+
   it('keeps the V1 wallet opening balance bit-for-bit', () => {
     expect(
       calculateV1WalletOpeningBalance(

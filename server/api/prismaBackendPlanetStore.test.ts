@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import { keccak256 } from 'viem';
+import { GENERATOR_VERSION } from '@megaplanets/planet-generator';
 import type { PrismaClient } from './generated/prisma/client.js';
-import { PrismaBackendPlanetStore } from './backendPlanet.js';
+import { deriveBackendPlanet, PrismaBackendPlanetStore } from './backendPlanet.js';
 import type { MegasteraProof } from './eligibility.js';
 
 const proof = {
@@ -46,8 +48,7 @@ describe('PrismaBackendPlanetStore', () => {
     await expect(store.generatePlanet(proof)).rejects.toThrow('conflicts with persisted ticket');
   });
 
-  it('repairs a READY Planet without moving its persisted generation time', async () => {
-    const generatedAt = new Date('2026-08-13T12:00:00.000Z');
+  it('fails closed instead of repairing a READY row from an unsupported generator version', async () => {
     const persistedTicket = {
       id: 'ticket-row',
       ticketId: { toFixed: () => '1' },
@@ -67,13 +68,168 @@ describe('PrismaBackendPlanetStore', () => {
       planetName: 'Existing Planet',
       seed: `0x${'11'.repeat(32)}`,
       traitsHash: `0x${'22'.repeat(32)}`,
-      generatorVersion: 1,
+      generatorVersion: 999,
       planetType: 'Gaia',
       terrain: 'Plains',
       rarity: 'Common',
       satelliteCount: 0,
       hasRing: false,
       baseMineralsPerDay: 1n,
+      generatedAt: new Date('2026-08-13T12:00:00.000Z'),
+      status: 'READY' as const,
+      gifData: null,
+      gifHash: null,
+      ticketPurchase: persistedTicket,
+    };
+    const update = vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
+      ...existingPlanet,
+      ...data,
+      ticketPurchase: persistedTicket,
+    }));
+    const prisma = {
+      ticketPurchase: { findUnique: vi.fn().mockResolvedValue(persistedTicket) },
+      backendPlanet: { findUnique: vi.fn().mockResolvedValue(existingPlanet), update },
+    } as unknown as PrismaClient;
+
+    await expect(new PrismaBackendPlanetStore(prisma).generatePlanet(proof)).rejects.toThrow(
+      'generator version',
+    );
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('fails closed instead of repairing a READY row with a mismatched GIF hash', async () => {
+    const draft = deriveBackendPlanet(proof, new Date('2026-08-13T12:00:00.000Z'));
+    const persistedTicket = {
+      id: 'ticket-row',
+      ticketId: { toFixed: () => '1' },
+      drawingId: { toFixed: () => '1' },
+      recipient: proof.recipient,
+      bonusBall: proof.bonusBall,
+      normals: proof.normals,
+      originTxHash: proof.originTxHash,
+      logIndex: 0,
+      purchasedAt: new Date('2026-08-13T11:00:00.000Z'),
+    };
+    const existingPlanet = {
+      id: 'planet-row',
+      chainId: draft.chainId,
+      ticketId: { toFixed: () => draft.ticketId },
+      ownerAddress: draft.ownerAddress,
+      planetName: draft.name,
+      seed: draft.seed,
+      traitsHash: draft.traitsHash,
+      generatorVersion: draft.generatorVersion,
+      planetType: draft.planetType,
+      terrain: draft.terrain,
+      rarity: draft.rarity,
+      satelliteCount: draft.satelliteCount,
+      hasRing: draft.hasRing,
+      baseMineralsPerDay: BigInt(draft.baseMineralsPerDay),
+      generatedAt: new Date(draft.generatedAt),
+      status: 'READY' as const,
+      gifData: Buffer.from('corrupt'),
+      gifHash: draft.gifHash,
+      ticketPurchase: persistedTicket,
+    };
+    const update = vi.fn();
+    const prisma = {
+      ticketPurchase: { findUnique: vi.fn().mockResolvedValue(persistedTicket) },
+      backendPlanet: { findUnique: vi.fn().mockResolvedValue(existingPlanet), update },
+    } as unknown as PrismaClient;
+
+    await expect(new PrismaBackendPlanetStore(prisma).generatePlanet(proof)).rejects.toThrow(
+      'GIF hash',
+    );
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('does not overwrite a non-READY row after a concurrent winner is committed', async () => {
+    const draft = deriveBackendPlanet(proof, new Date('2026-08-13T12:00:00.000Z'));
+    const persistedTicket = {
+      id: 'ticket-row',
+      ticketId: { toFixed: () => '1' },
+      drawingId: { toFixed: () => '1' },
+      recipient: proof.recipient,
+      bonusBall: proof.bonusBall,
+      normals: proof.normals,
+      originTxHash: proof.originTxHash,
+      logIndex: 0,
+      purchasedAt: new Date('2026-08-13T11:00:00.000Z'),
+    };
+    const failed = {
+      id: 'planet-row',
+      chainId: draft.chainId,
+      ticketId: { toFixed: () => draft.ticketId },
+      ownerAddress: draft.ownerAddress,
+      planetName: draft.name,
+      seed: draft.seed,
+      traitsHash: draft.traitsHash,
+      generatorVersion: draft.generatorVersion,
+      planetType: draft.planetType,
+      terrain: draft.terrain,
+      rarity: draft.rarity,
+      satelliteCount: draft.satelliteCount,
+      hasRing: draft.hasRing,
+      baseMineralsPerDay: BigInt(draft.baseMineralsPerDay),
+      generatedAt: new Date(draft.generatedAt),
+      status: 'FAILED' as const,
+      gifData: null,
+      gifHash: null,
+      ticketPurchase: persistedTicket,
+    };
+    const winner = {
+      ...failed,
+      status: 'READY' as const,
+      gifData: Buffer.from(draft.gifData),
+      gifHash: draft.gifHash,
+    };
+    const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+    const prisma = {
+      ticketPurchase: { findUnique: vi.fn().mockResolvedValue(persistedTicket) },
+      backendPlanet: {
+        findUnique: vi.fn().mockResolvedValueOnce(failed).mockResolvedValueOnce(winner),
+        updateMany,
+      },
+    } as unknown as PrismaClient;
+
+    await expect(new PrismaBackendPlanetStore(prisma).generatePlanet(proof)).resolves.toMatchObject({
+      planetId: 'planet-row',
+      status: 'READY',
+    });
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'planet-row', status: { not: 'READY' } },
+    }));
+  });
+
+  it('repairs a READY Planet without moving its persisted generation time', async () => {
+    const generatedAt = new Date('2026-08-13T12:00:00.000Z');
+    const draft = deriveBackendPlanet(proof, generatedAt);
+    const persistedTicket = {
+      id: 'ticket-row',
+      ticketId: { toFixed: () => '1' },
+      drawingId: { toFixed: () => '1' },
+      recipient: proof.recipient,
+      bonusBall: proof.bonusBall,
+      normals: proof.normals,
+      originTxHash: proof.originTxHash,
+      logIndex: 0,
+      purchasedAt: new Date('2026-08-13T11:00:00.000Z'),
+    };
+    const existingPlanet = {
+      id: 'planet-row',
+      chainId: draft.chainId,
+      ticketId: { toFixed: () => draft.ticketId },
+      ownerAddress: draft.ownerAddress,
+      planetName: draft.name,
+      seed: draft.seed,
+      traitsHash: draft.traitsHash,
+      generatorVersion: draft.generatorVersion,
+      planetType: draft.planetType,
+      terrain: draft.terrain,
+      rarity: draft.rarity,
+      satelliteCount: draft.satelliteCount,
+      hasRing: draft.hasRing,
+      baseMineralsPerDay: BigInt(draft.baseMineralsPerDay),
       generatedAt,
       status: 'READY' as const,
       gifData: null,
@@ -125,7 +281,7 @@ describe('PrismaBackendPlanetStore', () => {
       planetName: 'Failed Planet',
       seed: `0x${'11'.repeat(32)}`,
       traitsHash: `0x${'22'.repeat(32)}`,
-      generatorVersion: 1,
+      generatorVersion: GENERATOR_VERSION,
       planetType: 'Gaia',
       terrain: 'Plains',
       rarity: 'Common',
@@ -144,7 +300,7 @@ describe('PrismaBackendPlanetStore', () => {
       generatedAt,
       status: 'READY' as const,
       gifData: Buffer.from('gif'),
-      gifHash: `0x${'33'.repeat(32)}`,
+      gifHash: keccak256(Buffer.from('gif')),
     };
     const transaction = {
       mineralEconomyCutover: {
@@ -217,7 +373,7 @@ describe('PrismaBackendPlanetStore', () => {
       planetName: 'Failed Planet',
       seed: `0x${'11'.repeat(32)}`,
       traitsHash: `0x${'22'.repeat(32)}`,
-      generatorVersion: 1,
+      generatorVersion: GENERATOR_VERSION,
       planetType: 'Gaia',
       terrain: 'Plains',
       rarity: 'Common',
@@ -235,7 +391,7 @@ describe('PrismaBackendPlanetStore', () => {
       planetName: 'Ready Planet',
       status: 'READY' as const,
       gifData: Buffer.from('gif'),
-      gifHash: `0x${'33'.repeat(32)}`,
+      gifHash: keccak256(Buffer.from('gif')),
     };
     const transaction = {
       mineralEconomyCutover: {
@@ -307,7 +463,7 @@ describe('PrismaBackendPlanetStore', () => {
       planetName: 'Existing Planet',
       seed: `0x${'11'.repeat(32)}`,
       traitsHash: `0x${'22'.repeat(32)}`,
-      generatorVersion: 1,
+      generatorVersion: GENERATOR_VERSION,
       planetType: 'Gaia',
       terrain: 'Plains',
       rarity: 'Common',
@@ -317,7 +473,7 @@ describe('PrismaBackendPlanetStore', () => {
       generatedAt: new Date('2026-08-13T12:00:00.000Z'),
       status: 'READY',
       gifData: Buffer.from('gif'),
-      gifHash: `0x${'33'.repeat(32)}`,
+      gifHash: keccak256(Buffer.from('gif')),
       ticketPurchase: {
         ticketId: { toFixed: () => '1' },
         drawingId: { toFixed: () => '1' },
@@ -371,7 +527,7 @@ describe('PrismaBackendPlanetStore', () => {
       planetName: 'Winner Planet',
       seed: `0x${'11'.repeat(32)}`,
       traitsHash: `0x${'22'.repeat(32)}`,
-      generatorVersion: 1,
+      generatorVersion: GENERATOR_VERSION,
       planetType: 'Gaia',
       terrain: 'Plains',
       rarity: 'Common',
@@ -381,7 +537,7 @@ describe('PrismaBackendPlanetStore', () => {
       generatedAt: draftAt,
       status: 'READY' as const,
       gifData: Buffer.from('gif'),
-      gifHash: `0x${'33'.repeat(32)}`,
+      gifHash: keccak256(Buffer.from('gif')),
       ticketPurchase: persistedTicket,
     };
     const account = {
@@ -463,7 +619,7 @@ describe('PrismaBackendPlanetStore', () => {
       planetName: 'Post-cutover Winner Planet',
       seed: `0x${'11'.repeat(32)}`,
       traitsHash: `0x${'22'.repeat(32)}`,
-      generatorVersion: 1,
+      generatorVersion: GENERATOR_VERSION,
       planetType: 'Gaia',
       terrain: 'Plains',
       rarity: 'Common',
@@ -473,7 +629,7 @@ describe('PrismaBackendPlanetStore', () => {
       generatedAt: effectiveAt,
       status: 'READY' as const,
       gifData: Buffer.from('gif'),
-      gifHash: `0x${'33'.repeat(32)}`,
+      gifHash: keccak256(Buffer.from('gif')),
       ticketPurchase: persistedTicket,
     };
     const account = {

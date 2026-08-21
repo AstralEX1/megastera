@@ -4,6 +4,27 @@ import { getBackendWalletMiningSnapshot } from './miningStore.js';
 import { getCurrentLeaderboard } from './leaderboardStore.js';
 
 describe('backend Planet mining snapshots', () => {
+  it('rechecks a staged cutover after entering the PostgreSQL transaction', async () => {
+    const cutoverAt = new Date('2026-08-20T00:00:00.000Z');
+    const rootClock = vi.fn().mockResolvedValue([{ now: new Date(cutoverAt.getTime() - 1) }]);
+    const transactionClock = vi.fn().mockResolvedValue([{ now: cutoverAt }]);
+    const prisma = {
+      $queryRaw: rootClock,
+      mineralEconomyCutover: { findUnique: vi.fn().mockResolvedValue(null) },
+      backendPlanet: { findMany: vi.fn().mockResolvedValue([]) },
+      $transaction: vi.fn(async (callback: (client: unknown) => unknown) => callback({
+        $queryRaw: transactionClock,
+        mineralEconomyCutover: { findUnique: vi.fn().mockResolvedValue(null) },
+      })),
+    } as unknown as PrismaClient;
+
+    await expect(
+      getBackendWalletMiningSnapshot(prisma, '0x0000000000000000000000000000000000000001', new Date(), {
+        mineralEconomyCutoverAt: cutoverAt,
+      }),
+    ).rejects.toThrow('configured mineral economy cutover is not persisted');
+  });
+
   it('keeps wallet balance and live leaderboard score equal at PostgreSQL asOf', async () => {
     const owner = '0x0000000000000000000000000000000000000001';
     const cutoverAt = new Date('2026-08-20T00:00:00.000Z');
