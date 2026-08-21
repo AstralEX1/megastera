@@ -38,7 +38,7 @@ The source tag is always `MEGASTERA`. It is a Megapot attribution value and does
 
 ## Backend API
 
-The Vercel entrypoint `api/index.ts` delegates to `server/api/index.ts`, which mounts:
+The Vercel entrypoint `api/index.ts` delegates to `server/api/index.ts`, which mounts only:
 
 - backend Planet generation, collection, GIF, and wallet mining routes;
 - the server-disabled Planet upgrade endpoint;
@@ -51,8 +51,6 @@ The Vercel entrypoint `api/index.ts` delegates to `server/api/index.ts`, which m
 `server/api/prismaTicketPurchase.ts` persists only the immutable ticket row required by backend generation. `server/api/backendPlanet.ts` derives the deterministic traits and GIF and upserts one row per ticket purchase. Existing ready rows are returned unchanged; conflicting proof fields fail closed. Collection queries filter by Base mainnet, the active jackpot, and the `MEGASTERA` source tag.
 
 No active module signs vouchers, pins media, reads a Planet contract, projects Planet events, scans all tickets continuously, or writes transfer/accrual ledgers. The upgrade endpoint remains server-disabled because it does not yet verify a request-wallet signature.
-
-`server/api/leaderboardWorker.ts` is a separate scheduler/CLI entrypoint. When run, it finalizes completed UTC-day periods into `LeaderboardPeriod` and `LeaderboardEntry`; `pnpm api:server` and the Vercel function do not start it automatically.
 
 ## Frontend boundaries
 
@@ -73,7 +71,6 @@ The `BackendPlanet` model is linked one-to-one to `TicketPurchase` and stores:
 - ready/failed status plus bounded generation error text.
 
 This worktree additionally stores `upgradeLevel` and `upgradeBonusBps` on `BackendPlanet`, opening/current balances in `MineralAccount`, the authoritative cutover in `MineralEconomyCutover`, and idempotent `(planetId, targetLevel)` charges in `PlanetUpgradePurchase`. V2 calculations use integer micros and keep the V1 opening-balance calculation as the cutover anchor.
-Same-type collection bonuses are derived at read time from Planet generation timestamps; they are not stored as accrual or ledger rows. The active leaderboard and wallet/Planet mining reads therefore remain reproducible from immutable Planet data.
 
 Legacy Prisma tables and migrations are retained only for database compatibility. No active code writes the legacy Planet, voucher, artifact, projector, or accrual paths.
 

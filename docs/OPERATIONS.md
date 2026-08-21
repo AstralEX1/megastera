@@ -45,8 +45,6 @@ There is intentionally no readiness route that probes a Planet contract and no i
 
 The frontend must send the execution transaction hash and exact `TicketPurchased` log index. The API then checks receipt status, Base mainnet, canonical jackpot, `MEGASTERA` source tag, ticket fields, confirmation depth, canonical block hash, and optional recipient. The Play screen retries the same reference while the receipt reaches finality; the backend persists the proof before rendering the GIF, so a generation/storage failure leaves a retryable pending collection row.
 
-Play checkout checks the current USDC allowance against the exact purchase total before showing the purchase action. If the allowance is insufficient, the approval transaction grants a reusable allowance to the route-specific Megapot spender; bulk-order simulation runs only after that approval gate resolves. The UI distinguishes insufficient USDC balance, a rejected wallet transaction, and wallet/network failures.
-
 If generation returns `422`, inspect server logs for the request and RPC stage; do not retry with a different log index unless the receipt actually contains another canonical ticket event. Repeating the same valid request is safe: the key is `originTxHash:logIndex`, and an existing ready row is returned. If the receipt is not yet final, My Planets keeps the browser-confirmed receipt as a pending card and the catch-up pass retries it later.
 
 If the database already contains a conflicting ticket or Planet row, preserve it and investigate the immutable provenance mismatch. Do not delete production data as a first response.
@@ -61,7 +59,7 @@ With no `MINERAL_ECONOMY_CUTOVER_AT`, mining and leaderboard reads follow the V1
 baseMineralsPerDay × elapsed milliseconds × 1_000_000 / 86_400_000
 ```
 
-The start time is the backend generation timestamp. The base rate is `baseMineralsPerDay × 1_000_000` micros/day. Same-type collection milestones apply at 3 (+5%), 5 (+7.5%), and 10 (+10%) matching Planets. Earned micros are calculated over each rate interval with integer arithmetic; the browser only interpolates the returned snapshot for display and never writes accrual or ledger rows. Before cutover, public leaderboard routes calculate current rows from ready backend Planet `generatedAt` and `baseMineralsPerDay` values and apply the V1 collection calculation. Live leaderboard reads are uncached.
+The start time is the backend generation timestamp. Same-type collection milestones apply at 3 (+5%), 5 (+7.5%), and 10 (+10%) matching Planets. The browser never writes accrual or ledger rows. Before cutover, public leaderboard routes calculate current rows from ready backend Planet `generatedAt` and `baseMineralsPerDay` values and apply the V1 collection calculation. Live leaderboard reads are uncached.
 
 When the prepared cutover is active, the wallet mining route settles `MineralAccount` balance in integer micros from the cutover forward. New Planet generation settles the owner's account before inserting the new Planet. Level 1/2/3 persistence primitives retain +10%/+25%/+50% bonuses and idempotent `(planetId, targetLevel)` charges, but `POST /api/planets/:planetId/upgrade` remains server-disabled until owner-bound authorization exists. A configured cutover that was not persisted before PostgreSQL reaches it fails closed.
 

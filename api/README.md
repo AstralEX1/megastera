@@ -38,4 +38,4 @@ The HTTP server defaults to `127.0.0.1:8787`; set `MEGAPLANETS_API_HOST` and `ME
 - Receipt verification checks Base mainnet, canonical jackpot/source, event fields, confirmation depth, block hash, and optional wallet recipient.
 - Generation is idempotent on `originTxHash:logIndex`; conflicting persisted provenance is rejected.
 - GIF bytes are stored in PostgreSQL and served with an immutable content hash.
-- Leaderboard reads are derived from ready persisted Planet records and same-type collection milestones; after cutover, mineral account and upgrade history also contribute to spendable scores.
+- Leaderboard reads are derived from ready persisted Planet records, collection milestones, and—after cutover—mineral account and upgrade history.

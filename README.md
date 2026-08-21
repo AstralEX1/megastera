@@ -111,8 +111,6 @@ The automated reward contract is a future upgrade; it is not presented as part o
 
 Seasonal rewards can expand beyond monetary payouts over time and may include gameplay assets, planets or other items introduced by future mechanics.
 
-Implementation note: the active backend exposes live standings with a current UTC-day period label and has a separate daily finalization worker for archived rows. Reward settlement is not an automated smart-contract or HTTP path in this repository; the Season 1 countdown and prize copy are presented by the client.
-
 ## Why Megapot is core
 
 Megapot is not a secondary widget, a link-out, or an unrelated protocol attached to the game.
@@ -236,7 +234,6 @@ The browser handles interaction, but it is not the authority for planet creation
 - Planet generation is deterministic and idempotent.
 - Conflicting persisted provenance fails closed.
 - Mining is derived from persisted planet data rather than mutable browser state.
-- Same-type collection bonuses are derived from persisted Planet generation times rather than a browser-owned ledger.
 - After the mineral-economy cutover, wallet balances and current leaderboard scores are derived from persisted integer-micro account and upgrade history; V1 remains the pre-cutover fallback.
 - Generated GIF bytes are stored with an immutable content hash.
 - Server credentials and database secrets never enter the Vite client environment.
@@ -293,13 +290,13 @@ Copy the required values from [`.env.example`](.env.example) into your local env
 Every pull request and push to `main` runs the repository quality gate:
 
 ```bash
-pnpm db:generate
-pnpm db:validate
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm --filter @megaplanets/planet-generator golden
 pnpm build
+pnpm db:generate
+pnpm db:validate
 ```
 
 ## License
