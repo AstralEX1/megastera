@@ -187,7 +187,7 @@ describe('backend Planet mining snapshots', () => {
       currentBalanceMicros: '2000000',
       effectiveMineralsPerDayMicros: '1000000',
       ownedPlanetCount: 1,
-      upgradesEnabled: false,
+      upgradesEnabled: true,
     });
     expect(snapshot).not.toHaveProperty('earnedMicros');
     expect(snapshot.planets[0]).toMatchObject({
