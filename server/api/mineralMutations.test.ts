@@ -3,6 +3,7 @@ import type { PrismaClient } from './generated/prisma/client.js';
 import { purchasePlanetUpgrade, settleMineralAccount } from './mineralAccounts.js';
 
 const OWNER = '0x1111111111111111111111111111111111111111';
+const OTHER = '0x2222222222222222222222222222222222222222';
 const CUTOVER = new Date('2026-08-20T00:00:00.000Z');
 const PURCHASED_AT = new Date('2026-08-21T00:00:00.000Z');
 
@@ -29,20 +30,33 @@ function makePrisma(overrides: {
   const lastSettledAt = overrides.account?.lastSettledAt instanceof Date ? overrides.account.lastSettledAt : CUTOVER;
   const account = {
     id: 'account-1',
-    ownerAddress: OWNER,
+    ownerAddress: typeof overrides.account?.ownerAddress === 'string' ? overrides.account.ownerAddress : OWNER,
     openingBalanceMicros: 0n,
     balanceMicros,
     lastSettledAt,
   };
   const purchase = overrides.existingPurchase ?? null;
   const clockAt = overrides.clockAt ?? PURCHASED_AT;
+  const events: string[] = [];
+  let queryIndex = 0;
   const tx = {
-    $queryRaw: vi
-      .fn()
-      .mockResolvedValueOnce([{ locked: 1 }])
-      .mockResolvedValueOnce([{ locked: 1 }])
-      .mockResolvedValueOnce([{ now: clockAt }])
-      .mockResolvedValueOnce([{ id: planet.id }]),
+    $queryRaw: vi.fn().mockImplementation(() => {
+      queryIndex += 1;
+      if (queryIndex === 1) {
+        events.push('economy-lock');
+        return [{ locked: 1 }];
+      }
+      if (queryIndex === 2) {
+        events.push('wallet-lock');
+        return [{ locked: 1 }];
+      }
+      if (queryIndex === 3) {
+        events.push('clock');
+        return [{ now: clockAt }];
+      }
+      events.push('planet-lock');
+      return [{ id: planet.id }];
+    }),
     mineralEconomyCutover: {
       findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt: CUTOVER }),
       createMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -56,7 +70,10 @@ function makePrisma(overrides: {
       }),
     },
     backendPlanet: {
-      findUnique: vi.fn().mockResolvedValue(planet),
+      findUnique: vi.fn().mockImplementation(() => {
+        events.push('planet-read');
+        return planet;
+      }),
       findMany: vi.fn().mockResolvedValue([planet]),
       update: vi.fn().mockImplementation(({ data }: { data: Partial<typeof planet> }) => {
         Object.assign(planet, data);
@@ -75,6 +92,7 @@ function makePrisma(overrides: {
     } as unknown as PrismaClient,
     tx,
     account,
+    events,
     planet,
   };
 }
@@ -121,6 +139,7 @@ describe('mineral upgrade mutations', () => {
 
     await expect(
       purchasePlanetUpgrade(fixture.prisma, {
+        authenticatedWalletAddress: OWNER,
         planetId: 'planet-1',
         targetLevel: 1,
         cutoverAt: CUTOVER,
@@ -134,9 +153,30 @@ describe('mineral upgrade mutations', () => {
     expect(fixture.planet.upgradeLevel).toBe(0);
   });
 
+  it('checks the authenticated owner only after locking the Planet', async () => {
+    const fixture = makePrisma({ account: { ownerAddress: OTHER } });
+
+    await expect(
+      purchasePlanetUpgrade(fixture.prisma, {
+        authenticatedWalletAddress: OTHER,
+        planetId: 'planet-1',
+        targetLevel: 1,
+        cutoverAt: CUTOVER,
+      }),
+    ).rejects.toThrow('Authenticated wallet does not own this Planet');
+
+    expect(fixture.tx.backendPlanet.findUnique).toHaveBeenCalledOnce();
+    expect(fixture.events.indexOf('planet-lock')).toBeLessThan(fixture.events.indexOf('planet-read'));
+    expect(fixture.tx.backendPlanet.findMany).not.toHaveBeenCalled();
+    expect(fixture.tx.mineralAccount.update).not.toHaveBeenCalled();
+    expect(fixture.tx.backendPlanet.update).not.toHaveBeenCalled();
+    expect(fixture.tx.planetUpgradePurchase.create).not.toHaveBeenCalled();
+  });
+
   it('returns an existing purchase on retry without debiting again', async () => {
     const first = makePrisma();
     const result = await purchasePlanetUpgrade(first.prisma, {
+      authenticatedWalletAddress: OWNER,
       planetId: 'planet-1',
       targetLevel: 1,
       cutoverAt: CUTOVER,
@@ -156,6 +196,7 @@ describe('mineral upgrade mutations', () => {
       },
     });
     const retryResult = await purchasePlanetUpgrade(retry.prisma, {
+      authenticatedWalletAddress: OWNER,
       planetId: 'planet-1',
       targetLevel: 1,
       cutoverAt: CUTOVER,

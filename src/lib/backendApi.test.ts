@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { backendApiUrl, fetchBackendPlanets, requestBackendPlanetGeneration } from './backendApi';
+import {
+  backendApiUrl,
+  type BackendApiError,
+  fetchBackendPlanets,
+  requestBackendPlanetGeneration,
+  requestBackendPlanetUpgrade,
+  requestSiweChallenge,
+  verifySiweLogin,
+} from './backendApi';
 
 const ADDRESS = '0x0000000000000000000000000000000000000001' as const;
 const TX = `0x${'a'.repeat(64)}` as const;
@@ -45,7 +53,11 @@ describe('backendApiUrl', () => {
 });
 
 describe('backend Planet API', () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
 
   it('fetches and validates backend Planet rows', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
@@ -75,10 +87,6 @@ describe('backend Planet API', () => {
   });
 
   it('exposes an immutable receipt-only Planet upgrade request', async () => {
-    const module = await import('./backendApi');
-    expect(module.requestBackendPlanetUpgrade).toEqual(expect.any(Function));
-    if (typeof module.requestBackendPlanetUpgrade !== 'function') return;
-
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ upgrade: {
         purchaseId: 'purchase-1',
@@ -92,7 +100,11 @@ describe('backend Planet API', () => {
       } }), { status: 200 }),
     );
 
-    await expect(module.requestBackendPlanetUpgrade({ planetId: 'planet-1', targetLevel: 1 })).resolves.toEqual({
+    await expect(requestBackendPlanetUpgrade({
+      expectedAddress: ADDRESS,
+      planetId: 'planet-1',
+      targetLevel: 1,
+    })).resolves.toEqual({
       purchaseId: 'purchase-1',
       planetId: 'planet-1',
       ownerAddress: ADDRESS,
@@ -101,6 +113,98 @@ describe('backend Planet API', () => {
       costMicros: '200000',
       purchasedAt: '2026-08-13T12:00:00.000Z',
     });
-    expect(fetchMock).toHaveBeenCalledWith('/api/planets/planet-1/upgrade', expect.objectContaining({ method: 'POST' }));
+    expect(fetchMock).toHaveBeenCalledWith('/api/planets/planet-1/upgrade', expect.objectContaining({
+      body: JSON.stringify({ expectedAddress: ADDRESS, targetLevel: 1 }),
+      credentials: 'same-origin',
+      method: 'POST',
+    }));
+  });
+
+  it('preserves an upgrade 401 so the caller can start SIWE once', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ error: 'Wallet authentication is required.' }), { status: 401 }),
+    );
+
+    await expect(requestBackendPlanetUpgrade({
+      expectedAddress: ADDRESS,
+      planetId: 'planet-1',
+      targetLevel: 1,
+    })).rejects.toEqual(expect.objectContaining<Partial<BackendApiError>>({
+      message: 'Wallet authentication is required.',
+      status: 401,
+    }));
+  });
+
+  it('uses same-origin credentials for the minimal SIWE challenge and verification flow', async () => {
+    const challenge = {
+      address: ADDRESS,
+      chainId: 8453,
+      domain: 'megastera.example',
+      expirationTime: '2026-08-21T12:05:00.000Z',
+      issuedAt: '2026-08-21T12:00:00.000Z',
+      nonce: 'a'.repeat(96),
+      scheme: 'https',
+      uri: 'https://megastera.example',
+      version: '1',
+    } as const;
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(challenge), { status: 201 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(requestSiweChallenge(ADDRESS)).resolves.toEqual(challenge);
+    await expect(verifySiweLogin({ message: 'canonical message', signature: '0x12' })).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/auth/siwe/nonce', expect.objectContaining({
+      body: JSON.stringify({ address: ADDRESS }),
+      credentials: 'same-origin',
+      method: 'POST',
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/auth/siwe/verify', expect.objectContaining({
+      body: JSON.stringify({ message: 'canonical message', signature: '0x12' }),
+      credentials: 'same-origin',
+      method: 'POST',
+    }));
+  });
+
+  it('refuses a cross-origin SIWE backend before requesting a challenge', async () => {
+    vi.stubGlobal('location', new URL('https://megastera.example'));
+    vi.stubEnv('VITE_BACKEND_API_BASE_URL', 'https://evil.example');
+    vi.resetModules();
+    const isolatedApi = await import('./backendApi');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        address: ADDRESS,
+        chainId: 8453,
+        domain: 'megastera.example',
+        expirationTime: '2026-08-21T12:05:00.000Z',
+        issuedAt: '2026-08-21T12:00:00.000Z',
+        nonce: 'a'.repeat(96),
+        scheme: 'https',
+        uri: 'https://megastera.example',
+        version: '1',
+      }), { status: 201 }),
+    );
+
+    await expect(isolatedApi.requestSiweChallenge(ADDRESS)).rejects.toThrow(/same-origin/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses a SIWE challenge that is not pinned to the page origin', async () => {
+    vi.stubGlobal('location', new URL('https://megastera.example'));
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        address: ADDRESS,
+        chainId: 8453,
+        domain: 'evil.example',
+        expirationTime: '2026-08-21T12:05:00.000Z',
+        issuedAt: '2026-08-21T12:00:00.000Z',
+        nonce: 'a'.repeat(96),
+        scheme: 'https',
+        uri: 'https://evil.example',
+        version: '1',
+      }), { status: 201 }),
+    );
+
+    await expect(requestSiweChallenge(ADDRESS)).rejects.toThrow(/malformed/i);
   });
 });

@@ -1,4 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg';
+import { Hono } from 'hono';
+import { createSiweMessage } from 'viem/siwe';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { PrismaBackendPlanetStore } from './backendPlanet.js';
 import { MEGASTERA_SOURCE } from './config.js';
@@ -14,6 +16,7 @@ import {
   resolveMineralEconomyCutover,
   runMineralAccountsBackfill,
 } from './mineralAccounts.js';
+import { createSiweAuthRoutes } from './siweAuth.js';
 
 const testDatabaseUrl = process.env.MINERAL_ECONOMY_TEST_DATABASE_URL?.trim();
 if (!testDatabaseUrl && process.env.MINERAL_ECONOMY_REQUIRE_POSTGRES === '1') {
@@ -23,6 +26,7 @@ if (!testDatabaseUrl && process.env.MINERAL_ECONOMY_REQUIRE_POSTGRES === '1') {
 }
 const describePostgres = testDatabaseUrl ? describe : describe.skip;
 const OWNER = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const OTHER_OWNER = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 let nextFixtureId = 99_001;
 
 function createClient() {
@@ -141,6 +145,7 @@ function proofForTicket(
 }
 
 async function clearTestDatabase(prisma: PrismaClient): Promise<void> {
+  await prisma.siweNonce.deleteMany();
   await prisma.leaderboardEntry.deleteMany();
   await prisma.leaderboardPeriod.deleteMany();
   // Upgrade history is immutable in production; TRUNCATE keeps test cleanup read/write-safe without firing delete triggers.
@@ -268,6 +273,7 @@ describePostgres('Mineral upgrade PostgreSQL concurrency', () => {
 
       let completed = 0;
       const firstUpgrade = purchasePlanetUpgrade(first, {
+        authenticatedWalletAddress: OWNER,
         planetId: fixture.planet.id,
         targetLevel: 1,
         cutoverAt,
@@ -276,6 +282,7 @@ describePostgres('Mineral upgrade PostgreSQL concurrency', () => {
         return result;
       });
       const secondUpgrade = purchasePlanetUpgrade(second, {
+        authenticatedWalletAddress: OWNER,
         planetId: fixture.planet.id,
         targetLevel: 1,
         cutoverAt,
@@ -306,6 +313,91 @@ describePostgres('Mineral upgrade PostgreSQL concurrency', () => {
     }
   });
 
+  it('rolls back every economic write when the authenticated wallet is not the locked Planet owner', async () => {
+    const databaseNow = await postgresNow(first);
+    const cutoverAt = await ensurePersistedCutover(first, utcMidnightBefore(databaseNow));
+    const fixture = await createFixture(first, OWNER, cutoverAt);
+    const account = await seedAccount(first, OTHER_OWNER, databaseNow);
+
+    await expect(purchasePlanetUpgrade(first, {
+      authenticatedWalletAddress: OTHER_OWNER,
+      planetId: fixture.planet.id,
+      targetLevel: 1,
+      cutoverAt,
+    })).rejects.toThrow('Authenticated wallet does not own this Planet');
+
+    expect((await first.mineralAccount.findUnique({ where: { ownerAddress: OTHER_OWNER } }))?.balanceMicros)
+      .toBe(account.balanceMicros);
+    expect((await first.backendPlanet.findUnique({ where: { id: fixture.planet.id } }))?.upgradeLevel)
+      .toBe(0);
+    expect(await first.planetUpgradePurchase.count({ where: { planetId: fixture.planet.id } }))
+      .toBe(0);
+  });
+
+  it('lets only one of two parallel SIWE verify requests create a session', async () => {
+    const origin = 'https://megastera.example';
+    const databaseNow = await postgresNow(first);
+    const nonce = 'c'.repeat(96);
+    let arrivals = 0;
+    let release!: () => void;
+    const bothVerified = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const app = new Hono();
+    app.route('/api/auth/siwe', createSiweAuthRoutes({
+      generateNonce: () => nonce,
+      getPrisma: () => first,
+      loadConfig: () => ({
+        chainId: 8453,
+        confirmations: 6n,
+        databaseUrl: testDatabaseUrl ?? '',
+        mineralUpgradesEnabled: true,
+        rpcUrl: 'https://rpc.example.test',
+        siweOrigin: origin,
+        siweSessionSecret: 's'.repeat(32),
+      }),
+      now: () => databaseNow,
+      verifySignature: async () => {
+        arrivals += 1;
+        if (arrivals === 2) release();
+        await bothVerified;
+        return true;
+      },
+    }));
+    const challengeResponse = await app.request(`${origin}/api/auth/siwe/nonce`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin },
+      body: JSON.stringify({ address: OWNER }),
+    });
+    const challenge = await challengeResponse.json() as {
+      address: `0x${string}`;
+      chainId: number;
+      domain: string;
+      expirationTime: string;
+      issuedAt: string;
+      nonce: string;
+      scheme: string;
+      uri: string;
+      version: '1';
+    };
+    const message = createSiweMessage({
+      ...challenge,
+      expirationTime: new Date(challenge.expirationTime),
+      issuedAt: new Date(challenge.issuedAt),
+    });
+    const verify = () => app.request(`${origin}/api/auth/siwe/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin },
+      body: JSON.stringify({ message, signature: '0x12' }),
+    });
+
+    const responses = await Promise.all([verify(), verify()]);
+
+    expect(responses.map((response) => response.status).sort()).toEqual([204, 401]);
+    expect(responses.filter((response) => response.headers.has('set-cookie'))).toHaveLength(1);
+    expect(await first.siweNonce.count({ where: { nonce } })).toBe(0);
+  });
+
   it('serializes different Planet upgrades for one wallet', async () => {
     const databaseNow = await postgresNow(first);
     const cutoverAt = await ensurePersistedCutover(first, utcMidnightBefore(databaseNow));
@@ -314,8 +406,14 @@ describePostgres('Mineral upgrade PostgreSQL concurrency', () => {
     await seedAccount(first, OWNER, databaseNow);
 
     const [firstPurchase, secondPurchase] = await Promise.all([
-      purchasePlanetUpgrade(first, { planetId: firstFixture.planet.id, targetLevel: 1, cutoverAt }),
+      purchasePlanetUpgrade(first, {
+        authenticatedWalletAddress: OWNER,
+        planetId: firstFixture.planet.id,
+        targetLevel: 1,
+        cutoverAt,
+      }),
       purchasePlanetUpgrade(second, {
+        authenticatedWalletAddress: OWNER,
         planetId: secondFixture.planet.id,
         targetLevel: 1,
         cutoverAt,
@@ -344,6 +442,7 @@ describePostgres('Mineral upgrade PostgreSQL concurrency', () => {
       cutoverAt,
     ).generatePlanet(proofForTicket(generationTicket.ticket, OWNER));
     const upgrade = purchasePlanetUpgrade(first, {
+      authenticatedWalletAddress: OWNER,
       planetId: existing.planet.id,
       targetLevel: 1,
       cutoverAt,

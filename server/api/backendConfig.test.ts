@@ -36,4 +36,41 @@ describe('Minerals Economy configuration', () => {
       'MINERAL_UPGRADES_ENABLED must be a boolean',
     );
   });
+
+  it('requires exact HTTPS SIWE configuration before upgrades can be enabled', () => {
+    const config = loadBackendPlanetConfig({
+      ...baseEnv,
+      MINERAL_UPGRADES_ENABLED: 'true',
+      SIWE_ORIGIN: 'https://megastera.example',
+      SIWE_SESSION_SECRET: 's'.repeat(32),
+    });
+
+    expect(config.siweOrigin).toBe('https://megastera.example');
+    expect(config.siweSessionSecret).toBe('s'.repeat(32));
+  });
+
+  it('fails closed on missing or malformed SIWE configuration', () => {
+    expect(() => loadBackendPlanetConfig({
+      ...baseEnv,
+      MINERAL_UPGRADES_ENABLED: 'true',
+    })).toThrow('SIWE_ORIGIN is required');
+    expect(() => loadBackendPlanetConfig({
+      ...baseEnv,
+      MINERAL_UPGRADES_ENABLED: 'true',
+      SIWE_ORIGIN: 'http://megastera.example',
+      SIWE_SESSION_SECRET: 's'.repeat(32),
+    })).toThrow('SIWE_ORIGIN must be an exact HTTPS origin');
+    expect(() => loadBackendPlanetConfig({
+      ...baseEnv,
+      MINERAL_UPGRADES_ENABLED: 'true',
+      SIWE_ORIGIN: 'https://megastera.example/path',
+      SIWE_SESSION_SECRET: 's'.repeat(32),
+    })).toThrow('SIWE_ORIGIN must be an exact HTTPS origin');
+    expect(() => loadBackendPlanetConfig({
+      ...baseEnv,
+      MINERAL_UPGRADES_ENABLED: 'true',
+      SIWE_ORIGIN: 'https://megastera.example',
+      SIWE_SESSION_SECRET: 'too-short',
+    })).toThrow('SIWE_SESSION_SECRET must contain at least 32 bytes');
+  });
 });

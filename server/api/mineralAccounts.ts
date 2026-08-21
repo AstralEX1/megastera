@@ -566,6 +566,7 @@ function serializeUpgradeResult(purchase: Parameters<typeof serializePurchase>[0
 export async function purchasePlanetUpgrade(
   prisma: PrismaClient,
   input: {
+    authenticatedWalletAddress: string;
     planetId: string;
     targetLevel: number;
     cutoverAt?: Date | null;
@@ -574,12 +575,7 @@ export async function purchasePlanetUpgrade(
   getMineralUpgradeConfig(input.targetLevel);
   return prisma.$transaction(async (transaction) => {
     await acquireMineralEconomySharedBarrier(transaction);
-    const ownerHint = await transaction.backendPlanet.findUnique({
-      where: { id: input.planetId },
-      select: { ownerAddress: true },
-    });
-    if (!ownerHint) throw new Error('Planet not found.');
-    const ownerAddress = normalizeOwner(ownerHint.ownerAddress);
+    const ownerAddress = normalizeOwner(input.authenticatedWalletAddress);
     await acquireMineralWalletLock(transaction, ownerAddress);
     const purchasedAt = await getPostgresClockTimestamp(transaction);
     const resolution = await resolveMineralEconomyForOperation(
@@ -593,11 +589,18 @@ export async function purchasePlanetUpgrade(
     const account = await ensureAndLockMineralAccount(transaction, ownerAddress, cutoverAt);
     const planet = await lockPlanet(transaction, input.planetId);
     if (!planet) throw new Error('Planet not found.');
+    if (normalizeOwner(planet.ownerAddress) !== ownerAddress) {
+      throw new Error('Authenticated wallet does not own this Planet.');
+    }
     const existing = await transaction.planetUpgradePurchase.findUnique({
       where: { planetId_targetLevel: { planetId: input.planetId, targetLevel: input.targetLevel } },
     });
-    if (existing) return serializeUpgradeResult(existing);
-    if (planet.ownerAddress.toLowerCase() !== ownerAddress) throw new Error('Planet owner changed.');
+    if (existing) {
+      if (normalizeOwner(existing.walletAddress) !== ownerAddress) {
+        throw new Error('Upgrade target must be the next Planet level.');
+      }
+      return serializeUpgradeResult(existing);
+    }
     if (planet.status !== 'READY') throw new Error('Planet is not ready for upgrades.');
     if (input.targetLevel !== planet.upgradeLevel + 1) {
       throw new Error('Upgrade target must be the next Planet level.');

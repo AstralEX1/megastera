@@ -9,6 +9,8 @@ export type BackendPlanetConfig = {
   /** Optional in dependency overrides so pre-v2 Planet APIs remain source-compatible. */
   mineralEconomyCutoverAt?: Date | null;
   mineralUpgradesEnabled?: boolean;
+  siweOrigin?: string;
+  siweSessionSecret?: string;
 };
 
 export type MineralEconomyConfig = {
@@ -46,6 +48,44 @@ function parseMineralUpgradesEnabled(env: Record<string, string | undefined>): b
   throw new Error('MINERAL_UPGRADES_ENABLED must be a boolean.');
 }
 
+function parseSiweOrigin(
+  env: Record<string, string | undefined>,
+  requiredForUpgrades: boolean,
+): string | undefined {
+  const raw = env.SIWE_ORIGIN?.trim();
+  if (!raw) {
+    if (requiredForUpgrades) throw new Error('SIWE_ORIGIN is required when upgrades are enabled.');
+    return undefined;
+  }
+  let origin: URL;
+  try {
+    origin = new URL(raw);
+  } catch {
+    throw new Error('SIWE_ORIGIN must be an exact HTTPS origin.');
+  }
+  if (origin.protocol !== 'https:' || origin.origin !== raw) {
+    throw new Error('SIWE_ORIGIN must be an exact HTTPS origin.');
+  }
+  return raw;
+}
+
+function parseSiweSessionSecret(
+  env: Record<string, string | undefined>,
+  requiredForUpgrades: boolean,
+): string | undefined {
+  const secret = env.SIWE_SESSION_SECRET?.trim();
+  if (!secret) {
+    if (requiredForUpgrades) {
+      throw new Error('SIWE_SESSION_SECRET is required when upgrades are enabled.');
+    }
+    return undefined;
+  }
+  if (new TextEncoder().encode(secret).byteLength < 32) {
+    throw new Error('SIWE_SESSION_SECRET must contain at least 32 bytes.');
+  }
+  return secret;
+}
+
 export function loadMineralEconomyConfig(
   env: Record<string, string | undefined> = process.env,
 ): MineralEconomyConfig {
@@ -77,12 +117,15 @@ export function loadBackendPlanetConfig(
     .filter(Boolean)
     .filter((value, index, values) => value !== rpcUrl && values.indexOf(value) === index)
     .slice(0, 3);
+  const mineralEconomy = loadMineralEconomyConfig(env);
   return {
     chainId: BASE_CHAIN_ID,
     rpcUrl,
     rpcFallbackUrls,
     databaseUrl,
     confirmations,
-    ...loadMineralEconomyConfig(env),
+    ...mineralEconomy,
+    siweOrigin: parseSiweOrigin(env, mineralEconomy.mineralUpgradesEnabled),
+    siweSessionSecret: parseSiweSessionSecret(env, mineralEconomy.mineralUpgradesEnabled),
   };
 }

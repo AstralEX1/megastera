@@ -16,6 +16,12 @@ import { findTicketFromReceipt, parseReceiptReference, type ReceiptReference } f
 import { saveMegasteraProof } from './prismaTicketPurchase.js';
 import { reportBackendError } from './errorDiagnostics.js';
 import type { PrismaClient } from './generated/prisma/client.js';
+import { purchasePlanetUpgrade } from './mineralAccounts.js';
+import {
+  createSiweAuthRoutes,
+  getSiweSessionAddress,
+  isExactSiweRequestOrigin,
+} from './siweAuth.js';
 
 export type BackendPlanetReference = ReceiptReference;
 
@@ -27,6 +33,7 @@ export type BackendPlanetRouteDependencies = {
   allows: (key: string) => boolean;
   now: () => Date;
   getPrisma?: (config: BackendPlanetConfig) => PrismaClient;
+  purchaseUpgrade: typeof purchasePlanetUpgrade;
 };
 
 const MAX_BATCH = 50;
@@ -67,6 +74,7 @@ function defaultDependencies(): BackendPlanetRouteDependencies {
     getPrisma: (config) => getPrismaClient(config.databaseUrl),
     allows: createRateLimiter(),
     now: () => new Date(),
+    purchaseUpgrade: purchasePlanetUpgrade,
   };
 }
 
@@ -91,6 +99,14 @@ export function createBackendPlanetRoutes(
   const dependencies = { ...defaultDependencies(), ...overrides };
   const app = new Hono();
   const inFlight = new Map<string, Promise<BackendPlanetRecord>>();
+  const getPrisma = (config: BackendPlanetConfig) =>
+    (dependencies.getPrisma ?? ((value) => getPrismaClient(value.databaseUrl)))(config);
+
+  app.route('/auth/siwe', createSiweAuthRoutes({
+    getPrisma,
+    loadConfig: dependencies.loadConfig,
+    now: dependencies.now,
+  }));
 
   const generate = async (reference: BackendPlanetReference) => {
     const key = `${reference.transactionHash.toLowerCase()}:${reference.logIndex}`;
@@ -246,11 +262,67 @@ export function createBackendPlanetRoutes(
       return c.json({ error: 'Request body is invalid or too large.' }, 400);
     }
     const targetLevel = body && typeof body === 'object' ? (body as { targetLevel?: unknown }).targetLevel : undefined;
+    const expectedAddress = body && typeof body === 'object'
+      ? (body as { expectedAddress?: unknown }).expectedAddress
+      : undefined;
     if (typeof targetLevel !== 'number' || !Number.isInteger(targetLevel) || targetLevel < 1 || targetLevel > 3) {
       return c.json({ error: 'targetLevel must be an integer between 1 and 3.' }, 400);
     }
-    // ponytail: public upgrades stay off until requests are authenticated to the Planet owner.
-    return c.json({ error: 'Planet upgrades are disabled.' }, 404);
+    if (typeof expectedAddress !== 'string' || !isAddress(expectedAddress)) {
+      return c.json({ error: 'A valid expectedAddress is required.' }, 400);
+    }
+
+    let config: BackendPlanetConfig;
+    try {
+      config = dependencies.loadConfig();
+    } catch {
+      return c.json({ error: 'Planet upgrades are not configured.' }, 503);
+    }
+    if (!config.mineralUpgradesEnabled) {
+      return c.json({ error: 'Planet upgrades are disabled.' }, 404);
+    }
+    if (!config.siweOrigin || !isExactSiweRequestOrigin(c, config.siweOrigin)) {
+      return c.json({ error: 'Request origin is not allowed.' }, 403);
+    }
+
+    let authenticatedWalletAddress: Awaited<ReturnType<typeof getSiweSessionAddress>>;
+    try {
+      authenticatedWalletAddress = await getSiweSessionAddress(c, config, dependencies.now());
+    } catch {
+      return c.json({ error: 'SIWE authentication is not configured.' }, 503);
+    }
+    if (
+      !authenticatedWalletAddress ||
+      authenticatedWalletAddress.toLowerCase() !== getAddress(expectedAddress).toLowerCase()
+    ) return c.json({ error: 'Wallet authentication is required.' }, 401);
+
+    try {
+      const upgrade = await dependencies.purchaseUpgrade(getPrisma(config), {
+        authenticatedWalletAddress,
+        cutoverAt: config.mineralEconomyCutoverAt,
+        planetId: parsedPlanetId.data,
+        targetLevel,
+      });
+      return c.json({ upgrade });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (message === 'Authenticated wallet does not own this Planet.') {
+        return c.json({ error: message }, 403);
+      }
+      if (message === 'Planet not found.') return c.json({ error: message }, 404);
+      if (
+        message === 'Insufficient mineral balance.' ||
+        message === 'Mineral economy is disabled.' ||
+        message === 'Mineral economy is not active yet.' ||
+        message === 'Planet is not ready for upgrades.' ||
+        message === 'Upgrade target must be the next Planet level.'
+      ) return c.json({ error: message }, 422);
+      return c.json(
+        { error: 'Planet upgrade failed.' },
+        503,
+        reportBackendError('POST /api/planets/:planetId/upgrade', error),
+      );
+    }
   });
 
   app.get('/planets/:planetId', async (c) => {

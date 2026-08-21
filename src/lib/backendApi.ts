@@ -19,6 +19,15 @@ export function backendApiFetch(path: string, init?: RequestInit): Promise<Respo
   return init === undefined ? fetch(url) : fetch(url, init);
 }
 
+function sameOriginBackendApiFetch(path: string, init: RequestInit): Promise<Response> {
+  const url = backendApiUrl(path);
+  if (
+    BACKEND_API_BASE_URL &&
+    (!globalThis.location?.origin || new URL(url).origin !== globalThis.location.origin)
+  ) throw new Error('Wallet authentication requires a same-origin backend.');
+  return fetch(url, init);
+}
+
 export type BackendPlanet = {
   planetId: string;
   chainId: number;
@@ -65,6 +74,32 @@ export type BackendPlanetUpgradeReceipt = {
   costMicros: string;
   purchasedAt: string;
 };
+
+export type SiweChallenge = {
+  address: Address;
+  chainId: 8453;
+  domain: string;
+  expirationTime: string;
+  issuedAt: string;
+  nonce: string;
+  scheme: 'https';
+  uri: string;
+  version: '1';
+};
+
+export class BackendApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'BackendApiError';
+  }
+}
+
+function responseError(response: Response, payload: unknown, fallback: string): BackendApiError {
+  const message = payload && typeof payload === 'object' && typeof (payload as { error?: unknown }).error === 'string'
+    ? (payload as { error: string }).error
+    : fallback;
+  return new BackendApiError(message, response.status);
+}
 
 function parseBackendPlanet(value: unknown): BackendPlanet {
   if (!value || typeof value !== 'object') throw new Error('Backend Planet response is malformed.');
@@ -232,25 +267,99 @@ function parseBackendPlanetUpgradeReceipt(value: unknown): BackendPlanetUpgradeR
 }
 
 export async function requestBackendPlanetUpgrade(args: {
+  expectedAddress: Address;
   planetId: string;
   targetLevel: number;
 }): Promise<BackendPlanetUpgradeReceipt> {
-  const response = await backendApiFetch(`/api/planets/${encodeURIComponent(args.planetId)}/upgrade`, {
+  const response = await sameOriginBackendApiFetch(`/api/planets/${encodeURIComponent(args.planetId)}/upgrade`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ targetLevel: args.targetLevel }),
+    credentials: 'same-origin',
+    body: JSON.stringify({
+      expectedAddress: getAddress(args.expectedAddress),
+      targetLevel: args.targetLevel,
+    }),
   });
   const payload = await response.json().catch(() => undefined);
   if (!response.ok) {
-    const message = payload && typeof payload === 'object' && typeof (payload as { error?: unknown }).error === 'string'
-      ? (payload as { error: string }).error
-      : `Backend Planet upgrade returned HTTP ${response.status}.`;
-    throw new Error(message);
+    throw responseError(response, payload, `Backend Planet upgrade returned HTTP ${response.status}.`);
   }
   if (!payload || typeof payload !== 'object' || !('upgrade' in payload)) {
     throw new Error('Backend Planet upgrade response is malformed.');
   }
   return parseBackendPlanetUpgradeReceipt((payload as { upgrade: unknown }).upgrade);
+}
+
+function parseSiweChallenge(
+  value: unknown,
+  expectedAddress: Address,
+  expectedOrigin = globalThis.location?.origin,
+): SiweChallenge {
+  if (!value || typeof value !== 'object') throw new Error('SIWE challenge response is malformed.');
+  const candidate = value as Partial<SiweChallenge>;
+  const issuedAt = new Date(candidate.issuedAt ?? '');
+  const expirationTime = new Date(candidate.expirationTime ?? '');
+  let uri: URL;
+  try {
+    uri = new URL(candidate.uri ?? '');
+  } catch {
+    throw new Error('SIWE challenge response is malformed.');
+  }
+  if (
+    !isAddress(candidate.address ?? '') ||
+    getAddress(candidate.address as Address) !== getAddress(expectedAddress) ||
+    candidate.chainId !== 8453 ||
+    typeof candidate.domain !== 'string' ||
+    candidate.domain !== uri.host ||
+    !Number.isFinite(issuedAt.getTime()) ||
+    !Number.isFinite(expirationTime.getTime()) ||
+    expirationTime <= issuedAt ||
+    typeof candidate.nonce !== 'string' ||
+    !/^[A-Za-z0-9]{8,96}$/.test(candidate.nonce) ||
+    candidate.scheme !== 'https' ||
+    uri.protocol !== 'https:' ||
+    uri.origin !== candidate.uri ||
+    (expectedOrigin !== undefined && candidate.uri !== expectedOrigin) ||
+    candidate.version !== '1'
+  ) throw new Error('SIWE challenge response is malformed.');
+  return {
+    address: getAddress(candidate.address as Address),
+    chainId: 8453,
+    domain: candidate.domain,
+    expirationTime: expirationTime.toISOString(),
+    issuedAt: issuedAt.toISOString(),
+    nonce: candidate.nonce,
+    scheme: 'https',
+    uri: candidate.uri,
+    version: '1',
+  };
+}
+
+export async function requestSiweChallenge(address: Address): Promise<SiweChallenge> {
+  const expectedAddress = getAddress(address);
+  const response = await sameOriginBackendApiFetch('/api/auth/siwe/nonce', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ address: expectedAddress }),
+  });
+  const payload = await response.json().catch(() => undefined);
+  if (!response.ok) {
+    throw responseError(response, payload, `SIWE challenge returned HTTP ${response.status}.`);
+  }
+  return parseSiweChallenge(payload, expectedAddress);
+}
+
+export async function verifySiweLogin(args: { message: string; signature: Hex }): Promise<void> {
+  const response = await sameOriginBackendApiFetch('/api/auth/siwe/verify', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(args),
+  });
+  if (response.ok) return;
+  const payload = await response.json().catch(() => undefined);
+  throw responseError(response, payload, `SIWE verification returned HTTP ${response.status}.`);
 }
 
 export async function requestBackendPlanetGenerationBatch(args: {
