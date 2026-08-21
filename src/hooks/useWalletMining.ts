@@ -1,54 +1,143 @@
 import { useQuery } from '@tanstack/react-query';
 import { BACKEND_API_BASE_URL, backendApiFetch } from '@/lib/backendApi';
 
+export type PlanetUpgradeSnapshot = {
+  targetLevel: number;
+  bonusBpsAfter: number;
+  costMicros: string;
+};
+
 export type PlanetMiningSnapshot = {
-  planetId?: string;
-  tokenId?: string;
+  planetId: string;
   planetType: string;
   sameTypeCount: number;
   collectionBonusBps: number;
   baseMineralsPerDay: string;
   effectiveMineralsPerDayMicros: string;
-  earnedMicros: string;
-  activeSince: string;
+  upgradeLevel: number;
+  upgradeBonusBps: number;
+  nextUpgrade: PlanetUpgradeSnapshot | null;
 };
 
 export type WalletMiningSnapshot = {
   ownerAddress: `0x${string}`;
   asOf: string;
   ownedPlanetCount: number;
-  earnedMicros: string;
+  currentBalanceMicros: string;
   effectiveMineralsPerDayMicros: string;
+  upgradesEnabled: boolean;
   planets: PlanetMiningSnapshot[];
 };
 
 export const MINING_REFRESH_INTERVAL_MS = 60_000;
 
-function normalizeInteger(value: unknown, fallback: number, minimum: number): number {
-  const numeric = typeof value === 'number'
-    ? value
-    : typeof value === 'string' && value.trim() !== ''
-      ? Number(value)
-      : Number.NaN;
-  return Number.isInteger(numeric) && numeric >= minimum ? numeric : fallback;
+type JsonObject = Record<string, unknown>;
+
+function isObject(value: unknown): value is JsonObject {
+  return typeof value === 'object' && value !== null;
+}
+
+function requiredObject(value: unknown, label: string): JsonObject {
+  if (!isObject(value)) throw new Error(`Wallet mining ${label} is malformed.`);
+  return value;
+}
+
+function requiredString(value: unknown, label: string): string {
+  if (typeof value !== 'string' || value.trim() === '') throw new Error(`Wallet mining ${label} is malformed.`);
+  return value;
+}
+
+function requiredMicros(value: unknown, label: string): string {
+  const stringValue = requiredString(value, label);
+  if (!/^\d+$/.test(stringValue)) throw new Error(`Wallet mining ${label} is malformed.`);
+  return stringValue;
+}
+
+function requiredInteger(value: unknown, label: string, minimum: number): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < minimum) {
+    throw new Error(`Wallet mining ${label} is malformed.`);
+  }
+  return value;
+}
+
+function isWalletAddress(value: unknown): value is `0x${string}` {
+  return typeof value === 'string' && /^0x[\da-fA-F]{40}$/.test(value);
+}
+
+function requiredAddress(value: unknown): `0x${string}` {
+  if (!isWalletAddress(value)) {
+    throw new Error('Wallet mining ownerAddress is malformed.');
+  }
+  return value;
+}
+
+function requiredTimestamp(value: unknown, label: string): string {
+  const timestamp = requiredString(value, label);
+  if (!Number.isFinite(new Date(timestamp).getTime())) throw new Error(`Wallet mining ${label} is malformed.`);
+  return timestamp;
+}
+
+function parseNextUpgrade(value: unknown): PlanetUpgradeSnapshot | null {
+  if (value === null) return null;
+  const nextUpgrade = requiredObject(value, 'nextUpgrade');
+  const targetLevel = requiredInteger(nextUpgrade.targetLevel, 'nextUpgrade.targetLevel', 1);
+  if (targetLevel > 3) throw new Error('Wallet mining nextUpgrade.targetLevel is malformed.');
+  return {
+    targetLevel,
+    bonusBpsAfter: requiredInteger(nextUpgrade.bonusBpsAfter, 'nextUpgrade.bonusBpsAfter', 0),
+    costMicros: requiredMicros(nextUpgrade.costMicros, 'nextUpgrade.costMicros'),
+  };
+}
+
+function parsePlanet(value: unknown, upgradesEnabled: boolean): PlanetMiningSnapshot {
+  const planet = requiredObject(value, 'Planet');
+  const upgradeLevel = planet.upgradeLevel === undefined && !upgradesEnabled
+    ? 0
+    : requiredInteger(planet.upgradeLevel, 'Planet upgradeLevel', 0);
+  if (upgradeLevel > 3) throw new Error('Wallet mining Planet upgradeLevel is malformed.');
+  const upgradeBonusBps = planet.upgradeBonusBps === undefined && !upgradesEnabled
+    ? 0
+    : requiredInteger(planet.upgradeBonusBps, 'Planet upgradeBonusBps', 0);
+  const nextUpgrade = planet.nextUpgrade === undefined && !upgradesEnabled
+    ? null
+    : parseNextUpgrade(planet.nextUpgrade);
+
+  return {
+    planetId: requiredString(planet.planetId, 'Planet planetId'),
+    planetType: requiredString(planet.planetType, 'Planet planetType'),
+    sameTypeCount: requiredInteger(planet.sameTypeCount, 'Planet sameTypeCount', 1),
+    collectionBonusBps: requiredInteger(planet.collectionBonusBps, 'Planet collectionBonusBps', 0),
+    baseMineralsPerDay: requiredMicros(planet.baseMineralsPerDay, 'Planet baseMineralsPerDay'),
+    effectiveMineralsPerDayMicros: requiredMicros(planet.effectiveMineralsPerDayMicros, 'Planet effectiveMineralsPerDayMicros'),
+    upgradeLevel,
+    upgradeBonusBps,
+    nextUpgrade,
+  };
+}
+
+export function parseWalletMiningSnapshot(value: unknown): WalletMiningSnapshot {
+  const mining = requiredObject(value, 'snapshot');
+  const upgradesEnabled = mining.upgradesEnabled;
+  if (typeof upgradesEnabled !== 'boolean') throw new Error('Wallet mining upgradesEnabled is malformed.');
+  if (!Array.isArray(mining.planets)) throw new Error('Wallet mining planets is malformed.');
+
+  return {
+    ownerAddress: requiredAddress(mining.ownerAddress),
+    asOf: requiredTimestamp(mining.asOf, 'asOf'),
+    ownedPlanetCount: requiredInteger(mining.ownedPlanetCount, 'ownedPlanetCount', 0),
+    currentBalanceMicros: requiredMicros(mining.currentBalanceMicros, 'currentBalanceMicros'),
+    effectiveMineralsPerDayMicros: requiredMicros(mining.effectiveMineralsPerDayMicros, 'effectiveMineralsPerDayMicros'),
+    upgradesEnabled,
+    planets: mining.planets.map((planet) => parsePlanet(planet, upgradesEnabled)),
+  };
 }
 
 export async function fetchWalletMining(address: `0x${string}`): Promise<WalletMiningSnapshot> {
   const response = await backendApiFetch(`/api/wallets/${address}/mining`);
+  const payload = await response.json().catch(() => undefined);
   if (!response.ok) throw new Error(`Wallet mining returned HTTP ${response.status}.`);
-  const mining = ((await response.json()) as {
-    mining: Omit<WalletMiningSnapshot, 'planets'> & { planets?: Array<Partial<PlanetMiningSnapshot>> };
-  }).mining;
-  return {
-    ...mining,
-    planets: (mining.planets ?? []).map((planet) => ({
-      ...planet,
-      planetId: planet.planetId ?? planet.tokenId,
-      planetType: typeof planet.planetType === 'string' && planet.planetType.trim() !== '' ? planet.planetType : 'Unknown',
-      sameTypeCount: normalizeInteger(planet.sameTypeCount, 1, 1),
-      collectionBonusBps: normalizeInteger(planet.collectionBonusBps, 0, 0),
-    })),
-  } as WalletMiningSnapshot;
+  if (!isObject(payload) || !('mining' in payload)) throw new Error('Wallet mining response is malformed.');
+  return parseWalletMiningSnapshot(payload.mining);
 }
 
 export function walletMiningQueryOptions(address: `0x${string}` | undefined) {

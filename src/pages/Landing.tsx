@@ -7,6 +7,7 @@ import { LandingMiningLeaderboard } from '@/components/landing/LandingMiningLead
 import { LandingPlanetCard } from '@/components/landing/LandingPlanetCard';
 import { LandingSplitText } from '@/components/landing/LandingSplitText';
 import { PlanetGeneratorHero } from '@/components/landing/PlanetGeneratorHero';
+import { FOOTER_LINKS } from '@/components/layout/Footer';
 
 const generatedPlanetAssets = [
   { image: '/artifacts/megastera-generated/planet-01.gif', name: 'Draheunia', rarity: 'Common', ticketId: '5001', minerals: 25, numbers: [7, 14, 18, 23, 29], bonus: 3 },
@@ -192,7 +193,11 @@ export function Landing() {
         <a className="landing-wordmark" href="/" aria-label="Megastera home">
           <LandingSplitText text={COPY.brandName} className="landing-wordmark-name" />
         </a>
-        <LandingSplitText tag="span" className="landing-footer-tagline" text="Explore Planets. Win prizes." />
+        <nav className="landing-footer-links" aria-label="Megastera and Megapot links">
+          {FOOTER_LINKS.map(({ label, href }) => (
+            <a href={href} target="_blank" rel="noreferrer" key={href}>{label}</a>
+          ))}
+        </nav>
         <LandingSplitText
           tag="span"
           className="landing-footer-meta"

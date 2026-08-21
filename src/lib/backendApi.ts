@@ -56,6 +56,16 @@ export type BackendPlanetCollectionRow = {
   generationError?: string | null;
 };
 
+export type BackendPlanetUpgradeReceipt = {
+  purchaseId: string;
+  planetId: string;
+  ownerAddress: Address;
+  targetLevel: number;
+  bonusBpsAfter: number;
+  costMicros: string;
+  purchasedAt: string;
+};
+
 function parseBackendPlanet(value: unknown): BackendPlanet {
   if (!value || typeof value !== 'object') throw new Error('Backend Planet response is malformed.');
   const candidate = value as Partial<BackendPlanet>;
@@ -187,6 +197,60 @@ export async function requestBackendPlanetGeneration(args: {
     throw new Error('Backend Planet generation response is malformed.');
   }
   return parseBackendPlanet((payload as { planet: unknown }).planet);
+}
+
+function parseBackendPlanetUpgradeReceipt(value: unknown): BackendPlanetUpgradeReceipt {
+  if (!value || typeof value !== 'object') throw new Error('Backend Planet upgrade response is malformed.');
+  const candidate = value as Partial<BackendPlanetUpgradeReceipt>;
+  if (
+    typeof candidate.purchaseId !== 'string' ||
+    typeof candidate.planetId !== 'string' ||
+    !isAddress(candidate.ownerAddress ?? '') ||
+    typeof candidate.targetLevel !== 'number' ||
+    !Number.isInteger(candidate.targetLevel) ||
+    candidate.targetLevel < 1 ||
+    candidate.targetLevel > 3 ||
+    typeof candidate.bonusBpsAfter !== 'number' ||
+    !Number.isInteger(candidate.bonusBpsAfter) ||
+    candidate.bonusBpsAfter < 0 ||
+    typeof candidate.costMicros !== 'string' ||
+    !/^\d+$/.test(candidate.costMicros) ||
+    typeof candidate.purchasedAt !== 'string' ||
+    !Number.isFinite(new Date(candidate.purchasedAt).getTime())
+  ) {
+    throw new Error('Backend Planet upgrade response is malformed.');
+  }
+  return {
+    purchaseId: candidate.purchaseId,
+    planetId: candidate.planetId,
+    ownerAddress: getAddress(candidate.ownerAddress as Address),
+    targetLevel: candidate.targetLevel,
+    bonusBpsAfter: candidate.bonusBpsAfter,
+    costMicros: candidate.costMicros,
+    purchasedAt: candidate.purchasedAt,
+  };
+}
+
+export async function requestBackendPlanetUpgrade(args: {
+  planetId: string;
+  targetLevel: number;
+}): Promise<BackendPlanetUpgradeReceipt> {
+  const response = await backendApiFetch(`/api/planets/${encodeURIComponent(args.planetId)}/upgrade`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ targetLevel: args.targetLevel }),
+  });
+  const payload = await response.json().catch(() => undefined);
+  if (!response.ok) {
+    const message = payload && typeof payload === 'object' && typeof (payload as { error?: unknown }).error === 'string'
+      ? (payload as { error: string }).error
+      : `Backend Planet upgrade returned HTTP ${response.status}.`;
+    throw new Error(message);
+  }
+  if (!payload || typeof payload !== 'object' || !('upgrade' in payload)) {
+    throw new Error('Backend Planet upgrade response is malformed.');
+  }
+  return parseBackendPlanetUpgradeReceipt((payload as { upgrade: unknown }).upgrade);
 }
 
 export async function requestBackendPlanetGenerationBatch(args: {

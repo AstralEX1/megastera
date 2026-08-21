@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { maxUint256 } from 'viem';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -72,7 +72,19 @@ describe('ApprovalButton', () => {
     expect(screen.queryByRole('button', { name: /approve/i })).not.toBeInTheDocument();
   });
 
-  it('approves the route-specific spender once when allowance is insufficient', async () => {
+  it('does not expose the purchase action until the allowance has been read', () => {
+    state.allowance = undefined;
+    render(
+      <ApprovalButton spender={spender} amount={1_000_000n}>
+        <button type="button">Explore</button>
+      </ApprovalButton>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Checking USDC approval…' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Explore' })).not.toBeInTheDocument();
+  });
+
+  it('approves a reusable allowance when the current allowance is insufficient', async () => {
     const user = userEvent.setup();
     render(
       <ApprovalButton spender={spender} amount={1_000_000n}>
@@ -82,10 +94,12 @@ describe('ApprovalButton', () => {
 
     await user.click(screen.getByRole('button', { name: 'Approve USDC' }));
 
-    expect(state.writeContract).toHaveBeenCalledWith(expect.objectContaining({
-      functionName: 'approve',
-      args: [spender, maxUint256],
-    }));
+    expect(state.writeContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: 'approve',
+        args: [spender, maxUint256],
+      }),
+    );
   });
 
   it('does not treat a reverted approval receipt as successful', () => {
@@ -116,5 +130,21 @@ describe('ApprovalButton', () => {
 
     expect(onApproved).toHaveBeenCalledTimes(1);
     expect(state.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the purchase action visible while the allowance read catches up', async () => {
+    state.txHash = `0x${'ef'.repeat(32)}`;
+    state.receipt = { status: 'success' };
+
+    render(
+      <ApprovalButton spender={spender} amount={1_000_000n}>
+        <button type="button">Explore</button>
+      </ApprovalButton>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Explore' })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: 'Approve USDC' })).not.toBeInTheDocument();
   });
 });

@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAccount } from 'wagmi';
 import { Button } from '@/components/common/Button';
 import { FadeArc } from '@/components/common/FadeArc';
 import { Ball } from '@/components/lottery/Ball';
 import { BackendPlanetPreview } from '@/components/planets/BackendPlanetPreview';
+import { LiveMineralAmount } from '@/components/planets/LiveMineralAmount';
 import { PlanetMiningMetrics } from '@/components/planets/PlanetMiningOverlay';
 import { PlanetTicketAction } from '@/components/planets/PlanetTicketAction';
+import { PlanetUpgradeAction } from '@/components/planets/PlanetUpgradeAction';
 import { useClaimWinnings } from '@/hooks/useClaimWinnings';
 import { useBackendPlanets } from '@/hooks/useBackendPlanets';
 import { useJackpotState } from '@/hooks/useJackpotState';
+import { usePlanetUpgrade } from '@/hooks/usePlanetUpgrade';
 import { useRound } from '@/hooks/useRound';
 import { useWalletMining } from '@/hooks/useWalletMining';
 import type { PlanetMiningSnapshot } from '@/hooks/useWalletMining';
@@ -44,18 +47,18 @@ function CollectionSummary({
   planetCount,
   ticketCount,
   miningRate,
-  mined,
+  balance,
 }: {
   planetCount: number;
   ticketCount: number;
   miningRate: string;
-  mined: string;
+  balance: ReactNode;
 }) {
   const metrics = [
     { label: 'Planets', value: planetCount, testId: 'summary-planets' },
     { label: 'Tickets', value: ticketCount, testId: 'summary-tickets' },
     { label: 'Mining Rate', value: miningRate, testId: 'summary-rate', accent: true },
-    { label: 'Mined', value: mined, testId: 'summary-mined', accent: true },
+    { label: 'Balance', value: balance, testId: 'summary-balance', accent: true },
   ];
 
   return (
@@ -117,7 +120,7 @@ function BackendPlanetCard({
         </div>
       </button>
       <div className="p-3.5">
-        <PlanetMiningMetrics mining={mining} miningAsOf={mining?.activeSince} />
+        <PlanetMiningMetrics mining={mining} />
       </div>
       <div className="border-t border-[var(--border)] px-3.5 pb-3.5">
         <PlanetTicketAction status={ticketStatus} onClaim={onClaim} isClaimPending={isClaimPending} claimError={claimError} compact />
@@ -308,6 +311,11 @@ function PlanetDetail({
   onClaim,
   isClaimPending,
   claimError,
+  upgradesEnabled,
+  currentBalanceMicros,
+  onUpgrade,
+  isUpgradePending,
+  upgradeError,
 }: {
   planet: BackendPlanet;
   mining?: PlanetMiningSnapshot;
@@ -317,6 +325,11 @@ function PlanetDetail({
   onClaim: () => void;
   isClaimPending: boolean;
   claimError?: Error | null;
+  upgradesEnabled: boolean;
+  currentBalanceMicros: string;
+  onUpgrade: (targetLevel: number) => void;
+  isUpgradePending: boolean;
+  upgradeError?: Error | null;
 }) {
   const winningNumbers = round?.status === 'settled' ? round.winning_numbers : null;
   return (
@@ -343,7 +356,7 @@ function PlanetDetail({
         </div>
         <section data-testid="planet-detail-info" aria-label="Planet info" className="space-y-4">
           <section data-testid="planet-detail-mining" aria-label="Mining" className="min-w-0">
-            <PlanetMiningMetrics mining={mining} miningAsOf={mining?.activeSince} />
+            <PlanetMiningMetrics mining={mining} />
           </section>
           <section data-testid="planet-detail-details" aria-label="Planet details" className="mt-4 border-t border-[var(--border)] pt-4">
             <h3 className="mb-2 font-hud text-sm font-bold text-[var(--text-secondary)]">Details</h3>
@@ -357,6 +370,17 @@ function PlanetDetail({
             </dl>
           </section>
         </section>
+        {mining ? (
+          <PlanetUpgradeAction
+            upgradesEnabled={upgradesEnabled}
+            upgradeLevel={mining.upgradeLevel}
+            nextUpgrade={mining.nextUpgrade ?? null}
+            currentBalanceMicros={currentBalanceMicros}
+            isPending={isUpgradePending}
+            error={upgradeError}
+            onUpgrade={onUpgrade}
+          />
+        ) : null}
         <TicketBlock
           ticket={planet.ticket}
           winningNumbers={winningNumbers}
@@ -375,6 +399,7 @@ export function Planets({ onNavigate, onViewPlanet, routePlanetId }: PlanetsProp
   const { address } = useAccount();
   const planets = useBackendPlanets(address);
   const mining = useWalletMining(address);
+  const upgrade = usePlanetUpgrade(address);
   const jackpot = useJackpotState();
   const ticketHistory = useWalletTickets(address, { pageSize: 100, loadAll: true });
   const claim = useClaimWinnings();
@@ -427,7 +452,7 @@ export function Planets({ onNavigate, onViewPlanet, routePlanetId }: PlanetsProp
     [siteRows],
   );
   const miningByPlanetId = useMemo(
-    () => new Map((mining.data?.planets ?? []).map((item) => [item.planetId ?? item.tokenId ?? '', item] as const)),
+    () => new Map((mining.data?.planets ?? []).map((item) => [item.planetId, item] as const)),
     [mining.data?.planets],
   );
   const ticketsById = useMemo(
@@ -564,6 +589,11 @@ export function Planets({ onNavigate, onViewPlanet, routePlanetId }: PlanetsProp
   };
   const clearRoute = () => onNavigate('planets');
   const selectedTicketStatus = selected ? ticketStatusByTicketId.get(selected.ticket.ticketId) ?? UNAVAILABLE_TICKET_STATUS : UNAVAILABLE_TICKET_STATUS;
+  const upgradePlanet = (planetId: string, targetLevel: number) => {
+    upgrade.reset();
+    upgrade.mutate({ planetId, targetLevel });
+  };
+  const upgradeMatchesSelected = selected !== undefined && upgrade.variables?.planetId === selected.planetId;
   const detail = selected ? (
     <PlanetDetail
       planet={selected}
@@ -574,10 +604,21 @@ export function Planets({ onNavigate, onViewPlanet, routePlanetId }: PlanetsProp
       onClaim={() => claimTicket(selected.ticket.ticketId)}
       isClaimPending={selected.ticket.ticketId === claimingTicketId && claim.isPending}
       claimError={selected.ticket.ticketId === claimingTicketId ? claim.error : null}
+      upgradesEnabled={mining.data?.upgradesEnabled === true}
+      currentBalanceMicros={mining.data?.currentBalanceMicros ?? '0'}
+      onUpgrade={(targetLevel) => upgradePlanet(selected.planetId, targetLevel)}
+      isUpgradePending={upgradeMatchesSelected && upgrade.isPending}
+      upgradeError={upgradeMatchesSelected ? upgrade.error : null}
     />
   ) : null;
   const totalRate = mining.data?.effectiveMineralsPerDayMicros ? `${formatMinerals(BigInt(mining.data.effectiveMineralsPerDayMicros))}/day` : '—';
-  const totalMined = mining.data?.earnedMicros ? formatMinerals(BigInt(mining.data.earnedMicros)) : '—';
+  const totalBalance = mining.data?.currentBalanceMicros && mining.data.asOf ? (
+    <LiveMineralAmount
+      snapshotMicros={mining.data.currentBalanceMicros}
+      effectiveMineralsPerDayMicros={mining.data.effectiveMineralsPerDayMicros}
+      asOf={mining.data.asOf}
+    />
+  ) : '—';
   const generatedCount = generatedRows.length;
 
   return (
@@ -604,7 +645,7 @@ export function Planets({ onNavigate, onViewPlanet, routePlanetId }: PlanetsProp
         </div>
       </header>
 
-      <CollectionSummary planetCount={generatedCount} ticketCount={collection.length} miningRate={totalRate} mined={totalMined} />
+      <CollectionSummary planetCount={generatedCount} ticketCount={collection.length} miningRate={totalRate} balance={totalBalance} />
 
       {planets.isError ? <div role="status" className="rounded-xl border border-amber-700/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">The Megastera site registry is temporarily unavailable. Wallet tickets remain visible; refresh to retry Planet rows.</div> : null}
       {ticketHistory.error ? <div role="status" className="rounded-xl border border-amber-700/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">Megapot ticket statuses are temporarily unavailable. Site Planet rows remain visible.</div> : null}

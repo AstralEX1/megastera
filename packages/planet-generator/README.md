@@ -63,14 +63,15 @@ Rarity is descriptive and never multiplies minerals or score.
 
 ## Rendering
 
-The canonical NFT artifact is a real VP8/WebM animation (`video/webm`) rendered at
-128×128 from the logical pixel scene. `renderPlanetWebM` uses the pinned
-`webm-wasm@0.4.1` Apache-2.0 package, which bundles libvpx/libwebm/libyuv as WASM;
-deployment does not require a system ffmpeg binary. The preset is three seconds and
-the encoder enforces a five-second/two-megabyte upper bound. The output is deterministic
-for a descriptor, so immutable media can be cached and reused when a voucher signature
-expires. The old GIF renderer and fixtures remain available only as a legacy rollback
-and visual-regression reference.
+The active backend artifact is a deterministic animated GIF (`image/gif`) rendered at
+128×128 from the logical pixel scene. `renderPlanetGif` is the renderer used by
+`server/api/backendPlanet.ts`; GIF bytes and their hash are persisted in `BackendPlanet`
+and served through `/api/planets/:planetId/gif`.
+
+The package also contains a bounded WebM renderer in `src/webm.ts`, covered by direct
+generator tests. It is not exported by the package entrypoint and is not used by the
+active backend API; treat it as experimental/future output. Its `webm-wasm@0.4.1`
+path has a three-second preset and five-second/two-megabyte bounds.
 Animation speeds are loop-safe while retaining different planet, cloud, and satellite speeds.
 
 Clouds are a separate transparent pixel sphere, four logical pixels larger than the
@@ -93,8 +94,8 @@ helpers normalize inputs and descriptor deserialization re-derives canonical dat
 trusting a supplied seed, traits, or hashes. Workers receive the full serialized input and
 derive the seed themselves; arbitrary caller-provided seeds are not accepted.
 
-`derivePlanetPreviewForType` is reserved for the development-only Lab and must never
-produce NFT metadata. Production builds omit the Lab route and navigation entry.
+`derivePlanetPreviewForType` is a development/test helper and must never produce canonical
+metadata. It is not part of backend Planet generation.
 
 Run `pnpm --filter @megaplanets/planet-generator golden` to verify fixtures. Intentional
 fixture replacement uses `golden:update` and requires coordinator review.

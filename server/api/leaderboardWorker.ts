@@ -7,7 +7,9 @@ export async function runLeaderboardFinalization(
   env: Record<string, string | undefined> = process.env,
 ): Promise<void> {
   const config = loadBackendPlanetConfig(env);
-  await ensureOverdueLeaderboardPeriodsFinalized(getPrismaClient(config.databaseUrl), new Date());
+  await ensureOverdueLeaderboardPeriodsFinalized(getPrismaClient(config.databaseUrl), new Date(), {
+    mineralEconomyCutoverAt: config.mineralEconomyCutoverAt,
+  });
 }
 
 if (process.argv[1] && import.meta.url === new URL(process.argv[1], 'file:').href) {

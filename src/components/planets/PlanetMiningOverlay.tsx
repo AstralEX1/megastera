@@ -1,17 +1,14 @@
 import { useId, type ReactNode } from 'react';
 import type { PlanetMiningSnapshot } from '@/hooks/useWalletMining';
 import { formatMinerals } from '@/lib/minerals';
-import { LiveMineralAmount } from './LiveMineralAmount';
 
 type PlanetMiningOverlayProps = {
   mining?: PlanetMiningSnapshot;
-  miningAsOf?: string;
   variant?: 'default' | 'compact';
 };
 
 type PlanetMiningMetricsProps = {
   mining?: PlanetMiningSnapshot;
-  miningAsOf?: string;
 };
 
 function formatCollectionBonus(bps: number): string {
@@ -21,7 +18,6 @@ function formatCollectionBonus(bps: number): string {
 const METRIC_TOOLTIPS = {
   rate: 'Minerals per day including boost',
   boost: 'Bonus from matching planet types',
-  mined: 'Total minerals collected',
 } as const;
 
 function MetricTooltip({
@@ -54,9 +50,9 @@ function MetricTooltip({
 
 type MetricsSize = 'default' | 'compact' | 'card';
 
-function MetricsContent({ mining, miningAsOf, size }: PlanetMiningMetricsProps & { size: MetricsSize }) {
+function MetricsContent({ mining, size }: PlanetMiningMetricsProps & { size: MetricsSize }) {
   const tooltipId = useId();
-  if (!mining || !miningAsOf) {
+  if (!mining) {
     return <span className="telemetry text-[var(--text-secondary)]">Mining unavailable</span>;
   }
 
@@ -82,30 +78,21 @@ function MetricsContent({ mining, miningAsOf, size }: PlanetMiningMetricsProps &
           {formatCollectionBonus(mining.collectionBonusBps)}
         </strong>
       </MetricTooltip>
-      <MetricTooltip description={METRIC_TOOLTIPS.mined} id={`${tooltipId}-mined`} className={`border-l border-[var(--border)] text-center ${cellSpacing}`}>
-        <p className={labelClass}>MINED</p>
-        <LiveMineralAmount
-          snapshotMicros={mining.earnedMicros}
-          effectiveMineralsPerDayMicros={mining.effectiveMineralsPerDayMicros}
-          asOf={miningAsOf}
-          className={`mt-1 block font-hud tabular-nums whitespace-nowrap text-[var(--text-primary)] ${valueSize}`}
-        />
-      </MetricTooltip>
     </>
   );
 }
 
-export function PlanetMiningMetrics({ mining, miningAsOf }: PlanetMiningMetricsProps) {
+export function PlanetMiningMetrics({ mining }: PlanetMiningMetricsProps) {
   return (
-    <div data-testid="planet-mining-metrics" className="grid min-w-0 grid-cols-3 overflow-visible rounded-xl border border-[var(--border)] bg-[var(--surface)]">
-      {mining && miningAsOf ? <MetricsContent mining={mining} miningAsOf={miningAsOf} size="card" /> : <span className="col-span-3 p-3 text-center telemetry text-[var(--text-secondary)]">Mining unavailable</span>}
+    <div data-testid="planet-mining-metrics" className="grid min-w-0 grid-cols-2 overflow-visible rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+      {mining ? <MetricsContent mining={mining} size="card" /> : <span className="col-span-2 p-3 text-center telemetry text-[var(--text-secondary)]">Mining unavailable</span>}
     </div>
   );
 }
 
-export function PlanetMiningOverlay({ mining, miningAsOf, variant = 'default' }: PlanetMiningOverlayProps) {
+export function PlanetMiningOverlay({ mining, variant = 'default' }: PlanetMiningOverlayProps) {
   const compact = variant === 'compact';
-  if (!mining || !miningAsOf) {
+  if (!mining) {
     return (
       <div data-testid="planet-mining-overlay" className={`absolute rounded-2xl border border-[var(--border-strong)] bg-[var(--surface)]/90 text-center backdrop-blur-md ${compact ? 'inset-x-2 bottom-2 p-2' : 'inset-x-3 bottom-3 p-3'}`}>
         <span className="telemetry text-[var(--text-secondary)]">Mining unavailable</span>
@@ -114,8 +101,8 @@ export function PlanetMiningOverlay({ mining, miningAsOf, variant = 'default' }:
   }
 
   return (
-    <div data-testid="planet-mining-overlay" className={`absolute grid grid-cols-3 overflow-visible rounded-2xl border border-[var(--border-strong)] bg-[var(--surface)]/90 backdrop-blur-md ${compact ? 'inset-x-2 bottom-2' : 'inset-x-3 bottom-3'}`}>
-      <MetricsContent mining={mining} miningAsOf={miningAsOf} size={compact ? 'compact' : 'default'} />
+    <div data-testid="planet-mining-overlay" className={`absolute grid grid-cols-2 overflow-visible rounded-2xl border border-[var(--border-strong)] bg-[var(--surface)]/90 backdrop-blur-md ${compact ? 'inset-x-2 bottom-2' : 'inset-x-3 bottom-3'}`}>
+      <MetricsContent mining={mining} size={compact ? 'compact' : 'default'} />
     </div>
   );
 }

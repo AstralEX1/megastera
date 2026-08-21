@@ -190,18 +190,21 @@ The current product includes:
 - wallet connection and Megapot ticket purchasing;
 - Base mainnet ticket flow;
 - coordinate selection and direct checkout;
-- keeper-assisted bulk purchases for larger all-random expeditions;
+- keeper-assisted bulk purchases for 11–50 ticket expeditions, including up to ten selected-coordinate tickets;
 - canonical `TicketPurchased` receipt recovery and verification;
 - deterministic planet generation from immutable ticket provenance;
 - deterministic planet traits and GIF rendering;
 - persistent planet and ticket records in PostgreSQL;
 - retry-safe pending states while receipts finalize or generation completes;
 - `My Planets` collection and ticket status;
-- continuous mineral production;
-- wallet leaderboard;
+- live mineral production with same-type collection bonuses;
+- current wallet leaderboard;
+- opt-in mineral-economy-v2 spendable balances and persisted per-Planet upgrade primitives;
 - Megapot drawing state, ticket history and winnings;
 - onchain winnings claim flow after simulation;
-- Season 1 leaderboard competition and manual reward settlement.
+- Season 1 leaderboard countdown/prize presentation; manual reward settlement is outside the runtime/API in this repository.
+
+This worktree also contains an opt-in mineral-economy-v2 path. Before the prepared cutover, wallet mining and the current leaderboard use the V1 live calculation. After cutover, the backend reconstructs spendable mineral scores from opening balances, historical production, collection/upgrade rate changes, and persisted upgrade costs. The unauthenticated upgrade endpoint remains server-disabled until owner-bound authorization is implemented.
 
 Planet generation is idempotent and keyed by ticket provenance, so the same valid ticket cannot create duplicate planets through repeated generation requests.
 
@@ -231,6 +234,7 @@ The browser handles interaction, but it is not the authority for planet creation
 - Planet generation is deterministic and idempotent.
 - Conflicting persisted provenance fails closed.
 - Mining is derived from persisted planet data rather than mutable browser state.
+- After the mineral-economy cutover, wallet balances and current leaderboard scores are derived from persisted integer-micro account and upgrade history; V1 remains the pre-cutover fallback.
 - Generated GIF bytes are stored with an immutable content hash.
 - Server credentials and database secrets never enter the Vite client environment.
 
@@ -242,7 +246,7 @@ For deeper implementation details, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTUR
 
 Season 1 establishes the core **Megapot ticket → planet → mining → competition** loop.
 
-Future seasons can expand that foundation with planet upgrades, colonies, stars, ships, trading, and deeper player-to-player interaction. Existing planets are intended to remain relevant as the universe grows rather than becoming obsolete after a season.
+Future seasons can expand that foundation with colonies, stars, ships, trading, and deeper player-to-player interaction. This worktree's mineral upgrade path is feature-gated and operator-controlled; it is not a completed reward-system rollout. Existing planets are intended to remain relevant as the universe grows rather than becoming obsolete after a season.
 
 ## Repository
 

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import { keccak256 } from 'viem';
+import { GENERATOR_VERSION } from '@megaplanets/planet-generator';
 import type { PrismaClient } from './generated/prisma/client.js';
-import { PrismaBackendPlanetStore } from './backendPlanet.js';
+import { deriveBackendPlanet, PrismaBackendPlanetStore } from './backendPlanet.js';
 import type { MegasteraProof } from './eligibility.js';
 
 const proof = {
@@ -46,6 +48,404 @@ describe('PrismaBackendPlanetStore', () => {
     await expect(store.generatePlanet(proof)).rejects.toThrow('conflicts with persisted ticket');
   });
 
+  it('fails closed instead of repairing a READY row from an unsupported generator version', async () => {
+    const persistedTicket = {
+      id: 'ticket-row',
+      ticketId: { toFixed: () => '1' },
+      drawingId: { toFixed: () => '1' },
+      recipient: proof.recipient,
+      bonusBall: proof.bonusBall,
+      normals: proof.normals,
+      originTxHash: proof.originTxHash,
+      logIndex: 0,
+      purchasedAt: new Date('2026-08-13T11:00:00.000Z'),
+    };
+    const existingPlanet = {
+      id: 'planet-row',
+      chainId: 8453,
+      ticketId: { toFixed: () => '1' },
+      ownerAddress: proof.recipient,
+      planetName: 'Existing Planet',
+      seed: `0x${'11'.repeat(32)}`,
+      traitsHash: `0x${'22'.repeat(32)}`,
+      generatorVersion: 999,
+      planetType: 'Gaia',
+      terrain: 'Plains',
+      rarity: 'Common',
+      satelliteCount: 0,
+      hasRing: false,
+      baseMineralsPerDay: 1n,
+      generatedAt: new Date('2026-08-13T12:00:00.000Z'),
+      status: 'READY' as const,
+      gifData: null,
+      gifHash: null,
+      ticketPurchase: persistedTicket,
+    };
+    const update = vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
+      ...existingPlanet,
+      ...data,
+      ticketPurchase: persistedTicket,
+    }));
+    const prisma = {
+      ticketPurchase: { findUnique: vi.fn().mockResolvedValue(persistedTicket) },
+      backendPlanet: { findUnique: vi.fn().mockResolvedValue(existingPlanet), update },
+    } as unknown as PrismaClient;
+
+    await expect(new PrismaBackendPlanetStore(prisma).generatePlanet(proof)).rejects.toThrow(
+      'generator version',
+    );
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('fails closed instead of repairing a READY row with a mismatched GIF hash', async () => {
+    const draft = deriveBackendPlanet(proof, new Date('2026-08-13T12:00:00.000Z'));
+    const persistedTicket = {
+      id: 'ticket-row',
+      ticketId: { toFixed: () => '1' },
+      drawingId: { toFixed: () => '1' },
+      recipient: proof.recipient,
+      bonusBall: proof.bonusBall,
+      normals: proof.normals,
+      originTxHash: proof.originTxHash,
+      logIndex: 0,
+      purchasedAt: new Date('2026-08-13T11:00:00.000Z'),
+    };
+    const existingPlanet = {
+      id: 'planet-row',
+      chainId: draft.chainId,
+      ticketId: { toFixed: () => draft.ticketId },
+      ownerAddress: draft.ownerAddress,
+      planetName: draft.name,
+      seed: draft.seed,
+      traitsHash: draft.traitsHash,
+      generatorVersion: draft.generatorVersion,
+      planetType: draft.planetType,
+      terrain: draft.terrain,
+      rarity: draft.rarity,
+      satelliteCount: draft.satelliteCount,
+      hasRing: draft.hasRing,
+      baseMineralsPerDay: BigInt(draft.baseMineralsPerDay),
+      generatedAt: new Date(draft.generatedAt),
+      status: 'READY' as const,
+      gifData: Buffer.from('corrupt'),
+      gifHash: draft.gifHash,
+      ticketPurchase: persistedTicket,
+    };
+    const update = vi.fn();
+    const prisma = {
+      ticketPurchase: { findUnique: vi.fn().mockResolvedValue(persistedTicket) },
+      backendPlanet: { findUnique: vi.fn().mockResolvedValue(existingPlanet), update },
+    } as unknown as PrismaClient;
+
+    await expect(new PrismaBackendPlanetStore(prisma).generatePlanet(proof)).rejects.toThrow(
+      'GIF hash',
+    );
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('does not overwrite a non-READY row after a concurrent winner is committed', async () => {
+    const draft = deriveBackendPlanet(proof, new Date('2026-08-13T12:00:00.000Z'));
+    const persistedTicket = {
+      id: 'ticket-row',
+      ticketId: { toFixed: () => '1' },
+      drawingId: { toFixed: () => '1' },
+      recipient: proof.recipient,
+      bonusBall: proof.bonusBall,
+      normals: proof.normals,
+      originTxHash: proof.originTxHash,
+      logIndex: 0,
+      purchasedAt: new Date('2026-08-13T11:00:00.000Z'),
+    };
+    const failed = {
+      id: 'planet-row',
+      chainId: draft.chainId,
+      ticketId: { toFixed: () => draft.ticketId },
+      ownerAddress: draft.ownerAddress,
+      planetName: draft.name,
+      seed: draft.seed,
+      traitsHash: draft.traitsHash,
+      generatorVersion: draft.generatorVersion,
+      planetType: draft.planetType,
+      terrain: draft.terrain,
+      rarity: draft.rarity,
+      satelliteCount: draft.satelliteCount,
+      hasRing: draft.hasRing,
+      baseMineralsPerDay: BigInt(draft.baseMineralsPerDay),
+      generatedAt: new Date(draft.generatedAt),
+      status: 'FAILED' as const,
+      gifData: null,
+      gifHash: null,
+      ticketPurchase: persistedTicket,
+    };
+    const winner = {
+      ...failed,
+      status: 'READY' as const,
+      gifData: Buffer.from(draft.gifData),
+      gifHash: draft.gifHash,
+    };
+    const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+    const prisma = {
+      ticketPurchase: { findUnique: vi.fn().mockResolvedValue(persistedTicket) },
+      backendPlanet: {
+        findUnique: vi.fn().mockResolvedValueOnce(failed).mockResolvedValueOnce(winner),
+        updateMany,
+      },
+    } as unknown as PrismaClient;
+
+    await expect(new PrismaBackendPlanetStore(prisma).generatePlanet(proof)).resolves.toMatchObject({
+      planetId: 'planet-row',
+      status: 'READY',
+    });
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'planet-row', status: { not: 'READY' } },
+    }));
+  });
+
+  it('repairs a READY Planet without moving its persisted generation time', async () => {
+    const generatedAt = new Date('2026-08-13T12:00:00.000Z');
+    const draft = deriveBackendPlanet(proof, generatedAt);
+    const persistedTicket = {
+      id: 'ticket-row',
+      ticketId: { toFixed: () => '1' },
+      drawingId: { toFixed: () => '1' },
+      recipient: proof.recipient,
+      bonusBall: proof.bonusBall,
+      normals: proof.normals,
+      originTxHash: proof.originTxHash,
+      logIndex: 0,
+      purchasedAt: new Date('2026-08-13T11:00:00.000Z'),
+    };
+    const existingPlanet = {
+      id: 'planet-row',
+      chainId: draft.chainId,
+      ticketId: { toFixed: () => draft.ticketId },
+      ownerAddress: draft.ownerAddress,
+      planetName: draft.name,
+      seed: draft.seed,
+      traitsHash: draft.traitsHash,
+      generatorVersion: draft.generatorVersion,
+      planetType: draft.planetType,
+      terrain: draft.terrain,
+      rarity: draft.rarity,
+      satelliteCount: draft.satelliteCount,
+      hasRing: draft.hasRing,
+      baseMineralsPerDay: BigInt(draft.baseMineralsPerDay),
+      generatedAt,
+      status: 'READY' as const,
+      gifData: null,
+      gifHash: null,
+      ticketPurchase: persistedTicket,
+    };
+    const update = vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
+      ...existingPlanet,
+      ...data,
+      ticketId: existingPlanet.ticketId,
+      ticketPurchase: persistedTicket,
+    }));
+    const prisma = {
+      ticketPurchase: { findUnique: vi.fn().mockResolvedValue(persistedTicket) },
+      backendPlanet: { findUnique: vi.fn().mockResolvedValue(existingPlanet), update },
+    } as unknown as PrismaClient;
+    const store = new PrismaBackendPlanetStore(prisma, () => new Date('2026-08-14T12:00:00.000Z'));
+
+    const repaired = await store.generatePlanet(proof);
+
+    expect(repaired.generatedAt).toBe(generatedAt.toISOString());
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      data: { gifData: expect.anything(), gifHash: expect.anything(), generationError: null },
+    }));
+    expect(update.mock.calls[0]?.[0].data).not.toHaveProperty('generatedAt');
+    expect(update.mock.calls[0]?.[0].data).not.toHaveProperty('planetName');
+  });
+
+  it('reloads a row that became READY before the pre-cutover fallback', async () => {
+    const cutoverAt = new Date('2026-08-20T00:00:00.000Z');
+    const effectiveAt = new Date('2026-08-19T00:00:00.000Z');
+    const generatedAt = new Date('2026-08-18T12:00:00.000Z');
+    const persistedTicket = {
+      id: 'ticket-row',
+      ticketId: { toFixed: () => '1' },
+      drawingId: { toFixed: () => '1' },
+      recipient: proof.recipient,
+      bonusBall: proof.bonusBall,
+      normals: proof.normals,
+      originTxHash: proof.originTxHash,
+      logIndex: 0,
+      purchasedAt: new Date('2026-08-18T11:00:00.000Z'),
+    };
+    const failed = {
+      id: 'planet-row',
+      chainId: 8453,
+      ticketId: { toFixed: () => '1' },
+      ownerAddress: proof.recipient,
+      planetName: 'Failed Planet',
+      seed: `0x${'11'.repeat(32)}`,
+      traitsHash: `0x${'22'.repeat(32)}`,
+      generatorVersion: GENERATOR_VERSION,
+      planetType: 'Gaia',
+      terrain: 'Plains',
+      rarity: 'Common',
+      satelliteCount: 0,
+      hasRing: false,
+      baseMineralsPerDay: 1n,
+      generatedAt,
+      status: 'FAILED' as const,
+      gifData: null,
+      gifHash: null,
+      ticketPurchase: persistedTicket,
+    };
+    const ready = {
+      ...failed,
+      planetName: 'Ready Planet',
+      generatedAt,
+      status: 'READY' as const,
+      gifData: Buffer.from('gif'),
+      gifHash: keccak256(Buffer.from('gif')),
+    };
+    const transaction = {
+      mineralEconomyCutover: {
+        findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt }),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      $queryRaw: vi.fn().mockResolvedValue([{ now: effectiveAt }]),
+      mineralAccount: {
+        findUnique: vi.fn().mockResolvedValue({
+          ownerAddress: proof.recipient.toLowerCase(),
+          balanceMicros: 0n,
+          lastSettledAt: cutoverAt,
+        }),
+        upsert: vi.fn().mockResolvedValue({
+          ownerAddress: proof.recipient.toLowerCase(),
+          balanceMicros: 0n,
+          lastSettledAt: cutoverAt,
+        }),
+      },
+      backendPlanet: { findUnique: vi.fn().mockResolvedValue(failed) },
+    };
+    let outerFindCalls = 0;
+    const update = vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
+      ...failed,
+      ...data,
+      ticketId: failed.ticketId,
+      ticketPurchase: persistedTicket,
+    }));
+    const prisma = {
+      ticketPurchase: { findUnique: vi.fn().mockResolvedValue(persistedTicket) },
+      backendPlanet: {
+        findUnique: vi.fn().mockImplementation(async () => {
+          outerFindCalls += 1;
+          return outerFindCalls === 1 ? failed : ready;
+        }),
+        update,
+      },
+      $transaction: vi.fn(async (callback: (value: typeof transaction) => unknown) => callback(transaction)),
+    } as unknown as PrismaClient;
+    const store = new PrismaBackendPlanetStore(prisma, () => effectiveAt, cutoverAt);
+
+    const result = await store.generatePlanet(proof);
+
+    expect(result.generatedAt).toBe(generatedAt.toISOString());
+    expect(result.gifHash).toBe(ready.gifHash);
+    expect(prisma.backendPlanet.findUnique).toHaveBeenCalledTimes(2);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('does not overwrite a row that becomes READY after the fallback read', async () => {
+    const cutoverAt = new Date('2026-08-20T00:00:00.000Z');
+    const effectiveAt = new Date('2026-08-19T00:00:00.000Z');
+    const generatedAt = new Date('2026-08-18T12:00:00.000Z');
+    const persistedTicket = {
+      id: 'ticket-row',
+      ticketId: { toFixed: () => '1' },
+      drawingId: { toFixed: () => '1' },
+      recipient: proof.recipient,
+      bonusBall: proof.bonusBall,
+      normals: proof.normals,
+      originTxHash: proof.originTxHash,
+      logIndex: 0,
+      purchasedAt: new Date('2026-08-18T11:00:00.000Z'),
+    };
+    const failed = {
+      id: 'planet-row',
+      chainId: 8453,
+      ticketId: { toFixed: () => '1' },
+      ownerAddress: proof.recipient,
+      planetName: 'Failed Planet',
+      seed: `0x${'11'.repeat(32)}`,
+      traitsHash: `0x${'22'.repeat(32)}`,
+      generatorVersion: GENERATOR_VERSION,
+      planetType: 'Gaia',
+      terrain: 'Plains',
+      rarity: 'Common',
+      satelliteCount: 0,
+      hasRing: false,
+      baseMineralsPerDay: 1n,
+      generatedAt,
+      status: 'FAILED' as const,
+      gifData: null,
+      gifHash: null,
+      ticketPurchase: persistedTicket,
+    };
+    const ready = {
+      ...failed,
+      planetName: 'Ready Planet',
+      status: 'READY' as const,
+      gifData: Buffer.from('gif'),
+      gifHash: keccak256(Buffer.from('gif')),
+    };
+    const transaction = {
+      mineralEconomyCutover: {
+        findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt }),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      $queryRaw: vi.fn().mockResolvedValue([{ now: effectiveAt }]),
+      mineralAccount: {
+        findUnique: vi.fn().mockResolvedValue({
+          ownerAddress: proof.recipient.toLowerCase(),
+          balanceMicros: 0n,
+          lastSettledAt: cutoverAt,
+        }),
+        upsert: vi.fn().mockResolvedValue({
+          ownerAddress: proof.recipient.toLowerCase(),
+          balanceMicros: 0n,
+          lastSettledAt: cutoverAt,
+        }),
+      },
+      backendPlanet: { findUnique: vi.fn().mockResolvedValue(failed) },
+    };
+    let outerFindCalls = 0;
+    const update = vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
+      ...failed,
+      ...data,
+      ticketId: failed.ticketId,
+      ticketPurchase: persistedTicket,
+    }));
+    const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+    const prisma = {
+      ticketPurchase: { findUnique: vi.fn().mockResolvedValue(persistedTicket) },
+      backendPlanet: {
+        findUnique: vi.fn().mockImplementation(async () => {
+          outerFindCalls += 1;
+          return outerFindCalls < 3 ? failed : ready;
+        }),
+        update,
+        updateMany,
+      },
+      $transaction: vi.fn(async (callback: (value: typeof transaction) => unknown) => callback(transaction)),
+    } as unknown as PrismaClient;
+    const store = new PrismaBackendPlanetStore(prisma, () => effectiveAt, cutoverAt);
+
+    const result = await store.generatePlanet(proof);
+
+    expect(result.generatedAt).toBe(generatedAt.toISOString());
+    expect(result.gifHash).toBe(ready.gifHash);
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'planet-row', status: { not: 'READY' } },
+    }));
+    expect(update).not.toHaveBeenCalled();
+    expect(prisma.backendPlanet.findUnique).toHaveBeenCalledTimes(3);
+  });
+
   it('returns the row won by a concurrent create instead of overwriting its generation time', async () => {
     const persistedTicket = {
       id: 'ticket-row',
@@ -63,7 +463,7 @@ describe('PrismaBackendPlanetStore', () => {
       planetName: 'Existing Planet',
       seed: `0x${'11'.repeat(32)}`,
       traitsHash: `0x${'22'.repeat(32)}`,
-      generatorVersion: 1,
+      generatorVersion: GENERATOR_VERSION,
       planetType: 'Gaia',
       terrain: 'Plains',
       rarity: 'Common',
@@ -73,7 +473,7 @@ describe('PrismaBackendPlanetStore', () => {
       generatedAt: new Date('2026-08-13T12:00:00.000Z'),
       status: 'READY',
       gifData: Buffer.from('gif'),
-      gifHash: `0x${'33'.repeat(32)}`,
+      gifHash: keccak256(Buffer.from('gif')),
       ticketPurchase: {
         ticketId: { toFixed: () => '1' },
         drawingId: { toFixed: () => '1' },
@@ -103,5 +503,299 @@ describe('PrismaBackendPlanetStore', () => {
       generatedAt: existingPlanet.generatedAt.toISOString(),
     });
     expect(prisma.backendPlanet.create).toHaveBeenCalledOnce();
+  });
+
+  it('returns the concurrent winner when configured future cutover falls back to V1 creation', async () => {
+    const cutoverAt = new Date('2026-08-20T00:00:00.000Z');
+    const draftAt = new Date('2026-08-19T00:00:00.000Z');
+    const persistedTicket = {
+      id: 'ticket-row',
+      ticketId: { toFixed: () => '1' },
+      drawingId: { toFixed: () => '1' },
+      recipient: proof.recipient,
+      bonusBall: proof.bonusBall,
+      normals: proof.normals,
+      originTxHash: proof.originTxHash,
+      logIndex: 0,
+      purchasedAt: new Date('2026-08-19T00:00:00.000Z'),
+    };
+    const winner = {
+      id: 'winner-planet',
+      chainId: 8453,
+      ticketId: { toFixed: () => '1' },
+      ownerAddress: proof.recipient,
+      planetName: 'Winner Planet',
+      seed: `0x${'11'.repeat(32)}`,
+      traitsHash: `0x${'22'.repeat(32)}`,
+      generatorVersion: GENERATOR_VERSION,
+      planetType: 'Gaia',
+      terrain: 'Plains',
+      rarity: 'Common',
+      satelliteCount: 0,
+      hasRing: false,
+      baseMineralsPerDay: 1n,
+      generatedAt: draftAt,
+      status: 'READY' as const,
+      gifData: Buffer.from('gif'),
+      gifHash: keccak256(Buffer.from('gif')),
+      ticketPurchase: persistedTicket,
+    };
+    const account = {
+      ownerAddress: proof.recipient.toLowerCase(),
+      balanceMicros: 0n,
+      lastSettledAt: cutoverAt,
+    };
+    const transaction = {
+      mineralEconomyCutover: {
+        findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt }),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      $queryRaw: vi.fn().mockResolvedValue([{ now: draftAt }]),
+      mineralAccount: {
+        findUnique: vi.fn().mockResolvedValue(account),
+        upsert: vi.fn().mockResolvedValue(account),
+      },
+      backendPlanet: { findUnique: vi.fn().mockResolvedValue(null) },
+    };
+    let findCalls = 0;
+    let createCalls = 0;
+    let releaseCreates!: () => void;
+    const bothCreates = new Promise<void>((resolve) => {
+      releaseCreates = resolve;
+    });
+    const prisma = {
+      ticketPurchase: { findUnique: vi.fn().mockResolvedValue(persistedTicket) },
+      backendPlanet: {
+        findUnique: vi.fn().mockImplementation(async () => {
+          findCalls += 1;
+          return findCalls <= 2 ? null : winner;
+        }),
+        create: vi.fn(async () => {
+          const call = ++createCalls;
+          if (call === 2) releaseCreates();
+          await bothCreates;
+          if (call === 1) return winner;
+          throw { code: 'P2002' };
+        }),
+      },
+      $transaction: vi.fn(async (callback: (value: typeof transaction) => unknown) => callback(transaction)),
+    } as unknown as PrismaClient;
+    const createNow = () => {
+      let calls = 0;
+      return () => (calls++ === 0 ? draftAt : draftAt);
+    };
+    const firstStore = new PrismaBackendPlanetStore(prisma, createNow(), cutoverAt);
+    const secondStore = new PrismaBackendPlanetStore(prisma, createNow(), cutoverAt);
+
+    const results = await Promise.all([
+      firstStore.generatePlanet(proof),
+      secondStore.generatePlanet(proof),
+    ]);
+
+    expect(results.map((result) => result.planetId)).toEqual(['winner-planet', 'winner-planet']);
+    expect(prisma.backendPlanet.create).not.toHaveBeenCalled();
+    expect(prisma.backendPlanet.findUnique).toHaveBeenCalledTimes(4);
+  });
+
+  it('reloads the READY winner when a concurrent post-cutover transaction create loses P2002', async () => {
+    const cutoverAt = new Date('2026-08-20T00:00:00.000Z');
+    const effectiveAt = new Date('2026-08-21T00:00:00.000Z');
+    const persistedTicket = {
+      id: 'ticket-row',
+      ticketId: { toFixed: () => '1' },
+      drawingId: { toFixed: () => '1' },
+      recipient: proof.recipient,
+      bonusBall: proof.bonusBall,
+      normals: proof.normals,
+      originTxHash: proof.originTxHash,
+      logIndex: 0,
+      purchasedAt: new Date('2026-08-19T00:00:00.000Z'),
+    };
+    const winner = {
+      id: 'winner-post-cutover-planet',
+      chainId: 8453,
+      ticketId: { toFixed: () => '1' },
+      ownerAddress: proof.recipient,
+      planetName: 'Post-cutover Winner Planet',
+      seed: `0x${'11'.repeat(32)}`,
+      traitsHash: `0x${'22'.repeat(32)}`,
+      generatorVersion: GENERATOR_VERSION,
+      planetType: 'Gaia',
+      terrain: 'Plains',
+      rarity: 'Common',
+      satelliteCount: 0,
+      hasRing: false,
+      baseMineralsPerDay: 1n,
+      generatedAt: effectiveAt,
+      status: 'READY' as const,
+      gifData: Buffer.from('gif'),
+      gifHash: keccak256(Buffer.from('gif')),
+      ticketPurchase: persistedTicket,
+    };
+    const account = {
+      ownerAddress: proof.recipient.toLowerCase(),
+      balanceMicros: 0n,
+      lastSettledAt: effectiveAt,
+    };
+    let createCalls = 0;
+    let releaseCreates!: () => void;
+    const bothCreates = new Promise<void>((resolve) => {
+      releaseCreates = resolve;
+    });
+    const transaction = {
+      mineralEconomyCutover: {
+        findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt }),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      $queryRaw: vi.fn().mockResolvedValue([{ now: effectiveAt }]),
+      mineralAccount: {
+        findUnique: vi.fn().mockResolvedValue(account),
+        upsert: vi.fn().mockResolvedValue(account),
+      },
+      backendPlanet: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn().mockResolvedValue([]),
+        create: vi.fn(async () => {
+          const call = ++createCalls;
+          if (call === 2) releaseCreates();
+          await bothCreates;
+          if (call === 1) return winner;
+          throw { code: 'P2002' };
+        }),
+      },
+      planetUpgradePurchase: { findMany: vi.fn().mockResolvedValue([]) },
+    };
+    let findCalls = 0;
+    const prisma = {
+      ticketPurchase: { findUnique: vi.fn().mockResolvedValue(persistedTicket) },
+      backendPlanet: {
+        findUnique: vi.fn().mockImplementation(async () => {
+          findCalls += 1;
+          return findCalls <= 2 ? null : winner;
+        }),
+      },
+      $transaction: vi.fn(async (callback: (client: typeof transaction) => unknown) => callback(transaction)),
+    } as unknown as PrismaClient;
+    const firstStore = new PrismaBackendPlanetStore(prisma, () => effectiveAt, cutoverAt);
+    const secondStore = new PrismaBackendPlanetStore(prisma, () => effectiveAt, cutoverAt);
+
+    const results = await Promise.all([
+      firstStore.generatePlanet(proof),
+      secondStore.generatePlanet(proof),
+    ]);
+
+    expect(results.map((result) => result.planetId)).toEqual([
+      'winner-post-cutover-planet',
+      'winner-post-cutover-planet',
+    ]);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+    expect(transaction.backendPlanet.create).toHaveBeenCalledTimes(2);
+    expect(prisma.backendPlanet.findUnique).toHaveBeenCalledTimes(3);
+  });
+
+  it('settles existing production before activating a generated Planet at the locked effective time', async () => {
+    const cutoverAt = new Date('2026-08-20T00:00:00.000Z');
+    const draftAt = new Date('2026-08-19T00:00:00.000Z');
+    const effectiveAt = new Date('2026-08-21T00:00:00.000Z');
+    const appClockAt = new Date('2099-01-01T00:00:00.000Z');
+    const persistedTicket = {
+      id: 'ticket-row',
+      ticketId: { toFixed: () => '1' },
+      drawingId: { toFixed: () => '1' },
+      recipient: proof.recipient,
+      bonusBall: proof.bonusBall,
+      normals: proof.normals,
+      originTxHash: proof.originTxHash,
+      logIndex: 0,
+      purchasedAt: new Date('2026-08-19T00:00:00.000Z'),
+    };
+    const oldPlanet = {
+      id: 'old-planet',
+      ownerAddress: proof.recipient.toLowerCase(),
+      planetType: 'Gaia',
+      baseMineralsPerDay: 1n,
+      generatedAt: cutoverAt,
+      upgradeLevel: 0,
+      upgradeBonusBps: 0,
+      status: 'READY' as const,
+    };
+    const account = {
+      id: 'account-row',
+      ownerAddress: proof.recipient.toLowerCase(),
+      openingBalanceMicros: 0n,
+      balanceMicros: 0n,
+      lastSettledAt: cutoverAt,
+    };
+    const events: string[] = [];
+    let nowCalls = 0;
+    const transaction = {
+      mineralEconomyCutover: {
+        findUnique: vi.fn().mockResolvedValue({ id: 1, cutoverAt }),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      $queryRaw: vi.fn().mockResolvedValue([{ now: effectiveAt }]),
+      mineralAccount: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        upsert: vi.fn().mockImplementation(async () => {
+          events.push('account-lock');
+          return account;
+        }),
+        update: vi.fn().mockImplementation(async ({ data }: { data: Partial<typeof account> }) => {
+          Object.assign(account, data);
+          return account;
+        }),
+      },
+      backendPlanet: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([oldPlanet]),
+        create: vi.fn().mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+          id: 'new-planet',
+          chainId: 8453,
+          ticketId: { toFixed: () => '1' },
+          ownerAddress: data.ownerAddress,
+          planetName: data.planetName,
+          seed: data.seed,
+          traitsHash: data.traitsHash,
+          generatorVersion: data.generatorVersion,
+          planetType: data.planetType,
+          terrain: data.terrain,
+          rarity: data.rarity,
+          satelliteCount: data.satelliteCount,
+          hasRing: data.hasRing,
+          baseMineralsPerDay: data.baseMineralsPerDay,
+          generatedAt: data.generatedAt,
+          status: data.status,
+          gifData: data.gifData,
+          gifHash: data.gifHash,
+          ticketPurchase: persistedTicket,
+        })),
+      },
+      planetUpgradePurchase: { findMany: vi.fn().mockResolvedValue([]) },
+    };
+    const prisma = {
+      ticketPurchase: { findUnique: vi.fn().mockResolvedValue(persistedTicket) },
+      backendPlanet: {
+        findUnique: vi.fn().mockResolvedValue(null),
+      },
+      $transaction: vi.fn(async (callback: (value: typeof transaction) => unknown) => callback(transaction)),
+    } as unknown as PrismaClient;
+    const store = new PrismaBackendPlanetStore(
+      prisma,
+      () => {
+        nowCalls += 1;
+        events.push(`now-${nowCalls}`);
+        return nowCalls === 1 ? draftAt : appClockAt;
+      },
+      cutoverAt,
+    );
+
+    const generated = await store.generatePlanet(proof);
+
+    expect(generated.generatedAt).toBe(effectiveAt.toISOString());
+    expect(account.balanceMicros).toBe(1_000_000n);
+    expect(account.lastSettledAt).toBe(effectiveAt);
+    expect(events).toEqual(['now-1', 'account-lock']);
+    expect(transaction.mineralAccount.update).toHaveBeenCalledOnce();
+    expect(transaction.backendPlanet.create).toHaveBeenCalledOnce();
   });
 });

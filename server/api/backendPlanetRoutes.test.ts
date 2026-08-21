@@ -22,18 +22,25 @@ const proof: MegasteraProof = {
   source: stringToHex(MEGASTERA_SOURCE, { size: 32 }),
 };
 
-function makeApp() {
+const config = { chainId: BASE_CHAIN_ID, rpcUrl: 'https://rpc.example.test', databaseUrl: 'postgres://example', confirmations: 6n } as const;
+
+function makeAppDependencies() {
   const store = new MemoryBackendPlanetStore();
-  const config = { chainId: BASE_CHAIN_ID, rpcUrl: 'https://rpc.example.test', databaseUrl: 'postgres://example', confirmations: 6n } as const;
-  const app = new Hono();
-  app.route('/api', createBackendPlanetRoutes({
+  return {
     loadConfig: () => config,
     findTicket: vi.fn(async () => proof),
     saveProof: vi.fn(async () => store.saveProof(proof)),
     getStore: () => store,
     allows: () => true,
-  }));
-  return { app, store };
+    now: () => new Date('2026-08-21T00:00:00.000Z'),
+  };
+}
+
+function makeApp() {
+  const dependencies = makeAppDependencies();
+  const app = new Hono();
+  app.route('/api', createBackendPlanetRoutes(dependencies));
+  return { app, store: dependencies.getStore() };
 }
 
 describe('backend Planet routes', () => {
@@ -74,5 +81,85 @@ describe('backend Planet routes', () => {
     expect(gif.status).toBe(200);
     expect(gif.headers.get('content-type')).toBe('image/gif');
     expect((await gif.arrayBuffer()).byteLength).toBeGreaterThan(6);
+  });
+
+  it('retires the per-Planet mining route', async () => {
+    const getPrisma = vi.fn();
+    const app = new Hono();
+    app.route('/api', createBackendPlanetRoutes({
+      ...makeAppDependencies(),
+      getPrisma,
+    }));
+
+    const response = await app.request('/api/planets/planet-1/mining');
+
+    expect(response.status).toBe(404);
+    expect(getPrisma).not.toHaveBeenCalled();
+  });
+
+  it('validates upgrade payloads before touching the database', async () => {
+    const getPrisma = vi.fn();
+    const app = new Hono();
+    app.route('/api', createBackendPlanetRoutes({
+      ...makeAppDependencies(),
+      getPrisma,
+    }));
+
+    const response = await app.request('/api/planets/planet-1/upgrade', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ targetLevel: 0 }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(getPrisma).not.toHaveBeenCalled();
+  });
+
+  it('keeps upgrades disabled before the kill switch reaches the route', async () => {
+    const getPrisma = vi.fn();
+    const app = new Hono();
+    app.route('/api', createBackendPlanetRoutes({
+      ...makeAppDependencies(),
+      getPrisma,
+      loadConfig: () => ({
+        ...config,
+        mineralEconomyCutoverAt: new Date('2026-08-20T00:00:00.000Z'),
+        mineralUpgradesEnabled: false,
+      }),
+      now: () => new Date('2026-08-21T00:00:00.000Z'),
+    }));
+
+    const response = await app.request('/api/planets/planet-1/upgrade', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ targetLevel: 1 }),
+    });
+
+    expect(response.status).toBe(404);
+    expect(getPrisma).not.toHaveBeenCalled();
+  });
+
+  it('keeps the unauthenticated upgrade route server-disabled even when configured', async () => {
+    const getPrisma = vi.fn();
+    const app = new Hono();
+    app.route('/api', createBackendPlanetRoutes({
+      ...makeAppDependencies(),
+      getPrisma,
+      loadConfig: () => ({
+        ...config,
+        mineralEconomyCutoverAt: new Date('2026-08-22T00:00:00.000Z'),
+        mineralUpgradesEnabled: true,
+      }),
+      now: () => new Date('2026-08-21T00:00:00.000Z'),
+    }));
+
+    const response = await app.request('/api/planets/planet-1/upgrade', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ targetLevel: 1 }),
+    });
+
+    expect(response.status).toBe(404);
+    expect(getPrisma).not.toHaveBeenCalled();
   });
 });

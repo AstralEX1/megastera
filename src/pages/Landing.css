@@ -1161,6 +1161,27 @@
   text-align: right;
 }
 
+.landing-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 16px;
+  color: var(--landing-haze);
+  font-size: 0.5rem;
+  opacity: 0.72;
+}
+
+.landing-footer-links a {
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+
+.landing-footer-links a:hover,
+.landing-footer-links a:focus-visible {
+  color: var(--landing-dust);
+}
+
 @media (max-width: 1100px) {
   .landing-hero {
     grid-template-columns: minmax(0, 1fr) minmax(400px, 0.95fr);
@@ -1353,6 +1374,10 @@
 
   .landing-footer-meta {
     text-align: left;
+  }
+
+  .landing-footer-links {
+    justify-content: flex-start;
   }
 }
 

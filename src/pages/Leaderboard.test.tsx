@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import userEvent from '@testing-library/user-event';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const refreshMocks = vi.hoisted(() => ({ current: vi.fn(), wallet: vi.fn() }));
@@ -48,7 +48,10 @@ describe('Leaderboard', () => {
     refreshMocks.current.mockReset().mockResolvedValue({ error: null });
     refreshMocks.wallet.mockReset().mockResolvedValue({ error: null });
   });
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
 
   it('shows the FadeArc loading state during the initial standings load', () => {
     state.isLoading = true;
@@ -63,6 +66,11 @@ describe('Leaderboard', () => {
     const { container } = render(<Leaderboard />);
 
     expect(screen.getByRole('heading', { name: 'Leaderboard' })).toBeInTheDocument();
+    expect(screen.queryByText(/Current lifetime mining/)).not.toBeInTheDocument();
+    expect(screen.getByText('Active players').parentElement).toHaveTextContent('2');
+    const details = screen.getByRole('complementary', { name: 'Leaderboard details' });
+    expect(within(details).getByRole('region', { name: 'Season overview' })).toHaveTextContent('USDC');
+    expect(within(details).getByRole('region', { name: 'Season overview' })).toHaveTextContent('1/1 NFT Planets');
     expect(screen.queryByText('LIVE MINERAL SCORE')).not.toBeInTheDocument();
     expect(screen.queryByText('LIVE · GENERATED AT + BASE RATE')).not.toBeInTheDocument();
     expect(screen.queryByText(/As of Aug 12/)).not.toBeInTheDocument();
@@ -73,6 +81,29 @@ describe('Leaderboard', () => {
     expect(screen.queryByRole('progressbar', { name: 'Daily snapshot progress' })).not.toBeInTheDocument();
     expect(container.querySelector('[data-wallet-row="true"]')).toBeInTheDocument();
     expect(container.querySelector('[data-mobile-standings]')).toHaveClass('md:hidden');
+  });
+
+  it('keeps the season countdown compact and updates it every second', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-20T12:34:56.000Z'));
+
+    render(<Leaderboard />);
+
+    const timer = screen.getByRole('timer', { name: 'Season ends in' });
+    expect(timer).toHaveTextContent('08d 11h 24m 04s');
+
+    act(() => vi.advanceTimersByTime(1000));
+
+    expect(timer).toHaveTextContent('08d 11h 24m 03s');
+  });
+
+  it('shows the ended state after the season deadline', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-29T00:00:00.000Z'));
+
+    render(<Leaderboard />);
+
+    expect(screen.getByRole('timer', { name: 'Season ends in' })).toHaveTextContent('Season ended');
   });
 
   it('keeps the public page useful when no wallet is connected', () => {
@@ -116,6 +147,8 @@ describe('Leaderboard', () => {
     state.error = new Error('offline');
     render(<Leaderboard />);
 
+    expect(screen.getByRole('heading', { name: 'Leaderboard' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Season overview' })).toBeInTheDocument();
     expect(screen.getByText('Leaderboard unavailable')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });

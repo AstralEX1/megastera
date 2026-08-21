@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   generate: vi.fn(),
   account: { address: '0x0000000000000000000000000000000000000001', isConnected: true },
   directTickets: [] as Array<Record<string, unknown>>,
+  purchaseError: null as Error | null,
   bulkDraft: null as { dynamicCount: number; staticTickets: readonly unknown[] } | null,
 }));
 
@@ -42,7 +43,7 @@ vi.mock('@/hooks/useBuyTickets', () => ({
     purchasedTickets: mocks.directTickets,
     buy: mocks.buy,
     reset: vi.fn(),
-    error: null,
+    error: mocks.purchaseError,
   }),
 }));
 vi.mock('@/hooks/useBulkPurchase', () => ({
@@ -121,6 +122,7 @@ describe('Play backend generation flow', () => {
     mocks.buy.mockReset();
     mocks.generate.mockReset();
     mocks.directTickets = [];
+    mocks.purchaseError = null;
     mocks.bulkDraft = null;
     mocks.account.isConnected = true;
   });
@@ -141,6 +143,39 @@ describe('Play backend generation flow', () => {
     const [draft] = mocks.buy.mock.calls[0];
     expect(draft).toMatchObject({ count: 3, bounds: { ballMax: 50, bonusballMax: 10 } });
     expect(draft.customTickets).toHaveLength(3);
+  });
+
+  it('keeps the Play configurator visible while ticket purchase is pending', async () => {
+    mocks.buy.mockImplementation(() => new Promise<void>(() => {}));
+    const user = userEvent.setup();
+    render(<Play />);
+
+    await user.click(screen.getByRole('button', { name: /^Explore 3/ }));
+
+    expect(screen.getByRole('heading', { name: 'Win up to $0' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Transaction…' })).toBeDisabled();
+    expect(screen.queryByText('Confirming your tickets…')).not.toBeInTheDocument();
+  });
+
+  it('keeps purchase errors inline with a friendly retry message and support link', async () => {
+    mocks.purchaseError = new Error(
+      'Unknown error occurred while executing the contract function "buyTickets". Contract Call: calldata 0xdeadbeef',
+    );
+    const user = userEvent.setup();
+    render(<Play />);
+
+    await user.click(screen.getByRole('button', { name: /^Explore 3/ }));
+
+    expect(screen.getByRole('heading', { name: 'Win up to $0' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'We couldn’t complete the ticket purchase. Check your USDC balance and try again.',
+    );
+    expect(
+      screen.getByRole('link', { name: 'Message support if you have any issues' }),
+    ).toHaveAttribute('href', 'https://t.me/astralex163');
+    expect(screen.queryByText('The ticket purchase can be retried')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Unknown error occurred|deadbeef/)).not.toBeInTheDocument();
   });
 
   it('populates concrete Coordinates rows while the disclosure is closed', async () => {

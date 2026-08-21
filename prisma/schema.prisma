@@ -138,6 +138,8 @@ model BackendPlanet {
   satelliteCount     Int
   hasRing            Boolean
   baseMineralsPerDay BigInt
+  upgradeLevel       Int                  @default(0)
+  upgradeBonusBps    Int                  @default(0)
   generatedAt        DateTime           @db.Timestamptz(3)
   status             BackendPlanetStatus @default(READY)
   gifData            Bytes?
@@ -146,10 +148,45 @@ model BackendPlanet {
   createdAt          DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime           @updatedAt @db.Timestamptz(3)
   ticketPurchase     TicketPurchase     @relation(fields: [ticketPurchaseId], references: [id], onDelete: Restrict)
+  upgradePurchases   PlanetUpgradePurchase[]
 
   @@index([ownerAddress, generatedAt])
   @@index([status, createdAt])
   @@map("backend_planets")
+}
+
+model MineralAccount {
+  id                    String   @id @default(uuid()) @db.Uuid
+  ownerAddress          String   @unique @db.VarChar(42)
+  openingBalanceMicros  BigInt
+  balanceMicros         BigInt
+  lastSettledAt         DateTime @db.Timestamptz(3)
+  createdAt             DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("mineral_accounts")
+}
+
+model MineralEconomyCutover {
+  id        Int      @id @default(1)
+  cutoverAt DateTime @db.Timestamptz(3)
+
+  @@map("mineral_economy_cutover")
+}
+
+model PlanetUpgradePurchase {
+  id             String       @id @default(uuid()) @db.Uuid
+  planetId       String       @db.Uuid
+  walletAddress  String       @db.VarChar(42)
+  targetLevel    Int
+  bonusBpsAfter  Int
+  costMicros     BigInt
+  purchasedAt    DateTime     @db.Timestamptz(3)
+  planet         BackendPlanet @relation(fields: [planetId], references: [id], onDelete: Restrict)
+
+  @@unique([planetId, targetLevel])
+  @@index([walletAddress, purchasedAt])
+  @@map("planet_upgrade_purchases")
 }
 
 model PlanetOwnershipHistory {

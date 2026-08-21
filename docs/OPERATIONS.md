@@ -1,6 +1,6 @@
 # Operations and deployment runbook
 
-This runbook covers the active Megastera backend on Base mainnet. No Planet contract, NFT signer, Pinata credential, or indexer process is required.
+This runbook covers the active Megastera backend on Base mainnet and the opt-in mineral-economy-v2 path in this worktree. No Planet contract, NFT signer, Pinata credential, or indexer process is required. Vercel routes `/api/**` to `api/index.ts`; the daily leaderboard finalizer is a separate process.
 
 ## Required environment
 
@@ -10,11 +10,17 @@ Server values:
 BASE_RPC_URL
 BASE_RPC_FALLBACK_URLS               # optional comma-separated URLs
 DATABASE_URL
+DIRECT_URL                           # optional direct PostgreSQL URL; preparation/migrations fall back to DATABASE_URL
 MEGAPLANETS_CONFIRMATIONS=6          # optional, non-negative integer
 MEGAPLANETS_ALLOWED_ORIGINS          # optional exact comma-separated origins
+MEGAPOT_API_KEY                      # optional server-only key for /api/megapot/*
+MEGAPLANETS_API_HOST                 # optional standalone server host
+MEGAPLANETS_API_PORT                 # optional standalone server port
+MINERAL_ECONOMY_CUTOVER_AT           # optional exact UTC-midnight ISO timestamp; empty keeps V1
+MINERAL_UPGRADES_ENABLED=false       # reserved; public upgrades remain server-disabled
 ```
 
-Frontend values use `VITE_*` only for public configuration, including the wallet/RPC and optional `VITE_BACKEND_API_BASE_URL`. The Megapot Data API defaults to `https://api.megapot.io/v1` for Base mainnet. If `VITE_API_BASE_URL=/api/megapot` is used, the proxy must target the same mainnet host. Never put `DATABASE_URL`, server tokens, or private keys in a Vite variable.
+Frontend values use `VITE_*` only for public configuration, including `VITE_CHAIN`, wallet/RPC settings, `VITE_API_BASE_URL`, and optional `VITE_BACKEND_API_BASE_URL`. The Megapot Data API defaults to `https://api.megapot.io/v1` for Base mainnet. If `VITE_API_BASE_URL=/api/megapot` is used, the checked-in proxy targets that same mainnet host and may use server-only `MEGAPOT_API_KEY`. Never put `DATABASE_URL`, server tokens, or private keys in a Vite variable.
 
 ## Start and health checks
 
@@ -29,7 +35,9 @@ Check:
 
 - `GET /api/planets/health` for liveness;
 - `GET /api/planets/metrics` for process-local HTTP counters; and
-- `GET /api/planets/collection?owner=...` after a confirmed receipt generation.
+- `GET /api/planets/collection?owner=...` after a confirmed receipt generation;
+- `GET /api/leaderboard/current` for live standings; and
+- `/api/megapot/*` for the same-origin Megapot Data API proxy.
 
 There is intentionally no readiness route that probes a Planet contract and no indexer process to start.
 
@@ -45,26 +53,61 @@ GIFs are stored in PostgreSQL and served with an immutable content hash. A missi
 
 ## Mining and leaderboard
 
-Mining and leaderboard reads are lazy/live:
+With no `MINERAL_ECONOMY_CUTOVER_AT`, mining and leaderboard reads follow the V1 lazy/live path:
 
 ```text
 baseMineralsPerDay × elapsed milliseconds × 1_000_000 / 86_400_000
 ```
 
-The start time is the backend generation timestamp. The browser never writes accrual or ledger rows. Public leaderboard routes calculate current rows from ready backend Planet `generatedAt` and `baseMineralsPerDay` values and use an in-process cache for approximately 60 seconds. Daily snapshot tables/migrations remain for database compatibility, but daily workers/finalize routes are not active.
+The start time is the backend generation timestamp. Same-type collection milestones apply at 3 (+5%), 5 (+7.5%), and 10 (+10%) matching Planets. The browser never writes accrual or ledger rows. Before cutover, public leaderboard routes calculate current rows from ready backend Planet `generatedAt` and `baseMineralsPerDay` values and apply the V1 collection calculation. Live leaderboard reads are uncached.
+
+When the prepared cutover is active, the wallet mining route settles `MineralAccount` balance in integer micros from the cutover forward. New Planet generation settles the owner's account before inserting the new Planet. Level 1/2/3 persistence primitives retain +10%/+25%/+50% bonuses and idempotent `(planetId, targetLevel)` charges, but `POST /api/planets/:planetId/upgrade` remains server-disabled until owner-bound authorization exists. A configured cutover that was not persisted before PostgreSQL reaches it fails closed.
+
+The cutover migration must be applied before setting the environment variable. Before cutover, the current leaderboard remains V1; after cutover, it ranks spendable mineral scores reconstructed as opening balance plus historical production minus upgrade costs, and reports the effective per-day rate after collection and upgrade events.
+
+### Cutover preparation
+
+After applying the migration chain, choose one exact future UTC-midnight timestamp and validate it against PostgreSQL time:
+
+```sh
+pnpm minerals:prepare --dry-run --cutover-at <UTC_MIDNIGHT_ISO>
+pnpm minerals:prepare --cutover-at <UTC_MIDNIGHT_ISO>
+```
+
+The preparation command is the only path that deliberately persists the immutable `MineralEconomyCutover` singleton. Ordinary reads and mutations fail closed on a configured/persisted timestamp conflict; do not update or delete the singleton manually.
+
+### Mineral account backfill
+
+After applying the mineral-economy migration and configuring `MINERAL_ECONOMY_CUTOVER_AT`, inspect the one-shot account backfill with:
+
+```sh
+pnpm minerals:backfill:dry-run
+```
+
+The command reads READY Planets generated by the cutover, groups them by owner, and reports candidate/existing/missing account counts plus V1 opening-balance totals in integer micros. A dry run does not write accounts. The mutating run is:
+
+```sh
+pnpm minerals:backfill
+```
+
+It refuses to run when the cutover variable is absent or when PostgreSQL `clock_timestamp()` is before the configured cutover. Account creation is create-only and idempotent: existing `MineralAccount` balances are never reset; concurrent duplicates are skipped. If the configured cutover conflicts with the persisted singleton, the command fails closed. Keep the transaction short and rerun after correcting configuration or clock/migration state.
+
+`pnpm api:leaderboard-worker` is the separate finalization command for completed UTC days; it writes archived `LeaderboardPeriod`/`LeaderboardEntry` rows when scheduled, but no HTTP history/finalization route is exposed.
 
 Ticket status uses `useJackpotState` for the live drawing countdown/phase and the Base mainnet Megapot Data API for wallet ticket/win history. The wallet ticket list follows opaque cursors to completion for My Planets and stops on API errors without showing a false empty collection. `Claim winnings` remains an on-chain `Jackpot.claimWinnings(uint256[])` call after simulation, capped at 50 IDs per batch; confirmed receipts invalidate the wallet ticket/win queries.
 
 ## Release gate
 
 ```sh
+pnpm db:generate
+pnpm db:validate
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm --filter @megaplanets/planet-generator golden
 pnpm build
-pnpm db:generate
-pnpm db:validate
 ```
+
+The PostgreSQL-specific CI job additionally runs `pnpm db:migrate:deploy` against a fresh PostgreSQL 16 service and then `pnpm test:postgres`. The local default test command skips that suite when `MINERAL_ECONOMY_TEST_DATABASE_URL` is not configured.
 
 Live funded purchases, production database checks, and browser smoke require an appropriately configured environment. Local green tests verify the repository gate but do not by themselves prove external RPC or deployment availability.

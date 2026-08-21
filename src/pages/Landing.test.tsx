@@ -30,6 +30,7 @@ describe('Landing', () => {
 
     expect(screen.getByRole('heading', { name: /Explore\.\s*Mine\.\s*Win\./ })).toBeInTheDocument();
     expect(screen.getByText('Every ticket becomes a Planet and enters the draw.')).toBeInTheDocument();
+    expect(container.textContent).not.toContain('Explore Planets. Win prizes.');
     const poweredBy = screen.getByRole('link', { name: 'Powered by Megapot' });
     expect(poweredBy).toHaveAttribute('href', 'https://megapot.io/ecosystem');
     expect(poweredBy.closest('.landing-live-jackpot')).toBeTruthy();
@@ -46,6 +47,36 @@ describe('Landing', () => {
     expect(wordmarks).toHaveLength(2);
     expect(wordmarks.every((wordmark) => wordmark.textContent === 'MEGASTERA')).toBe(true);
     expect(container.querySelectorAll('.landing-wordmark-mark')).toHaveLength(0);
+  });
+
+  it('shows the requested Megastera and Megapot links in the footer', () => {
+    render(<Landing />);
+
+    const links = within(screen.getByRole('contentinfo')).getAllByRole('link');
+
+    expect(links.map((link) => link.textContent)).toEqual([
+      'MEGASTERA',
+      'X Megastera',
+      'Megapot Docs',
+      'Megapot site',
+      'Support',
+    ]);
+    expect(screen.getByRole('link', { name: 'X Megastera' })).toHaveAttribute(
+      'href',
+      'https://x.com/MegasteraGame',
+    );
+    expect(screen.getByRole('link', { name: 'Megapot Docs' })).toHaveAttribute(
+      'href',
+      'https://docs.megapot.io',
+    );
+    expect(screen.getByRole('link', { name: 'Megapot site' })).toHaveAttribute(
+      'href',
+      'https://megapot.io',
+    );
+    expect(screen.getByRole('link', { name: 'Support' })).toHaveAttribute(
+      'href',
+      'https://t.me/astralex163',
+    );
   });
 
   it('sends every Play CTA to the play experience', () => {
@@ -154,7 +185,6 @@ describe('Landing', () => {
       '.landing-how-it-works .landing-faq-question.split-parent',
       '.landing-how-it-works .landing-faq-answer.split-parent',
       '.landing-footer .landing-wordmark .split-parent',
-      '.landing-footer > .landing-footer-tagline.split-parent',
       '.landing-footer .landing-footer-meta.split-parent',
     ];
 

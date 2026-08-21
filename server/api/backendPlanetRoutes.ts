@@ -11,10 +11,11 @@ import {
 } from './backendPlanet.js';
 import type { MegasteraProof } from './eligibility.js';
 import { readBoundedJson } from './http.js';
-import { getBackendPlanetMiningSnapshot, getBackendWalletMiningSnapshot } from './miningStore.js';
+import { getBackendWalletMiningSnapshot } from './miningStore.js';
 import { findTicketFromReceipt, parseReceiptReference, type ReceiptReference } from './receiptVerification.js';
 import { saveMegasteraProof } from './prismaTicketPurchase.js';
 import { reportBackendError } from './errorDiagnostics.js';
+import type { PrismaClient } from './generated/prisma/client.js';
 
 export type BackendPlanetReference = ReceiptReference;
 
@@ -25,6 +26,7 @@ export type BackendPlanetRouteDependencies = {
   getStore: (config: BackendPlanetConfig) => BackendPlanetStore;
   allows: (key: string) => boolean;
   now: () => Date;
+  getPrisma?: (config: BackendPlanetConfig) => PrismaClient;
 };
 
 const MAX_BATCH = 50;
@@ -51,21 +53,18 @@ function serializeCollectionRow(row: BackendPlanetCollectionRecord) {
   };
 }
 
-function serializeMining(mining: Awaited<ReturnType<typeof getBackendPlanetMiningSnapshot>>) {
-  return mining
-    ? {
-        ...mining,
-        planetId: mining.planetId,
-      }
-    : undefined;
-}
-
 function defaultDependencies(): BackendPlanetRouteDependencies {
   return {
     loadConfig: () => loadBackendPlanetConfig(process.env),
     findTicket: (config, reference) => findTicketFromReceipt(config, reference),
     saveProof: (config, proof) => saveMegasteraProof(getPrismaClient(config.databaseUrl), proof),
-    getStore: (config) => new PrismaBackendPlanetStore(getPrismaClient(config.databaseUrl)),
+    getStore: (config) =>
+      new PrismaBackendPlanetStore(
+        getPrismaClient(config.databaseUrl),
+        () => new Date(),
+        config.mineralEconomyCutoverAt ?? null,
+      ),
+    getPrisma: (config) => getPrismaClient(config.databaseUrl),
     allows: createRateLimiter(),
     now: () => new Date(),
   };
@@ -211,37 +210,19 @@ export function createBackendPlanetRoutes(
     }
   });
 
-  app.get('/planets/:planetId/mining', async (c) => {
-    const rawPlanetId = c.req.param('planetId');
-    if (isRetiredPlanetPath(rawPlanetId)) return c.json({ error: 'Planet not found.' }, 404);
-    const parsed = planetIdSchema.safeParse(rawPlanetId);
-    if (!parsed.success) return c.json({ error: 'A valid Planet ID is required.' }, 400);
-    try {
-      const config = dependencies.loadConfig();
-      const mining = await getBackendPlanetMiningSnapshot(
-        getPrismaClient(config.databaseUrl),
-        parsed.data,
-        dependencies.now(),
-      );
-      return mining ? c.json({ mining: serializeMining(mining) }) : c.json({ error: 'Mining data is not available for this Planet.' }, 404);
-    } catch (error) {
-      return c.json(
-        { error: 'The mining API is not configured.' },
-        503,
-        reportBackendError('GET /api/planets/:planetId/mining', error),
-      );
-    }
-  });
-
   app.get('/wallets/:address/mining', async (c) => {
     const owner = c.req.param('address');
     if (!isAddress(owner)) return c.json({ error: 'A valid wallet address is required.' }, 400);
     try {
       const config = dependencies.loadConfig();
       const mining = await getBackendWalletMiningSnapshot(
-        getPrismaClient(config.databaseUrl),
+        (dependencies.getPrisma ?? ((value) => getPrismaClient(value.databaseUrl)))(config),
         getAddress(owner).toLowerCase(),
         dependencies.now(),
+        {
+          mineralEconomyCutoverAt: config.mineralEconomyCutoverAt,
+          mineralUpgradesEnabled: config.mineralUpgradesEnabled,
+        },
       );
       return c.json({ mining });
     } catch (error) {
@@ -251,6 +232,25 @@ export function createBackendPlanetRoutes(
         reportBackendError('GET /api/wallets/:address/mining', error),
       );
     }
+  });
+
+  app.post('/planets/:planetId/upgrade', async (c) => {
+    const rawPlanetId = c.req.param('planetId');
+    if (isRetiredPlanetPath(rawPlanetId)) return c.json({ error: 'Planet not found.' }, 404);
+    const parsedPlanetId = planetIdSchema.safeParse(rawPlanetId);
+    if (!parsedPlanetId.success) return c.json({ error: 'A valid Planet ID is required.' }, 400);
+    let body: unknown;
+    try {
+      body = await readBoundedJson(c.req.raw);
+    } catch {
+      return c.json({ error: 'Request body is invalid or too large.' }, 400);
+    }
+    const targetLevel = body && typeof body === 'object' ? (body as { targetLevel?: unknown }).targetLevel : undefined;
+    if (typeof targetLevel !== 'number' || !Number.isInteger(targetLevel) || targetLevel < 1 || targetLevel > 3) {
+      return c.json({ error: 'targetLevel must be an integer between 1 and 3.' }, 400);
+    }
+    // ponytail: public upgrades stay off until requests are authenticated to the Planet owner.
+    return c.json({ error: 'Planet upgrades are disabled.' }, 404);
   });
 
   app.get('/planets/:planetId', async (c) => {
