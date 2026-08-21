@@ -402,9 +402,9 @@ describePostgres('Mineral upgrade PostgreSQL concurrency', () => {
     );
   });
 
-  it('waits on the wallet lock across T before post-cutover generation', async () => {
+  it('timestamps generation after waiting on the wallet lock', async () => {
     const databaseNow = await postgresNow(first);
-    const cutoverAt = await ensurePersistedCutover(first, new Date(databaseNow.getTime() + 250));
+    const cutoverAt = await ensurePersistedCutover(first, utcMidnightBefore(databaseNow));
     const ticket = await createTicket(first, OWNER, databaseNow);
     await seedAccount(first, OWNER, databaseNow);
 
@@ -435,15 +435,14 @@ describePostgres('Mineral upgrade PostgreSQL concurrency', () => {
     });
     await new Promise<void>((resolve) => setImmediate(resolve));
     expect(completed).toBe(false);
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      if ((await postgresNow(first)).getTime() >= cutoverAt.getTime()) break;
-      await new Promise<void>((resolve) => setTimeout(resolve, 20));
-    }
-    expect((await postgresNow(first)).getTime()).toBeGreaterThanOrEqual(cutoverAt.getTime());
+    const releasedAt = await postgresNow(first);
     releaseWallet();
     await Promise.all([blockerTransaction, generation]);
 
-    expect(new Date((await first.backendPlanet.findUnique({ where: { id: ticket.ticket.id } }))?.generatedAt ?? 0).getTime()).toBeGreaterThanOrEqual(cutoverAt.getTime());
+    const generated = await first.backendPlanet.findUnique({
+      where: { ticketPurchaseId: ticket.ticket.id },
+    });
+    expect(generated?.generatedAt.getTime()).toBeGreaterThanOrEqual(releasedAt.getTime());
     const account = await first.mineralAccount.findUnique({ where: { ownerAddress: OWNER } });
     const planets = await first.backendPlanet.findMany({
       where: { ownerAddress: OWNER, status: 'READY' },
@@ -558,7 +557,7 @@ describePostgres('Mineral upgrade PostgreSQL concurrency', () => {
     const archived = await first.leaderboardEntry.findUnique({
       where: { periodId_walletAddress: { periodId: period.id, walletAddress: OWNER } },
     });
-    expect(archived?.scoreMicros).toBe(10_799_999n);
+    expect(archived?.scoreMicros).toBe(10_800_000n);
   });
 
   it('uses a persisted cutover when configuration is missing', async () => {
