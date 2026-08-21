@@ -190,8 +190,7 @@ export async function getBackendWalletMiningSnapshot(
         ownedPlanetCount: snapshots.length,
         currentBalanceMicros: currentBalanceMicros.toString(),
         effectiveMineralsPerDayMicros: effectiveMineralsPerDayMicros.toString(),
-        // ponytail: expose upgrades only after the public route gains owner-bound authentication.
-        upgradesEnabled: false,
+        upgradesEnabled: options.mineralUpgradesEnabled === true,
         planets: snapshots,
       };
     },
