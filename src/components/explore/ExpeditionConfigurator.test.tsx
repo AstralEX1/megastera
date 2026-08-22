@@ -26,12 +26,19 @@ describe('ExpeditionConfigurator', () => {
 
     expect(screen.getByRole('heading', { name: 'Win up to $123.46' })).toBeInTheDocument();
     expect(container.querySelectorAll('.depth-text__layer')).toHaveLength(32);
+    expect(container.querySelector('h1')).toHaveClass(
+      'w-full',
+      'min-w-0',
+      'max-w-full',
+      'overflow-hidden',
+    );
     expect(container.querySelector('.depth-text')).toHaveStyle({
       '--depth-text-perspective': '1500px',
-      '--depth-text-font-size': 'clamp(3.45rem, 5.6vw, 5.3rem)',
+      '--depth-text-font-size': 'clamp(2rem, 7vw, 5.3rem)',
       '--depth-text-font-weight': '800',
       '--depth-text-face-color': '#f8fafc',
     });
+    expect(container.querySelector('.depth-text')).toHaveClass('block', 'w-full', 'min-w-0');
     expect(container.querySelector('.depth-text__layer')).toHaveStyle({
       transform: 'translateZ(-128px)',
     });
@@ -112,31 +119,25 @@ describe('ExpeditionConfigurator', () => {
 
     expect(screen.getByRole('button', { name: 'Explore 3 · $3.00 USDC' })).toBeEnabled();
 
-    expect(screen.getByTestId('expedition-core')).toHaveAttribute('data-layout-anchor', 'fixed');
-    expect(screen.getByTestId('expedition-core')).toHaveClass('max-w-[840px]');
-    expect(screen.getByTestId('coordinates-disclosure')).toHaveAttribute('data-side', 'right');
+    expect(screen.getByTestId('expedition-core')).toHaveAttribute('data-layout-anchor', 'flow');
+    expect(screen.getByTestId('expedition-core')).toHaveClass('max-w-[1120px]', 'min-w-0');
+    expect(screen.getByTestId('coordinates-disclosure')).toHaveAttribute('data-side', 'in-flow');
     expect(screen.getByTestId('coordinates-disclosure')).toHaveAttribute('data-state', 'closed');
-    expect(screen.getByTestId('coordinates-disclosure')).toHaveClass('w-0');
+    expect(screen.getByTestId('coordinates-disclosure')).toHaveClass('max-h-0');
 
     const [toggle] = screen.getAllByRole('button', { name: 'Open coordinates' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(toggle).toHaveClass('transition-[right,background-color]');
-    expect(toggle).toHaveClass('h-60', 'w-20');
-    expect(toggle).toHaveClass('fixed');
-    expect(toggle).toHaveStyle({ right: '0px' });
-    expect(toggle.querySelector('.text-\\[1rem\\]')).toBeInTheDocument();
-    expect(toggle.querySelector('.text-\\[2\\.25rem\\]')).toBeInTheDocument();
-    expect(screen.getByTestId('coordinates-disclosure')).toHaveClass('fixed');
-    expect(screen.getByTestId('coordinates-disclosure')).toHaveStyle({ right: '0px' });
+    expect(toggle).toHaveClass('w-full');
+    expect(toggle).not.toHaveClass('fixed');
+    expect(screen.getAllByRole('button', { name: 'Open coordinates' })).toHaveLength(1);
     expect(screen.getAllByText('Bonus Ball influences Planet generation.')).toHaveLength(1);
 
     await user.click(toggle);
-    expect(screen.getAllByRole('region', { name: 'Coordinates' })).toHaveLength(2);
+    expect(screen.getAllByRole('region', { name: 'Coordinates' })).toHaveLength(1);
     expect(screen.getByTestId('coordinates-disclosure')).toHaveAttribute('data-state', 'open');
-    expect(screen.getByTestId('coordinates-disclosure')).toHaveClass('w-[380px]');
+    expect(screen.getByTestId('coordinates-disclosure')).not.toHaveClass('max-h-0');
 
     const [closeToggle] = screen.getAllByRole('button', { name: 'Close coordinates' });
-    expect(closeToggle).toHaveStyle({ right: '380px' });
     await user.click(closeToggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });

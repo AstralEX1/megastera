@@ -28,17 +28,19 @@ describe('PlanetMiningOverlay', () => {
     const boost = screen.getByText('BOOST');
     expect(rate.compareDocumentPosition(boost) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const rateTooltip = screen.getByRole('tooltip', { name: 'Minerals per day including boost' });
-    const boostTooltip = screen.getByRole('tooltip', { name: 'Bonus from matching planet types' });
+    const boostTooltip = screen.getByRole('tooltip', {
+      name: 'Matching Planets +5% Planet Level +10% Total Boost +15%',
+    });
     expect(rateTooltip).toHaveClass('h-[22px]', 'px-2', 'text-[10px]', 'font-medium', 'duration-150', 'group-hover/metric:opacity-100');
     expect(rateTooltip).not.toHaveClass('group-hover:opacity-100');
-    expect(boostTooltip).toHaveClass('h-[22px]', 'px-2', 'text-[10px]', 'font-medium', 'duration-150');
-    expect(boostTooltip).toHaveClass('group-hover/metric:opacity-100');
+    expect(boostTooltip).toHaveClass('px-2', 'text-[10px]', 'font-medium', 'duration-150', 'group-hover/metric:opacity-100', 'group-focus/metric:opacity-100');
+    expect(screen.getByText('BOOST').parentElement).toHaveAttribute('type', 'button');
     expect(screen.queryByRole('tooltip', { name: 'Total minerals collected' })).not.toBeInTheDocument();
     expect(screen.queryByTitle('Minerals per day after all collection bonuses')).not.toBeInTheDocument();
     expect(screen.getByText('25.2')).toHaveClass('text-[var(--rare)]');
     expect(screen.queryByText('24')).not.toBeInTheDocument();
     expect(screen.queryByText('10.1')).not.toBeInTheDocument();
-    expect(screen.getByText('+5%')).toHaveClass('text-[var(--rare)]');
+    expect(screen.getByText('+15%')).toHaveClass('text-[var(--rare)]');
     expect(screen.queryByText('MINERALS / DAY')).not.toBeInTheDocument();
   });
 
@@ -48,8 +50,11 @@ describe('PlanetMiningOverlay', () => {
         mining={{ ...mining, sameTypeCount: 2, collectionBonusBps: 0 }}
       />,
     );
-    expect(screen.getByText('+0%')).toBeInTheDocument();
-    expect(screen.getByText('+0%')).toHaveClass('text-[var(--text-secondary)]');
+    expect(screen.getByText('+10%')).toBeInTheDocument();
+    expect(screen.getByText('+10%')).toHaveClass('text-[var(--rare)]');
+    expect(screen.getByRole('tooltip', {
+      name: 'Matching Planets +0% Planet Level +10% Total Boost +10%',
+    })).toBeInTheDocument();
     expect(screen.getByText('BOOST')).toBeInTheDocument();
   });
 
@@ -70,7 +75,7 @@ describe('PlanetMiningOverlay', () => {
     render(<PlanetMiningOverlay mining={mining} variant="compact" />);
     const overlay = screen.getByTestId('planet-mining-overlay');
     expect(overlay).toHaveClass('inset-x-2', 'bottom-2');
-    expect(overlay.querySelector(':scope > div')).toHaveClass('p-2');
+    expect(overlay.querySelector(':scope > button')).toHaveClass('p-2');
     expect(screen.getByText('RATE')).toBeInTheDocument();
     expect(screen.getByText('BOOST')).toBeInTheDocument();
     expect(screen.getByText('25.2')).toHaveClass('text-sm', 'text-[var(--rare)]');

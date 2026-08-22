@@ -261,7 +261,7 @@ export function Play() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-3 pb-6">
+    <div className="mx-auto min-w-0 max-w-[1400px] space-y-3 overflow-x-clip pb-6">
       {phase !== 'open' && <Notice>Tickets are paused until the next drawing opens.</Notice>}
       {content}
       {isBulk && bulk.minimumTicketCount !== undefined && !meetsBulkMinimum && !flowActive && (

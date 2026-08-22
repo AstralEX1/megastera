@@ -26,7 +26,7 @@ export function StaticDepthStack({
   const radiusY = visibleCards === 1 ? 1 : Math.min(190, Math.max(90, 72 + visibleCards * 5));
   return (
     <fieldset
-      className="relative m-0 flex h-[200px] w-full min-w-0 items-center justify-center overflow-hidden border-0 p-0 min-[381px]:h-[300px] sm:h-[360px] xl:h-[clamp(360px,calc(100svh-420px),500px)]"
+      className="relative m-0 flex h-[200px] w-full min-w-0 items-center justify-center overflow-hidden border-0 p-0 min-[381px]:h-[300px] sm:h-[360px] lg:mt-12 lg:aspect-[8/5] lg:h-auto"
       aria-label="Selected planets visualization"
     >
       <OrbitImages

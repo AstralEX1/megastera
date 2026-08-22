@@ -11,14 +11,20 @@ describe('StaticDepthStack', () => {
   });
 
   it('uses random mystery colors on an expanded vertical orbit', () => {
-    vi.spyOn(Math, 'random')
-      .mockReturnValueOnce(0)
-      .mockReturnValueOnce(0.99)
-      .mockReturnValue(0.5);
+    vi.spyOn(Math, 'random').mockReturnValueOnce(0).mockReturnValueOnce(0.99).mockReturnValue(0.5);
 
     render(<StaticDepthStack quantity={3} />);
 
-    expect(screen.getByRole('group', { name: 'Selected planets visualization' })).toHaveClass('h-[200px]', 'sm:h-[360px]');
+    expect(screen.getByRole('group', { name: 'Selected planets visualization' })).toHaveClass(
+      'h-[200px]',
+      'min-[381px]:h-[300px]',
+      'sm:h-[360px]',
+      'lg:mt-12',
+      'min-w-0',
+      'overflow-hidden',
+      'lg:aspect-[8/5]',
+      'lg:h-auto',
+    );
     const images = screen.getAllByRole('img', { name: /selected planet/i });
     expect(images[0]).toHaveAttribute('src', expect.stringContaining('blue'));
     expect(images[1]).toHaveAttribute('src', expect.stringContaining('violet'));
@@ -30,7 +36,12 @@ describe('StaticDepthStack', () => {
   it('adds newly selected planets as animated visual slots', () => {
     const { rerender } = render(<StaticDepthStack quantity={1} />);
 
-    expect(screen.getByRole('group', { name: 'Selected planets visualization' })).toHaveClass('h-[200px]', 'sm:h-[360px]');
+    expect(screen.getByRole('group', { name: 'Selected planets visualization' })).toHaveClass(
+      'h-[200px]',
+      'sm:h-[360px]',
+      'lg:aspect-[8/5]',
+      'lg:h-auto',
+    );
     const orbitItem = screen.getByTestId('planet-orbit').querySelector('.orbit-item');
     expect(orbitItem).toHaveStyle({
       width: '560px',
@@ -42,7 +53,12 @@ describe('StaticDepthStack', () => {
     rerender(<StaticDepthStack quantity={3} />);
 
     expect(screen.getAllByRole('img', { name: /selected planet/i })).toHaveLength(3);
-    expect(screen.getByRole('group', { name: 'Selected planets visualization' })).toHaveClass('h-[200px]', 'sm:h-[360px]');
+    expect(screen.getByRole('group', { name: 'Selected planets visualization' })).toHaveClass(
+      'h-[200px]',
+      'sm:h-[360px]',
+      'lg:aspect-[8/5]',
+      'lg:h-auto',
+    );
     expect(screen.getByTestId('planet-orbit').querySelector('.orbit-item')).toHaveStyle({
       width: '510px',
       height: '510px',
@@ -55,7 +71,12 @@ describe('StaticDepthStack', () => {
 
     expect(screen.getAllByRole('img', { name: /selected planet/i })).toHaveLength(20);
     expect(screen.queryByText('20 planets selected')).not.toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Selected planets visualization' })).toHaveClass('h-[200px]', 'sm:h-[360px]');
+    expect(screen.getByRole('group', { name: 'Selected planets visualization' })).toHaveClass(
+      'h-[200px]',
+      'sm:h-[360px]',
+      'lg:aspect-[8/5]',
+      'lg:h-auto',
+    );
     expect(screen.queryByTestId('orbit-planet-count')).not.toBeInTheDocument();
   });
 

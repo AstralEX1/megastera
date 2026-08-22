@@ -81,15 +81,15 @@ export function ExpeditionConfigurator({
 
   return (
     <section className="relative mx-auto w-full px-4 py-0 sm:px-6">
-      <div className="relative w-full">
+      <div className="relative w-full min-w-0 overflow-x-clip">
         <div className="min-w-0">
           <div
             data-testid="expedition-core"
-            data-layout-anchor="fixed"
-            className="mx-auto w-full max-w-[840px]"
+            data-layout-anchor="flow"
+            className="mx-auto w-full min-w-0 max-w-[1120px]"
           >
             <div className="flex flex-col items-center">
-              <h1 className="max-w-full text-center">
+              <h1 className="w-full min-w-0 max-w-full overflow-hidden text-center text-balance">
                 {jackpotStatus === 'ready' ? (
                   <DepthText
                     text={`Win up to $${formatJackpot(jackpotAmount)}`}
@@ -103,7 +103,8 @@ export function ExpeditionConfigurator({
                     orbitSpeed={0.1}
                     pointerTracking={false}
                     autoOrbit
-                    fontSize="clamp(3.45rem, 5.6vw, 5.3rem)"
+                    className="block w-full min-w-0 max-w-full [&_.depth-text__stage]:w-full [&_.depth-text__stage]:min-w-0 [&_.depth-text__layer]:whitespace-normal [&_.depth-text__layer]:break-words [&_.depth-text__face]:whitespace-normal [&_.depth-text__face]:break-words"
+                    fontSize="clamp(2rem, 7vw, 5.3rem)"
                     fontWeight={800}
                     shadow
                   />
@@ -178,43 +179,8 @@ export function ExpeditionConfigurator({
             </div>
           </div>
         </div>
-        <button
-          type="button"
-          aria-label={coordinatesLabel}
-          aria-expanded={coordinatesOpen}
-          onClick={() => setCoordinatesOpen((open) => !open)}
-          className="fixed top-1/2 right-0 z-40 hidden h-60 w-20 -translate-y-1/2 items-center justify-center border-x border-[var(--border)] bg-[var(--background)] text-[var(--text-primary)] transition-[right,background-color] duration-300 ease-out hover:bg-[var(--surface-raised)] xl:flex"
-          style={{ right: coordinatesOpen ? '380px' : '0px' }}
-        >
-          <span className="relative flex h-full w-full items-center justify-center" aria-hidden>
-            <span className="-rotate-90 whitespace-nowrap telemetry text-[1rem] font-bold">
-              Coordinates
-            </span>
-            <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[2.25rem] leading-none">
-              {coordinatesOpen ? '›' : '‹'}
-            </span>
-          </span>
-        </button>
-        <div
-          data-testid="coordinates-disclosure"
-          data-side="right"
-          data-state={coordinatesOpen ? 'open' : 'closed'}
-          aria-hidden={!coordinatesOpen}
-          inert={!coordinatesOpen || undefined}
-          className={`fixed top-[7rem] right-0 z-30 hidden h-[calc(100svh-7rem)] overflow-hidden transition-[width,opacity,transform] duration-300 ease-out xl:block ${coordinatesOpen ? 'pointer-events-auto w-[380px] translate-x-0 opacity-100' : 'pointer-events-none w-0 translate-x-3 opacity-0'}`}
-          style={{ right: '0px' }}
-        >
-          <div className="h-full w-[380px] overflow-y-auto">
-            <CoordinatesPanel
-              quantity={quantity}
-              bounds={bounds}
-              tickets={tickets}
-              onTicketsChange={onTicketsChange}
-            />
-          </div>
-        </div>
       </div>
-      <div className="mx-auto mt-5 w-full max-w-[560px] xl:hidden">
+      <div className="mx-auto mt-5 w-full max-w-[1120px]">
         <button
           type="button"
           aria-label={coordinatesLabel}
@@ -227,16 +193,21 @@ export function ExpeditionConfigurator({
             Optional
           </span>
         </button>
-        {coordinatesOpen && (
-          <div className="mt-3 border border-[var(--border-strong)]">
-            <CoordinatesPanel
-              quantity={quantity}
-              bounds={bounds}
-              tickets={tickets}
-              onTicketsChange={onTicketsChange}
-            />
-          </div>
-        )}
+        <div
+          data-testid="coordinates-disclosure"
+          data-side="in-flow"
+          data-state={coordinatesOpen ? 'open' : 'closed'}
+          aria-hidden={!coordinatesOpen}
+          inert={!coordinatesOpen || undefined}
+          className={`mt-3 overflow-hidden border border-[var(--border-strong)] transition-[max-height,opacity] duration-300 ease-out ${coordinatesOpen ? 'opacity-100' : 'pointer-events-none max-h-0 opacity-0'}`}
+        >
+          <CoordinatesPanel
+            quantity={quantity}
+            bounds={bounds}
+            tickets={tickets}
+            onTicketsChange={onTicketsChange}
+          />
+        </div>
       </div>
     </section>
   );

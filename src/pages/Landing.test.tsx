@@ -29,7 +29,9 @@ describe('Landing', () => {
     const { container } = render(<Landing />);
 
     expect(screen.getByRole('heading', { name: /Explore\.\s*Mine\.\s*Win\./ })).toBeInTheDocument();
-    expect(screen.getByText('Every ticket becomes a Planet and enters the draw.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Every ticket becomes a Planet and enters the draw.'),
+    ).toBeInTheDocument();
     expect(container.textContent).not.toContain('Explore Planets. Win prizes.');
     const poweredBy = screen.getByRole('link', { name: 'Powered by Megapot' });
     expect(poweredBy).toHaveAttribute('href', 'https://megapot.io/ecosystem');
@@ -85,31 +87,60 @@ describe('Landing', () => {
     const ctas = screen.getAllByRole('link', { name: 'Play' });
     expect(ctas.length).toBeGreaterThanOrEqual(2);
     expect(ctas.every((cta) => cta.getAttribute('href') === '/play')).toBe(true);
-    expect(container.querySelectorAll('.landing-button > span[aria-hidden="true"]')).toHaveLength(0);
-    expect(container.querySelector('.landing-hero-actions .landing-button')).toHaveClass('landing-button-primary');
+    expect(container.querySelectorAll('.landing-button > span[aria-hidden="true"]')).toHaveLength(
+      0,
+    );
+    expect(container.querySelector('.landing-hero-actions .landing-button')).toHaveClass(
+      'landing-button-primary',
+    );
     expect(screen.queryByText('Mint Planet')).not.toBeInTheDocument();
     expect(
-        [...container.querySelectorAll('img')]
-        .filter((image) => image.getAttribute('src')?.includes('/artifacts/'))
-        .every((image) => image.closest('.landing-planet-card, .landing-mining-planet')),
+      [...container.querySelectorAll('img')].some((image) =>
+        image.getAttribute('src')?.includes('/landing/'),
+      ),
     ).toBe(true);
+    expect(
+      [...container.querySelectorAll('img')].some((image) =>
+        image.getAttribute('src')?.includes('/artifacts/'),
+      ),
+    ).toBe(false);
   });
 
-  it('explains the two linked mechanics in one compact block', () => {
+  it('explains the two linked mechanics in one compact block and keeps the discovery deck in the Planet slot', () => {
     const { container } = render(<Landing />);
     const landing = within(container);
 
     expect(container.querySelectorAll('.landing > main > section')).toHaveLength(4);
-    expect(landing.getByRole('region', { name: /One ticket\.\s*One Planet\./ })).toBeInTheDocument();
-    expect(landing.getByRole('heading', { name: /One ticket\.\s*One Planet\./ })).toBeInTheDocument();
+    expect(
+      landing.getByRole('region', { name: /One ticket\.\s*One Planet\./ }),
+    ).toBeInTheDocument();
+    expect(
+      landing.getByRole('heading', { name: /One ticket\.\s*One Planet\./ }),
+    ).toBeInTheDocument();
     expect(landing.getByRole('heading', { name: 'Megapot Tickets' })).toBeInTheDocument();
     expect(landing.getByRole('heading', { name: 'Planets' })).toBeInTheDocument();
-    expect(landing.getByRole('region', { name: /Keep mining\.\s*Climb higher\./ })).toBeInTheDocument();
-    expect(landing.getByRole('heading', { name: /Keep mining\.\s*Climb higher\./ })).toBeInTheDocument();
-    expect(landing.getByText(/ticket numbers become the coordinates that generate your Planet/i)).toBeInTheDocument();
-    expect(landing.getByText(/Every Planet is unique and keeps mining minerals after the draw/i)).toBeInTheDocument();
-    expect(landing.getByText(/enters the Megapot draw and can win the jackpot/i)).toBeInTheDocument();
-    expect(landing.queryByText(/tied to that ticket, mines minerals and competes on the leaderboard/i)).not.toBeInTheDocument();
+    expect(
+      landing.getByRole('region', { name: /Keep mining\.\s*Upgrade\.\s*Climb higher\./ }),
+    ).toBeInTheDocument();
+    expect(
+      landing.getByRole('heading', { name: /Keep mining\.\s*Upgrade\.\s*Climb higher\./ }),
+    ).toBeInTheDocument();
+    expect(
+      landing.getByText(/Spend mined Minerals to upgrade production and climb the leaderboard/i),
+    ).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-testid="landing-upgrade-stage"]')).toHaveLength(3);
+    expect(
+      landing.getByText(/ticket numbers become the coordinates that generate your Planet/i),
+    ).toBeInTheDocument();
+    expect(
+      landing.getByText(/Every Planet is unique and keeps mining minerals after the draw/i),
+    ).toBeInTheDocument();
+    expect(
+      landing.getByText(/enters the Megapot draw and can win the jackpot/i),
+    ).toBeInTheDocument();
+    expect(
+      landing.queryByText(/tied to that ticket, mines minerals and competes on the leaderboard/i),
+    ).not.toBeInTheDocument();
     expect(landing.queryByText('PLANET COORDINATES')).not.toBeInTheDocument();
     expect(container.textContent).not.toContain('01 / MEGAPOT TICKET');
     expect(container.textContent).not.toContain('ONE TICKET');
@@ -118,6 +149,7 @@ describe('Landing', () => {
     expect(container.querySelector('.landing-mechanics-connection')).not.toBeInTheDocument();
     expect(landing.queryByText('PLANET = TICKET')).not.toBeInTheDocument();
     expect(landing.queryByText('MEGAPOT · IN DRAW')).not.toBeInTheDocument();
+
     const generatePlanetButton = landing.getByRole('button', { name: 'Tap' });
     expect(generatePlanetButton).toBeInTheDocument();
     expect(generatePlanetButton).not.toHaveTextContent('↗');
@@ -125,36 +157,65 @@ describe('Landing', () => {
     expect(generatePlanetButton).not.toHaveAttribute('title');
     expect(generatePlanetButton.closest('.landing-live-generator-art')).toBeTruthy();
     expect(container.querySelector('.landing-megapot-ticket')).toBeInTheDocument();
-    expect(container.querySelector('.landing-ticket-visual-stack')).toHaveClass('landing-ticket-visual-stack--vertical');
+    expect(container.querySelector('.landing-ticket-visual-stack')).toHaveClass(
+      'landing-ticket-visual-stack--vertical',
+    );
     expect(container.querySelectorAll('.landing-megapot-ticket')).toHaveLength(3);
     expect(container.querySelectorAll('.landing-ticket-ball')).toHaveLength(18);
     expect(container.querySelectorAll('.landing-ticket-ball-bonus')).toHaveLength(3);
-    expect(container.querySelectorAll('.landing-my-planet-card')).toHaveLength(3);
-    expect(container.querySelector('.landing-my-planet-card')).toHaveAttribute('data-rarity', 'Common');
-    expect(container.querySelectorAll('.landing-my-planet-card-media')).toHaveLength(3);
-    expect(container.querySelectorAll('.landing-my-planet-card-minerals')).toHaveLength(3);
-    expect(landing.getByText('Draheunia')).toBeInTheDocument();
-    expect(landing.getByText('Ticket #5001')).toBeInTheDocument();
-    expect(landing.getByText('TICKET / 5001')).toBeInTheDocument();
-    expect(landing.getByText('TICKET / 5005')).toBeInTheDocument();
-    expect(landing.getByText('TICKET / 5009')).toBeInTheDocument();
-    expect(landing.getByText('25')).toBeInTheDocument();
+
+    const carousel = landing.getByRole('region', { name: 'Planet discovery carousel' });
+    expect(carousel.closest('.landing-planet-mechanic')).toBeTruthy();
+    expect(carousel.querySelectorAll('.landing-planet-card')).toHaveLength(7);
+    expect(carousel.querySelectorAll('[data-active="true"]')).toHaveLength(1);
+    expect(carousel.querySelector('[data-active="true"] img')).toHaveAttribute(
+      'src',
+      expect.stringContaining('/landing/gifs-512/'),
+    );
+    expect(
+      [...carousel.querySelectorAll('[data-active="false"] img')].every((image) =>
+        image.getAttribute('src')?.endsWith('.png'),
+      ),
+    ).toBe(true);
+
     expect(landing.getByRole('region', { name: /How it works/i })).toBeInTheDocument();
     expect(container.querySelectorAll('.landing-how-it-works details')).toHaveLength(8);
     expect(landing.queryByText('The core loop')).not.toBeInTheDocument();
     expect(landing.queryByText('Explore. Reveal. Compete.')).not.toBeInTheDocument();
     expect(landing.queryByText('No two discoveries')).not.toBeInTheDocument();
     expect(landing.queryByText('feel the same.')).not.toBeInTheDocument();
-    expect(landing.queryByRole('region', { name: /Circular Planet gallery/ })).not.toBeInTheDocument();
+    expect(
+      landing.queryByRole('region', { name: /Circular Planet gallery/ }),
+    ).not.toBeInTheDocument();
     expect(container.querySelector('.landing-hero-lightfall')).not.toBeInTheDocument();
     expect(container.querySelector('.landing-live-jackpot')).toBeInTheDocument();
     expect(landing.getByText('LIVE JACKPOT')).toBeInTheDocument();
     expect(landing.getByText('DRAWING IN')).toBeInTheDocument();
     expect(container.querySelector('.landing-mystery-orbit')).not.toBeInTheDocument();
     expect(container.querySelectorAll('.landing-mystery-orbit .orbit-item')).toHaveLength(0);
-    expect(container.querySelectorAll('.landing-hero-title .split-parent')).toHaveLength(2);
-    expect([...container.querySelectorAll('img')].filter((image) => image.getAttribute('src')?.includes('/artifacts/')).length).toBeGreaterThanOrEqual(3);
-    expect([...container.querySelectorAll('img')].filter((image) => image.getAttribute('alt')?.startsWith('Unrevealed'))).toHaveLength(0);
+    expect(
+      [...container.querySelectorAll('img')].filter((image) =>
+        image.getAttribute('src')?.includes('/landing/'),
+      ).length,
+    ).toBeGreaterThanOrEqual(3);
+    expect(
+      [...container.querySelectorAll('img')].some((image) =>
+        image.getAttribute('src')?.includes('/artifacts/'),
+      ),
+    ).toBe(false);
+    expect(
+      [...container.querySelectorAll('img')].filter((image) =>
+        image.getAttribute('alt')?.startsWith('Unrevealed'),
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('does not retain the rejected full-page game-loop copy or stage', () => {
+    render(<Landing />);
+
+    expect(screen.queryByText('A ticket is only the beginning.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'How the game works' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('figure', { name: 'Planet mining monitor' })).not.toBeInTheDocument();
   });
 
   it('uses SplitText across every landing copy block', () => {
@@ -166,9 +227,7 @@ describe('Landing', () => {
       '.landing-hero-subtitle.split-parent',
       '.landing-hero-actions .landing-button .split-parent',
       '.landing-live-jackpot-header .landing-kicker.split-parent',
-      '.landing-live-jackpot-status.split-parent',
-      '.landing-live-jackpot-footer .landing-micro-label.split-parent',
-      '.landing-live-jackpot-drawing.split-parent',
+      '.landing-live-jackpot-header .landing-micro-label.split-parent',
       '.landing-live-generator-button .split-parent',
       '.landing-mechanics-heading .landing-kicker.split-parent',
       '.landing-mechanics-heading h2 .split-parent',
@@ -185,7 +244,6 @@ describe('Landing', () => {
       '.landing-how-it-works .landing-faq-question.split-parent',
       '.landing-how-it-works .landing-faq-answer.split-parent',
       '.landing-footer .landing-wordmark .split-parent',
-      '.landing-footer .landing-footer-meta.split-parent',
     ];
 
     for (const selector of animatedCopySelectors) {

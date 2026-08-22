@@ -13,10 +13,10 @@
  */
 import type { ReactNode } from 'react';
 import { COPY } from '@/config/copy';
+import { Footer } from './Footer';
 import { MobileWalletBar } from './MobileWalletBar';
 import { MobileBottomNav, Nav, type NavKey } from './Nav';
 import { ProfileCard } from './ProfileCard';
-import { Footer } from './Footer';
 
 export function Layout({
   active,
@@ -27,6 +27,11 @@ export function Layout({
   onSelect: (k: NavKey) => void;
   children: ReactNode;
 }) {
+  const mainMaxWidth =
+    active === 'planets' ? 'max-w-[1480px]' : active === 'play' ? 'max-w-[1440px]' : 'max-w-5xl';
+  const mainBottomPadding =
+    active === 'play' ? 'pb-[calc(env(safe-area-inset-bottom)+5rem)]' : 'pb-6';
+
   return (
     <div className="space-shell relative isolate min-h-screen text-[var(--text)]">
       <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--background)]">
@@ -42,7 +47,11 @@ export function Layout({
         </div>
         <MobileWalletBar />
       </header>
-      <main className={`relative z-10 mx-auto w-full px-4 pt-6 pb-6 ${active === 'planets' ? 'max-w-[1480px]' : 'max-w-5xl'}`}>{children}</main>
+      <main
+        className={`relative z-10 mx-auto min-w-0 w-full px-4 pt-6 ${mainBottomPadding} ${mainMaxWidth}`}
+      >
+        {children}
+      </main>
       <Footer />
       <MobileBottomNav active={active} onSelect={onSelect} />
       <div

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import userEvent from '@testing-library/user-event';
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const refreshMocks = vi.hoisted(() => ({ current: vi.fn(), wallet: vi.fn() }));
@@ -69,8 +69,11 @@ describe('Leaderboard', () => {
     expect(screen.queryByText(/Current lifetime mining/)).not.toBeInTheDocument();
     expect(screen.getByText('Active players').parentElement).toHaveTextContent('2');
     const details = screen.getByRole('complementary', { name: 'Leaderboard details' });
-    expect(within(details).getByRole('region', { name: 'Season overview' })).toHaveTextContent('USDC');
-    expect(within(details).getByRole('region', { name: 'Season overview' })).toHaveTextContent('1/1 NFT Planets');
+    const seasonOverview = within(details).getByRole('region', { name: 'Season overview' });
+    expect(seasonOverview).toHaveTextContent('Megapot Tickets');
+    expect(seasonOverview).toHaveTextContent('(USDC)');
+    expect(seasonOverview).toHaveTextContent('1/1 NFT Planets');
+    expect(seasonOverview.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(2);
     expect(screen.queryByText('LIVE MINERAL SCORE')).not.toBeInTheDocument();
     expect(screen.queryByText('LIVE · GENERATED AT + BASE RATE')).not.toBeInTheDocument();
     expect(screen.queryByText(/As of Aug 12/)).not.toBeInTheDocument();
