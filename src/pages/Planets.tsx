@@ -936,7 +936,7 @@ export function Planets({ onNavigate, onViewPlanet, routePlanetId }: PlanetsProp
     <section className="mx-auto space-y-6 pb-10">
       <header
         data-testid="planets-page-header"
-        className="relative z-20 grid grid-cols-1 items-center gap-4 border-b border-[var(--border)] pb-5 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]"
+        className="relative z-40 grid grid-cols-1 items-center gap-4 border-b border-[var(--border)] pb-5 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]"
       >
         <div>
           <h1 className="font-hud text-3xl font-bold tracking-[-0.05em] text-[var(--text-primary)] sm:text-4xl">

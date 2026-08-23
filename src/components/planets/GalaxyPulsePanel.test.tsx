@@ -44,7 +44,8 @@ describe('GalaxyPulsePanel', () => {
     const panel = screen.getByTestId('galaxy-pulse-panel');
     const tooltip = screen.getByRole('tooltip');
     expect(within(panel).getByRole('heading', { name: 'GALAXY PULSE' })).toBeInTheDocument();
-    expect(within(tooltip).getByText('GALAXY PULSE')).toBeInTheDocument();
+    expect(within(tooltip).queryByText('GALAXY PULSE', { exact: true })).not.toBeInTheDocument();
+    expect(within(tooltip).queryByText('DRAWING #8421')).not.toBeInTheDocument();
     const items = within(tooltip).getAllByRole('listitem');
     expect(items).toHaveLength(4);
     expect(items.map((item) => item.textContent)).toEqual([
@@ -54,7 +55,7 @@ describe('GalaxyPulsePanel', () => {
       'Toxic+1%',
     ]);
     expect(within(panel).getAllByText('Gaia')).toHaveLength(2);
-    expect(within(tooltip).getByText('DRAWING #8421')).toBeInTheDocument();
+    expect(within(tooltip).queryByText('DRAWING #8421')).not.toBeInTheDocument();
     expect(within(tooltip).getByText('Settled Aug 22, 12:34 UTC')).toBeInTheDocument();
     expect(within(tooltip).getByText('Settled Aug 22, 12:34 UTC')).toHaveAttribute(
       'datetime',
@@ -92,6 +93,31 @@ describe('GalaxyPulsePanel', () => {
     ];
     expect(screen.getByTestId('galaxy-pulse-frame')).toHaveClass(...gradientClasses);
     expect(screen.getByRole('tooltip')).toHaveClass(...gradientClasses);
+  });
+
+  it('keeps the pulse above planet level signals and uses the larger layout', () => {
+    render(<GalaxyPulsePanel pulse={pulse} />);
+
+    const panel = screen.getByTestId('galaxy-pulse-panel');
+    const frame = screen.getByTestId('galaxy-pulse-frame');
+    const tooltip = screen.getByRole('tooltip');
+
+    expect(panel).toHaveClass('relative', 'z-40');
+    expect(frame).toHaveClass('lg:w-[34rem]');
+    expect(frame.querySelector('img')).toHaveClass('size-11', 'lg:size-14');
+    expect(tooltip.querySelector('img')).toHaveClass('size-12', 'lg:size-14');
+  });
+
+  it('normalizes the visible scale of the pixel-art icons', () => {
+    render(<GalaxyPulsePanel pulse={lowercasePulse} />);
+
+    const headerIcons = [...screen.getByTestId('galaxy-pulse-frame').querySelectorAll('img')];
+    expect(headerIcons.map((icon) => icon.style.transform)).toEqual([
+      'scale(1.17)',
+      'scale(1.02)',
+      'scale(1.3)',
+      'scale(1.11)',
+    ]);
   });
 
   it('exposes a detailed tooltip with the pulse explanation and effects', () => {

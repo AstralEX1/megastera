@@ -262,7 +262,11 @@ describe('backend My Planets', () => {
     const panel = within(header).getByTestId('galaxy-pulse-panel');
     const refresh = within(header).getByRole('button', { name: 'Refresh' });
     const summary = screen.getByTestId('collection-summary');
-    expect(header).toHaveClass('lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]');
+    expect(header).toHaveClass(
+      'relative',
+      'z-40',
+      'lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]',
+    );
     expect(panel).toHaveClass('lg:justify-self-center');
     expect(refresh.parentElement).toHaveClass('lg:justify-self-end');
     expect(panel.compareDocumentPosition(refresh) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -272,7 +276,7 @@ describe('backend My Planets', () => {
     expect(
       within(panel).getByRole('list', { name: 'Galaxy Pulse effects' }).querySelectorAll('li'),
     ).toHaveLength(4);
-    expect(within(panel).getByRole('tooltip')).toHaveTextContent('DRAWING #8421');
+    expect(within(panel).getByRole('tooltip')).not.toHaveTextContent('DRAWING #8421');
   });
 
   it('shows collection counts and mining totals in the requested label-above-value order', () => {
