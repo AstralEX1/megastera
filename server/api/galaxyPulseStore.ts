@@ -9,7 +9,7 @@ import {
 
 export type GalaxyPulseRoundRow = {
   drawingId: bigint | string | { toString(): string };
-  entropy: string;
+  seed: string;
   settledAt: Date;
 };
 
@@ -42,10 +42,10 @@ function normalizeDrawingId(row: GalaxyPulseRoundRow): bigint {
 }
 
 function deriveSlots(row: GalaxyPulseRoundRow): readonly GalaxyPulseSlot[] {
-  if (!isHash(row.entropy)) throw new Error('Galaxy Pulse entropy is invalid.');
+  if (!isHash(row.seed)) throw new Error('Galaxy Pulse seed is invalid.');
   return deriveGalaxyPulseV1({
     drawingId: normalizeDrawingId(row),
-    entropy: row.entropy,
+    seed: row.seed,
     chainId: BASE_CHAIN_ID,
     jackpotAddress: BASE_JACKPOT,
   });

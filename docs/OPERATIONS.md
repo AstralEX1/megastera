@@ -69,7 +69,7 @@ When the prepared cutover is active, the wallet mining route settles `MineralAcc
 
 The cutover migration must be applied before setting the environment variable. Before cutover, the current leaderboard remains V1; after cutover, it ranks spendable mineral scores reconstructed as opening balance plus historical production minus upgrade costs, and reports the effective per-day rate after collection, upgrade, and Galaxy Pulse events.
 
-Galaxy Pulse starts strictly at `GALAXY_PULSE_START_BLOCK`; there is no historical backfill. The leaderboard worker verifies finalized `JackpotSettled` receipts, extracts the `EntropyFulfilled` value from the same transaction, and advances the sole indexer cursor. Wallet mining reads only the latest authoritative database snapshot. Balance mutations and leaderboard finalization fail closed until the database round matches the current settled drawing reported by the Megapot Data API.
+Galaxy Pulse starts strictly at `GALAXY_PULSE_START_BLOCK`; there is no historical backfill. The leaderboard worker verifies finalized `JackpotSettled` receipts, derives a deterministic seed from `drawingId` and `winningNumbers`, and advances the sole indexer cursor. Wallet mining reads only the latest authoritative database snapshot. Balance mutations and leaderboard finalization fail closed until the database round matches the current settled drawing reported by the Megapot Data API.
 
 ### Cutover preparation
 

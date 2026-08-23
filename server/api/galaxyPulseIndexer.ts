@@ -9,6 +9,7 @@ import {
   type TransactionReceipt,
   toBytes,
 } from 'viem';
+import { deriveGalaxyPulseSeed } from './galaxyPulse.js';
 
 export const JACKPOT_SETTLED_ABI = [
   {
@@ -25,25 +26,13 @@ export const JACKPOT_SETTLED_ABI = [
   },
 ] as const;
 
-export const ENTROPY_FULFILLED_ABI = [
-  {
-    type: 'event',
-    name: 'EntropyFulfilled',
-    inputs: [
-      { indexed: true, name: 'sequence', type: 'uint64' },
-      { indexed: false, name: 'randomNumber', type: 'bytes32' },
-    ],
-  },
-] as const;
-
 const JACKPOT_SETTLED_TOPIC = keccak256(
   toBytes('JackpotSettled(uint256,uint256,uint256,uint8,uint256,uint256)'),
 );
-const ENTROPY_FULFILLED_TOPIC = keccak256(toBytes('EntropyFulfilled(uint64,bytes32)'));
 
 export type GalaxyPulseRound = {
   drawingId: bigint;
-  entropy: Hex;
+  seed: Hex;
   settlementTxHash: Hex;
   settledAt: Date;
 };
@@ -56,7 +45,6 @@ export type GalaxyPulseRoundStore = {
 export type GalaxyPulseSettlementReceiptInput = {
   receipt: TransactionReceipt;
   jackpotAddress: Address;
-  scaledEntropyProviderAddress: Address;
   /** Block timestamps returned by viem are Unix seconds; Date is accepted for tests/adapters. */
   blockTimestamp: bigint | number | Date;
 };
@@ -145,7 +133,7 @@ function blockTimestampDate(value: bigint | number | Date): Date {
   return new Date(Number(seconds) * 1_000);
 }
 
-/** Decodes one finalized receipt without making any follow-up entropy RPC call. */
+/** Decodes one finalized JackpotSettled receipt and derives its Galaxy Pulse seed. */
 export function decodeGalaxyPulseSettlementReceipt(
   input: GalaxyPulseSettlementReceiptInput,
 ): GalaxyPulseRound {
@@ -157,28 +145,18 @@ export function decodeGalaxyPulseSettlementReceipt(
     input.jackpotAddress,
     provenance,
   );
-  const entropyLog = findExactlyOneEvent(
-    input.receipt,
-    ENTROPY_FULFILLED_TOPIC,
-    'EntropyFulfilled',
-    input.scaledEntropyProviderAddress,
-    provenance,
-  );
   const settled = decodeEventLog({
     abi: JACKPOT_SETTLED_ABI,
     eventName: 'JackpotSettled',
     data: settledLog.data,
     topics: settledLog.topics,
   });
-  const entropy = decodeEventLog({
-    abi: ENTROPY_FULFILLED_ABI,
-    eventName: 'EntropyFulfilled',
-    data: entropyLog.data,
-    topics: entropyLog.topics,
-  });
   return {
     drawingId: settled.args.drawingId,
-    entropy: entropy.args.randomNumber,
+    seed: deriveGalaxyPulseSeed({
+      drawingId: settled.args.drawingId,
+      winningNumbers: settled.args.winningNumbers,
+    }),
     settlementTxHash: provenance.transactionHash,
     settledAt: blockTimestampDate(input.blockTimestamp),
   };
@@ -189,13 +167,13 @@ export async function persistGalaxyPulseRound(
   store: GalaxyPulseRoundStore,
   round: GalaxyPulseRound,
 ): Promise<GalaxyPulseRound> {
-  if (!isHash(round.entropy) || !isHash(round.settlementTxHash)) {
+  if (!isHash(round.seed) || !isHash(round.settlementTxHash)) {
     throw new Error('Galaxy Pulse round hash is invalid.');
   }
   const existing = await store.findByDrawingId(round.drawingId);
   if (!existing) return store.create(round);
   if (
-    existing.entropy.toLowerCase() !== round.entropy.toLowerCase() ||
+    existing.seed.toLowerCase() !== round.seed.toLowerCase() ||
     existing.settlementTxHash.toLowerCase() !== round.settlementTxHash.toLowerCase()
   ) {
     throw new Error(`Galaxy Pulse round conflict for drawing ${round.drawingId.toString()}.`);

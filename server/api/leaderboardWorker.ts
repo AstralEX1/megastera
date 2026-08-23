@@ -26,9 +26,6 @@ import { ensureOverdueLeaderboardPeriodsFinalized } from './leaderboardStore.js'
 import { getLogsAdaptive, readWithRpcFallback } from './rpc.js';
 
 export const GALAXY_PULSE_JACKPOT_ADDRESS = BASE_JACKPOT;
-export const GALAXY_PULSE_SCALED_ENTROPY_PROVIDER_ADDRESS = getAddress(
-  '0x5D030DEC2e0d38935e662C0d2feD44B050c8Ae51',
-);
 export const GALAXY_PULSE_CURSOR_STREAM = 'galaxy-pulse-rounds';
 
 const JACKPOT_SETTLED_TOPIC = keccak256(
@@ -60,13 +57,13 @@ type GalaxyPulsePrisma = {
   galaxyPulseRound: {
     findUnique(args: unknown): Promise<{
       drawingId: { toString(): string } | bigint | string;
-      entropy: string;
+      seed: string;
       settlementTxHash: string;
       settledAt: Date;
     } | null>;
     create(args: unknown): Promise<{
       drawingId: { toString(): string } | bigint | string;
-      entropy: string;
+      seed: string;
       settlementTxHash: string;
       settledAt: Date;
     }>;
@@ -79,7 +76,6 @@ export type GalaxyPulseIngestOptions = {
   confirmations: bigint;
   rpcEndpoints: readonly string[];
   jackpotAddress?: Address;
-  scaledEntropyProviderAddress?: Address;
   makeClient?: (rpcUrl: string) => GalaxyPulseRpcClient;
 };
 
@@ -102,7 +98,7 @@ function asRound(
 ): GalaxyPulseRound {
   return {
     drawingId: BigInt(row.drawingId.toString()),
-    entropy: row.entropy as Hex,
+    seed: row.seed as Hex,
     settlementTxHash: row.settlementTxHash as Hex,
     settledAt: row.settledAt,
   };
@@ -120,7 +116,7 @@ function makeGalaxyPulseRoundStore(prisma: GalaxyPulsePrisma): GalaxyPulseRoundS
       const row = await prisma.galaxyPulseRound.create({
         data: {
           drawingId: round.drawingId.toString(),
-          entropy: round.entropy,
+          seed: round.seed,
           settlementTxHash: round.settlementTxHash,
           settledAt: round.settledAt,
         },
@@ -141,7 +137,6 @@ async function ingestGalaxyPulseOnClient(
   options: Omit<GalaxyPulseIngestOptions, 'rpcEndpoints' | 'makeClient'> & {
     client: GalaxyPulseRpcClient;
     jackpotAddress: Address;
-    scaledEntropyProviderAddress: Address;
   },
 ): Promise<void> {
   if (options.confirmations < 0n)
@@ -235,7 +230,6 @@ async function ingestGalaxyPulseOnClient(
     const round = decodeGalaxyPulseSettlementReceipt({
       receipt,
       jackpotAddress: options.jackpotAddress,
-      scaledEntropyProviderAddress: options.scaledEntropyProviderAddress,
       blockTimestamp: block.timestamp,
     });
     await persistGalaxyPulseRound(roundStore, round);
@@ -269,16 +263,12 @@ async function ingestGalaxyPulseOnClient(
 
 export async function ingestGalaxyPulseRounds(options: GalaxyPulseIngestOptions): Promise<void> {
   const jackpotAddress = getAddress(options.jackpotAddress ?? GALAXY_PULSE_JACKPOT_ADDRESS);
-  const scaledEntropyProviderAddress = getAddress(
-    options.scaledEntropyProviderAddress ?? GALAXY_PULSE_SCALED_ENTROPY_PROVIDER_ADDRESS,
-  );
   const makeClient = options.makeClient ?? defaultGalaxyPulseClient;
   await readWithRpcFallback(options.rpcEndpoints, async (rpcUrl) =>
     ingestGalaxyPulseOnClient({
       ...options,
       client: makeClient(rpcUrl),
       jackpotAddress,
-      scaledEntropyProviderAddress,
     }),
   );
 }

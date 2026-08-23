@@ -58,13 +58,13 @@ describe('backend Planet mining snapshots', () => {
     };
     const pulseRow = {
       drawingId: 150n,
-      entropy: `0x${'33'.repeat(32)}` as const,
+      seed: `0x${'33'.repeat(32)}` as const,
       settlementTxHash: `0x${'44'.repeat(32)}` as const,
       settledAt: cutoverAt,
     };
     const pulseBps = aggregateGalaxyPulseByType(deriveGalaxyPulseV1({
       drawingId: pulseRow.drawingId,
-      entropy: pulseRow.entropy,
+      seed: pulseRow.seed,
       chainId: BASE_CHAIN_ID,
       jackpotAddress: BASE_JACKPOT,
     })).get('gaia') ?? 0;

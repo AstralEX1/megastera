@@ -12,27 +12,27 @@ import {
 } from './galaxyPulseStore.js';
 
 const TO = new Date('2026-08-22T00:00:00.000Z');
-const ENTROPY_A = `0x${'11'.repeat(32)}` as Hex;
-const ENTROPY_B = `0x${'22'.repeat(32)}` as Hex;
+const SEED_A = `0x${'11'.repeat(32)}` as Hex;
+const SEED_B = `0x${'22'.repeat(32)}` as Hex;
 
 function row(
   drawingId: bigint,
   settledAt: string,
-  entropy: Hex,
-): GalaxyPulseRoundRow & { entropy: Hex } {
-  return { drawingId, entropy, settledAt: new Date(settledAt) };
+  seed: Hex,
+): GalaxyPulseRoundRow & { seed: Hex } {
+  return { drawingId, seed, settledAt: new Date(settledAt) };
 }
 
 function drawingId(round: GalaxyPulseRoundRow): bigint {
   return BigInt(round.drawingId.toString());
 }
 
-function expectedModifiers(round: GalaxyPulseRoundRow & { entropy: Hex }): Record<string, number> {
+function expectedModifiers(round: GalaxyPulseRoundRow & { seed: Hex }): Record<string, number> {
   return Object.fromEntries(
     aggregateGalaxyPulseByType(
       deriveGalaxyPulseV1({
         drawingId: drawingId(round),
-        entropy: round.entropy,
+        seed: round.seed,
         chainId: BASE_CHAIN_ID,
         jackpotAddress: BASE_JACKPOT,
       }),
@@ -42,8 +42,8 @@ function expectedModifiers(round: GalaxyPulseRoundRow & { entropy: Hex }): Recor
 
 describe('Galaxy Pulse store', () => {
   it('loads settled rounds through an explicit minimal client in deterministic time order', async () => {
-    const later = row(2n, '2026-08-21T00:00:00.000Z', ENTROPY_B);
-    const earlier = row(1n, '2026-08-20T00:00:00.000Z', ENTROPY_A);
+    const later = row(2n, '2026-08-21T00:00:00.000Z', SEED_B);
+    const earlier = row(1n, '2026-08-20T00:00:00.000Z', SEED_A);
     const findMany = vi.fn(async () => [later, earlier]);
     const client: GalaxyPulseStoreClient = { galaxyPulseRound: { findMany } };
 
@@ -53,7 +53,7 @@ describe('Galaxy Pulse store', () => {
         settledAt: earlier.settledAt,
         slots: deriveGalaxyPulseV1({
           drawingId: drawingId(earlier),
-          entropy: earlier.entropy,
+          seed: earlier.seed,
           chainId: BASE_CHAIN_ID,
           jackpotAddress: BASE_JACKPOT,
         }),
@@ -64,7 +64,7 @@ describe('Galaxy Pulse store', () => {
         settledAt: later.settledAt,
         slots: deriveGalaxyPulseV1({
           drawingId: drawingId(later),
-          entropy: later.entropy,
+          seed: later.seed,
           chainId: BASE_CHAIN_ID,
           jackpotAddress: BASE_JACKPOT,
         }),
@@ -78,13 +78,13 @@ describe('Galaxy Pulse store', () => {
   });
 
   it('serializes the current stored round with raw slots and stable strings', () => {
-    const stored = row(218n, '2026-08-21T12:34:56.000Z', ENTROPY_A);
+    const stored = row(218n, '2026-08-21T12:34:56.000Z', SEED_A);
     const temporal: GalaxyPulseTemporalRound = {
       drawingId: drawingId(stored),
       settledAt: stored.settledAt,
       slots: deriveGalaxyPulseV1({
         drawingId: drawingId(stored),
-        entropy: stored.entropy,
+        seed: stored.seed,
         chainId: BASE_CHAIN_ID,
         jackpotAddress: BASE_JACKPOT,
       }),

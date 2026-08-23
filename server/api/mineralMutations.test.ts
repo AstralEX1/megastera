@@ -28,7 +28,7 @@ function makePrisma(overrides: {
   account?: Record<string, unknown>;
   existingPurchase?: Record<string, unknown> | null;
   clockAt?: Date;
-  pulseRows?: Array<{ drawingId: bigint; entropy: `0x${string}`; settledAt: Date }>;
+  pulseRows?: Array<{ drawingId: bigint; seed: `0x${string}`; settledAt: Date }>;
 } = {}) {
   const planet = makePlanet();
   const balanceMicros = typeof overrides.account?.balanceMicros === 'bigint' ? overrides.account.balanceMicros : 500_000n;
@@ -107,13 +107,13 @@ describe('mineral upgrade mutations', () => {
   it('loads authoritative Pulse rounds before fixing an account balance', async () => {
     const pulse = {
       drawingId: 150n,
-      entropy: `0x${'33'.repeat(32)}` as const,
+      seed: `0x${'33'.repeat(32)}` as const,
       settledAt: CUTOVER,
     };
     const fixture = makePrisma({ account: { balanceMicros: 0n }, pulseRows: [pulse] });
     const pulseBps = aggregateGalaxyPulseByType(deriveGalaxyPulseV1({
       drawingId: pulse.drawingId,
-      entropy: pulse.entropy,
+      seed: pulse.seed,
       chainId: BASE_CHAIN_ID,
       jackpotAddress: BASE_JACKPOT,
     })).get('gaia') ?? 0;

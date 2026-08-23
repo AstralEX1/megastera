@@ -10,14 +10,12 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from './generated/prisma/client.js';
 import {
   GALAXY_PULSE_JACKPOT_ADDRESS,
-  GALAXY_PULSE_SCALED_ENTROPY_PROVIDER_ADDRESS,
   ingestGalaxyPulseRounds,
   runLeaderboardFinalization,
 } from './leaderboardWorker.js';
 
 const TRANSACTION_HASH = `0x${'11'.repeat(32)}` as Hex;
 const BLOCK_HASH = `0x${'22'.repeat(32)}` as Hex;
-const RANDOM_NUMBER = `0x${'aa'.repeat(32)}` as Hex;
 const SETTLEMENT_BLOCK = 110n;
 const FINALIZED_TO_BLOCK = 118n;
 const BLOCK_TIMESTAMP = 1_787_000_000n;
@@ -26,7 +24,6 @@ const NOW = new Date('2026-08-22T18:00:00.000Z');
 const JACKPOT_SETTLED_TOPIC = keccak256(
   toBytes('JackpotSettled(uint256,uint256,uint256,uint8,uint256,uint256)'),
 );
-const ENTROPY_FULFILLED_TOPIC = keccak256(toBytes('EntropyFulfilled(uint64,bytes32)'));
 
 function makeLog(input: {
   address: string;
@@ -64,16 +61,13 @@ function makeSettlementLogs(): Log[] {
       ),
       logIndex: 0,
     }),
-    makeLog({
-      address: GALAXY_PULSE_SCALED_ENTROPY_PROVIDER_ADDRESS,
-      topics: [ENTROPY_FULFILLED_TOPIC, encodeAbiParameters([{ type: 'uint64' }], [7n])],
-      data: encodeAbiParameters([{ type: 'bytes32' }], [RANDOM_NUMBER]),
-      logIndex: 1,
-    }),
   ];
 }
 
-function makeReceipt(logs: readonly Log[]): TransactionReceipt {
+function makeReceipt(
+  logs: readonly Log[],
+  status: 'success' | 'reverted' = 'success',
+): TransactionReceipt {
   return {
     blockHash: BLOCK_HASH,
     blockNumber: SETTLEMENT_BLOCK,
@@ -83,7 +77,7 @@ function makeReceipt(logs: readonly Log[]): TransactionReceipt {
     gasUsed: 1n,
     logs,
     logsBloom: `0x${'00'.repeat(256)}`,
-    status: 'success',
+    status,
     to: GALAXY_PULSE_JACKPOT_ADDRESS,
     transactionHash: TRANSACTION_HASH,
     transactionIndex: 0,
@@ -102,7 +96,7 @@ function makePrisma(cursorNextBlock = 100n, lastBlockHash: string | null = null)
   };
   const rounds = new Map<
     string,
-    { drawingId: string; entropy: string; settlementTxHash: string; settledAt: Date }
+    { drawingId: string; seed: string; settlementTxHash: string; settledAt: Date }
   >();
   const indexerCursor = {
     findUnique: vi.fn(async () => cursor),
@@ -122,7 +116,7 @@ function makePrisma(cursorNextBlock = 100n, lastBlockHash: string | null = null)
       async ({
         data,
       }: {
-        data: { drawingId: string; entropy: string; settlementTxHash: string; settledAt: Date };
+        data: { drawingId: string; seed: string; settlementTxHash: string; settledAt: Date };
       }) => {
         events.push('persist');
         rounds.set(data.drawingId, data);
@@ -138,8 +132,7 @@ function makePrisma(cursorNextBlock = 100n, lastBlockHash: string | null = null)
   };
 }
 
-function makeClient(logs = makeSettlementLogs()) {
-  const receipt = makeReceipt(logs);
+function makeClient(logs = makeSettlementLogs(), receipt = makeReceipt(logs)) {
   return {
     getBlockNumber: vi.fn(async () => 120n),
     getLogs: vi.fn(async () => logs.filter((log) => log.address === GALAXY_PULSE_JACKPOT_ADDRESS)),
@@ -178,7 +171,7 @@ describe('ingestGalaxyPulseRounds', () => {
     expect(events).toEqual(['persist', 'cursor']);
     expect(rounds.get('42')).toEqual({
       drawingId: '42',
-      entropy: RANDOM_NUMBER,
+      seed: '0xfab72b15dd628f60b7525cf14fa40841b6fab21a6269c3a336cde9bdd890ffae',
       settlementTxHash: TRANSACTION_HASH,
       settledAt: new Date(Number(BLOCK_TIMESTAMP) * 1_000),
     });
@@ -191,7 +184,8 @@ describe('ingestGalaxyPulseRounds', () => {
 
   it('does not advance the cursor when receipt verification fails', async () => {
     const { events, cursor, prisma } = makePrisma();
-    const client = makeClient(makeSettlementLogs().slice(0, 1));
+    const logs = makeSettlementLogs();
+    const client = makeClient(logs, makeReceipt(logs, 'reverted'));
 
     await expect(
       ingestGalaxyPulseRounds({
@@ -201,7 +195,7 @@ describe('ingestGalaxyPulseRounds', () => {
         rpcEndpoints: ['fixture'],
         makeClient: () => client,
       }),
-    ).rejects.toThrow(/EntropyFulfilled/i);
+    ).rejects.toThrow(/did not succeed/i);
 
     expect(events).toEqual([]);
     expect(cursor.upsert).not.toHaveBeenCalled();

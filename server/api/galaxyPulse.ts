@@ -2,16 +2,33 @@ import { PLANET_TYPES, type PlanetTypeId } from '@megaplanets/planet-generator';
 import { type Address, encodeAbiParameters, type Hex, keccak256 } from 'viem';
 
 export const GALAXY_PULSE_ALGORITHM_VERSION = 'MEGASTERA_GALAXY_PULSE_V1' as const;
+export const GALAXY_PULSE_SEED_VERSION = 'MEGASTERA_GALAXY_PULSE_SEED_V1' as const;
 
 const SLOT_COUNT = 4;
 const BPS_RANGE = 10_001n;
 
 export type GalaxyPulseInput = {
   drawingId: bigint;
-  entropy: Hex;
+  seed: Hex;
   chainId: number;
   jackpotAddress: Address;
 };
+
+export function deriveGalaxyPulseSeed(input: {
+  drawingId: bigint;
+  winningNumbers: bigint;
+}): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        { type: 'string', name: 'version' },
+        { type: 'uint256', name: 'drawingId' },
+        { type: 'uint256', name: 'winningNumbers' },
+      ],
+      [GALAXY_PULSE_SEED_VERSION, input.drawingId, input.winningNumbers],
+    ),
+  );
+}
 
 export type GalaxyPulseSlot = {
   planetType: PlanetTypeId;
@@ -26,14 +43,14 @@ function deriveRootSeed(input: GalaxyPulseInput): Hex {
         { type: 'uint256', name: 'chainId' },
         { type: 'address', name: 'jackpotAddress' },
         { type: 'uint256', name: 'drawingId' },
-        { type: 'bytes32', name: 'entropy' },
+        { type: 'bytes32', name: 'seed' },
       ],
       [
         GALAXY_PULSE_ALGORITHM_VERSION,
         BigInt(input.chainId),
         input.jackpotAddress,
         input.drawingId,
-        input.entropy,
+        input.seed,
       ],
     ),
   );

@@ -2,6 +2,7 @@ import type { Address, Hex } from 'viem';
 import { describe, expect, it } from 'vitest';
 import {
   aggregateGalaxyPulseByType,
+  deriveGalaxyPulseSeed,
   deriveGalaxyPulseV1,
   GALAXY_PULSE_ALGORITHM_VERSION,
   type GalaxyPulseSlot,
@@ -10,12 +11,18 @@ import {
 
 const INPUT = {
   drawingId: 218n,
-  entropy: `0x${'11'.repeat(32)}` as Hex,
+  seed: `0x${'11'.repeat(32)}` as Hex,
   chainId: 8453,
   jackpotAddress: '0x1111111111111111111111111111111111111111' as Address,
 } as const;
 
 describe('Galaxy Pulse V1', () => {
+  it('derives a stable seed from the drawing and winning numbers', () => {
+    expect(deriveGalaxyPulseSeed({ drawingId: 151n, winningNumbers: 0x1234n })).toBe(
+      '0x947b7cc15a9029cfc6aa39072ad5b89bb0dbdbd5fc60872e887bd5c9dfeaffc9',
+    );
+  });
+
   it('keeps a literal deterministic vector', () => {
     expect(GALAXY_PULSE_ALGORITHM_VERSION).toBe('MEGASTERA_GALAXY_PULSE_V1');
     expect(deriveGalaxyPulseV1(INPUT)).toEqual([
