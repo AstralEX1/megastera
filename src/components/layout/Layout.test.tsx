@@ -16,7 +16,11 @@ describe('Layout', () => {
   afterEach(cleanup);
 
   it('renders the global footer with external links only', () => {
-    render(<Layout active="play" onSelect={vi.fn()}><p>Page content</p></Layout>);
+    render(
+      <Layout active="play" onSelect={vi.fn()}>
+        <p>Page content</p>
+      </Layout>,
+    );
 
     expect(screen.getByText('Page content')).toBeInTheDocument();
     const footer = screen.getByRole('contentinfo');
@@ -31,10 +35,26 @@ describe('Layout', () => {
   });
 
   it('renders an uppercase text-only brand in the shell', () => {
-    render(<Layout active="play" onSelect={vi.fn()}><p>Page content</p></Layout>);
+    render(
+      <Layout active="play" onSelect={vi.fn()}>
+        <p>Page content</p>
+      </Layout>,
+    );
 
     const brandLink = screen.getByRole('link', { name: 'MEGASTERA' });
     expect(brandLink).toHaveTextContent('MEGASTERA');
     expect(brandLink.querySelector('svg')).not.toBeInTheDocument();
+  });
+
+  it('gives Play a wider centered shell with mobile bottom clearance', () => {
+    render(
+      <Layout active="play" onSelect={vi.fn()}>
+        <p>Page content</p>
+      </Layout>,
+    );
+
+    const main = screen.getByRole('main');
+    expect(main).toHaveClass('max-w-[1440px]');
+    expect(main).toHaveClass('pb-[calc(env(safe-area-inset-bottom)+5rem)]');
   });
 });

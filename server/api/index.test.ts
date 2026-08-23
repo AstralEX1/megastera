@@ -3,6 +3,7 @@ import { createApp } from './index.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe('active API surface', () => {
@@ -16,6 +17,13 @@ describe('active API surface', () => {
     const app = createApp();
     expect((await app.request('/api/planets/vouchers')).status).toBe(404);
     expect((await app.request('/api/planets/readiness')).status).toBe(404);
+  });
+
+  it('protects the leaderboard worker trigger with the cron secret', async () => {
+    vi.stubEnv('CRON_SECRET', 'test-secret');
+    const response = await createApp().request('/api/internal/leaderboard-worker');
+
+    expect(response.status).toBe(401);
   });
 
   it('forwards the configured Megapot API path used by the production bundle', async () => {

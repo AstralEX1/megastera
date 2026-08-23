@@ -27,21 +27,22 @@ export type ButtonVariant = 'primary' | 'secondary' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
-  primary: 'bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)]',
+  primary:
+    'bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm hover:-translate-y-0.5 hover:bg-[var(--primary-hover)] hover:shadow-md',
   secondary:
-    'border border-[var(--border)] bg-[var(--surface-raised)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)]',
+    'border border-[var(--border)] bg-transparent text-[var(--text-primary)] hover:border-[var(--primary)] hover:bg-[var(--surface-hover)]',
   danger:
     'bg-[var(--danger)] text-[#28070d] hover:brightness-110',
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
-  sm: 'rounded-lg px-3 py-2 text-xs font-semibold',
+  sm: 'rounded-md px-3 py-2 text-xs font-semibold',
   md: 'rounded-lg px-4 py-2.5 text-sm font-semibold',
-  lg: 'rounded-xl px-6 py-4 text-base font-semibold',
+  lg: 'rounded-lg px-6 py-4 text-base font-semibold',
 };
 
 const BASE_CLASSES =
-  'min-h-10 font-hud uppercase tracking-wide transition-transform duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-50';
+  'min-h-10 font-hud uppercase tracking-wide transition-all duration-150 ease-out disabled:cursor-not-allowed disabled:opacity-50';
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;

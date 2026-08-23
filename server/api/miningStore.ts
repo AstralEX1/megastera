@@ -7,9 +7,11 @@ import {
 import {
   calculateHistoricalPlanetProduction,
   collectionBonusBpsAt,
+  galaxyPulseBpsAt,
   type MineralCollectionPlanet,
   type MineralUpgradePurchase,
 } from './mineralEconomy.js';
+import { loadGalaxyPulseRounds, serializeCurrentGalaxyPulse } from './galaxyPulseStore.js';
 import {
   calculateCurrentMineralBalanceMicros,
   calculateV1WalletOpeningBalance,
@@ -70,6 +72,9 @@ export async function getBackendWalletMiningSnapshot(
           asOf,
         );
       }
+      const pulseRounds = transaction.galaxyPulseRound
+        ? await loadGalaxyPulseRounds(transaction, asOf)
+        : [];
       const planets = await transaction.backendPlanet.findMany({
         where: { ownerAddress: ownerAddress.toLowerCase(), status: 'READY', generatedAt: { lte: asOf } },
         select: {
@@ -117,6 +122,7 @@ export async function getBackendWalletMiningSnapshot(
         asOf,
         planets: economyPlanets,
         purchases,
+        pulseRounds,
       });
       const preCutoverCalculations = calculateCollectionMining({
         planets: openingPlanets as BackendMiningPlanetRow[],
@@ -132,9 +138,10 @@ export async function getBackendWalletMiningSnapshot(
             candidate.generatedAt && candidate.generatedAt.getTime() <= asOf.getTime(),
         ).length;
         const upgradeBonusBps = planet.upgradeBonusBps;
+        const galaxyPulseBps = galaxyPulseBpsAt(pulseRounds, planet.planetType, asOf.getTime());
         const effectiveRate = calculateEffectiveMineralsPerDayMicros(
           planet.baseMineralsPerDay,
-          collectionBonusBps + upgradeBonusBps,
+          collectionBonusBps + upgradeBonusBps + galaxyPulseBps,
         );
         effectiveMineralsPerDayMicros += effectiveRate;
         const preCutoverEarned = preCutoverCalculations.get(planet.id)?.earnedMicros ?? 0n;
@@ -145,6 +152,7 @@ export async function getBackendWalletMiningSnapshot(
           from: cutoverAt,
           to: asOf,
           anchor: cutoverAt,
+          pulseRounds,
         });
         let nextUpgrade = null;
         try {
@@ -172,6 +180,7 @@ export async function getBackendWalletMiningSnapshot(
           collectionBonusBps,
           upgradeLevel: planet.upgradeLevel,
           upgradeBonusBps: planet.upgradeBonusBps,
+          galaxyPulseBps,
           effectiveMineralsPerDayMicros: effectiveRate.toString(),
           earnedMicros: (preCutoverEarned + postCutoverEarned).toString(),
           activeSince: planet.generatedAt.toISOString(),
@@ -191,6 +200,7 @@ export async function getBackendWalletMiningSnapshot(
         currentBalanceMicros: currentBalanceMicros.toString(),
         effectiveMineralsPerDayMicros: effectiveMineralsPerDayMicros.toString(),
         upgradesEnabled: options.mineralUpgradesEnabled === true,
+        galaxyPulse: serializeCurrentGalaxyPulse(pulseRounds.at(-1) ?? null),
         planets: snapshots,
       };
     },
@@ -218,6 +228,7 @@ async function getV1WalletMiningSnapshot(prisma: PrismaClient, ownerAddress: str
       planetType: calculated.planetType,
       sameTypeCount: calculated.sameTypeCount,
       collectionBonusBps: calculated.collectionBonusBps,
+      galaxyPulseBps: 0,
       effectiveMineralsPerDayMicros: calculated.effectiveMineralsPerDayMicros.toString(),
       earnedMicros: calculated.earnedMicros.toString(),
       activeSince: planet.generatedAt.toISOString(),
@@ -231,6 +242,7 @@ async function getV1WalletMiningSnapshot(prisma: PrismaClient, ownerAddress: str
     currentBalanceMicros: earnedMicros.toString(),
     effectiveMineralsPerDayMicros: effectiveMineralsPerDayMicros.toString(),
     upgradesEnabled: false,
+    galaxyPulse: null,
     planets: snapshots,
   };
 }

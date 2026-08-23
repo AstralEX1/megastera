@@ -50,7 +50,11 @@ const faqItems: readonly LandingFaqItem[] = [
 
 export function LandingHowItWorks() {
   return (
-    <section className="landing-section landing-container landing-how-it-works" aria-labelledby="how-it-works-title" aria-label="How it works">
+    <section
+      className="landing-section landing-container landing-how-it-works"
+      aria-labelledby="how-it-works-title"
+      aria-label="How it works"
+    >
       <div className="landing-how-it-works-heading">
         <div>
           <LandingSplitText tag="span" className="landing-kicker" text="FAQ / MECHANICS" />
@@ -72,8 +76,20 @@ export function LandingHowItWorks() {
         {faqItems.map((item, index) => (
           <details className="landing-faq-row" key={item.question} open={index === 0}>
             <summary className="landing-faq-summary">
-              <LandingSplitText tag="span" className="landing-faq-index" text={`0${index + 1}`} delay={24} duration={0.58} />
-              <LandingSplitText tag="span" className="landing-faq-question" text={item.question} delay={34} duration={0.64} />
+              <LandingSplitText
+                tag="span"
+                className="landing-faq-index"
+                text={`0${index + 1}`}
+                delay={24}
+                duration={0.58}
+              />
+              <LandingSplitText
+                tag="span"
+                className="landing-faq-question"
+                text={item.question}
+                delay={34}
+                duration={0.64}
+              />
               <span className="landing-faq-marker" aria-hidden="true" />
             </summary>
             <LandingSplitText

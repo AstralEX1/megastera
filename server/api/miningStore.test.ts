@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from './generated/prisma/client.js';
+import { aggregateGalaxyPulseByType, deriveGalaxyPulseV1 } from './galaxyPulse.js';
+import { BASE_CHAIN_ID } from './config.js';
+import { BASE_JACKPOT } from './eligibility.js';
 import { getBackendWalletMiningSnapshot } from './miningStore.js';
 import { getCurrentLeaderboard } from './leaderboardStore.js';
 
@@ -53,11 +56,24 @@ describe('backend Planet mining snapshots', () => {
       balanceMicros: 100_000_000n,
       lastSettledAt: cutoverAt,
     };
+    const pulseRow = {
+      drawingId: 150n,
+      seed: `0x${'33'.repeat(32)}` as const,
+      settlementTxHash: `0x${'44'.repeat(32)}` as const,
+      settledAt: cutoverAt,
+    };
+    const pulseBps = aggregateGalaxyPulseByType(deriveGalaxyPulseV1({
+      drawingId: pulseRow.drawingId,
+      seed: pulseRow.seed,
+      chainId: BASE_CHAIN_ID,
+      jackpotAddress: BASE_JACKPOT,
+    })).get('gaia') ?? 0;
     const walletTransaction = {
       $queryRaw: vi.fn().mockResolvedValue([{ now: databaseNow }]),
       mineralAccount: { findUnique: vi.fn().mockResolvedValue(account) },
       backendPlanet: { findMany: vi.fn().mockResolvedValue([planet]) },
       planetUpgradePurchase: { findMany: vi.fn().mockResolvedValue([]) },
+      galaxyPulseRound: { findMany: vi.fn().mockResolvedValue([pulseRow]) },
     };
     const walletPrisma = {
       $transaction: vi.fn(async (callback: (value: typeof walletTransaction) => unknown) => callback(walletTransaction)),
@@ -67,6 +83,7 @@ describe('backend Planet mining snapshots', () => {
       backendPlanet: { findMany: vi.fn().mockResolvedValue([planet]) },
       mineralAccount: { findMany: vi.fn().mockResolvedValue([account]) },
       planetUpgradePurchase: { findMany: vi.fn().mockResolvedValue([]) },
+      galaxyPulseRound: { findMany: vi.fn().mockResolvedValue([pulseRow]) },
     };
     const leaderboardPrisma = {
       $transaction: vi.fn(async (callback: (value: typeof leaderboardTransaction) => unknown) => callback(leaderboardTransaction)),
@@ -84,9 +101,12 @@ describe('backend Planet mining snapshots', () => {
 
     expect(wallet.asOf).toBe(databaseNow.toISOString());
     expect(leaderboard.asOf).toBe(databaseNow);
-    expect(wallet.currentBalanceMicros).toBe('200000000');
-    expect(leaderboard.rows[0]?.scoreMicros).toBe(200_000_000n);
+    expect(wallet.galaxyPulse).toMatchObject({ drawingId: '150', slots: expect.any(Array) });
+    expect(wallet.planets[0]).toMatchObject({ galaxyPulseBps: pulseBps });
     expect(BigInt(wallet.currentBalanceMicros)).toBe(leaderboard.rows[0]?.scoreMicros);
+    expect(BigInt(wallet.effectiveMineralsPerDayMicros)).toBe(
+      leaderboard.rows[0]?.effectiveMineralsPerDayMicros,
+    );
   });
 
   it('calculates lifetime production from backend-generatedAt', async () => {

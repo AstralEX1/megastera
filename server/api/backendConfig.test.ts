@@ -11,6 +11,19 @@ describe('Minerals Economy configuration', () => {
     const config = loadBackendPlanetConfig(baseEnv);
     expect(config.mineralEconomyCutoverAt).toBeNull();
     expect(config.mineralUpgradesEnabled).toBe(false);
+    expect(config.galaxyPulseStartBlock).toBeNull();
+  });
+
+  it('enables Galaxy Pulse from one explicit non-negative start block', () => {
+    expect(loadBackendPlanetConfig({
+      ...baseEnv,
+      GALAXY_PULSE_START_BLOCK: '34567890',
+    }).galaxyPulseStartBlock).toBe(34_567_890n);
+
+    expect(() => loadBackendPlanetConfig({
+      ...baseEnv,
+      GALAXY_PULSE_START_BLOCK: '-1',
+    })).toThrow('GALAXY_PULSE_START_BLOCK must be a non-negative integer');
   });
 
   it('parses a cutover and opt-in upgrade flag without changing Planet requirements', () => {

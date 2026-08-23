@@ -32,17 +32,23 @@ describe('LandingLiveJackpot', () => {
     vi.useRealTimers();
   });
 
-  it('shows the live jackpot, drawing number, and a ticking countdown with a larger echo', () => {
+  it('shows the live jackpot and countdown without phase or drawing-number clutter', () => {
     render(<LandingLiveJackpot />);
 
     const jackpot = screen.getByTestId('landing-jackpot-echo');
     expect(jackpot).toHaveTextContent('$123.46');
     expect(jackpot.querySelectorAll('.depth-text__layer')).toHaveLength(64);
     expect(screen.getByTestId('landing-jackpot-layout')).toHaveClass('landing-live-jackpot-layout');
-    expect(screen.getByTestId('landing-drawing-in')).toBeInTheDocument();
+    const drawing = screen.getByTestId('landing-drawing-in');
+    expect(drawing).toBeInTheDocument();
+    expect(screen.getByText('LIVE JACKPOT').parentElement).toContainElement(drawing);
+    expect(drawing.querySelector('.landing-live-jackpot-countdown-line')).toHaveTextContent(
+      'DRAWING IN01:01:01',
+    );
     expect(screen.getByText('LIVE JACKPOT')).toBeInTheDocument();
     expect(screen.getByText('DRAWING IN')).toBeInTheDocument();
-    expect(screen.getByText('DRAWING #88')).toBeInTheDocument();
+    expect(screen.queryByText('TICKETS OPEN')).not.toBeInTheDocument();
+    expect(screen.queryByText('DRAWING #88')).not.toBeInTheDocument();
     expect(screen.getByRole('timer')).toHaveTextContent('01:01:01');
 
     act(() => {

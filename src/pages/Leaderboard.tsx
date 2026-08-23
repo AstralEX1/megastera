@@ -2,12 +2,17 @@ import { useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { Button } from '@/components/common/Button';
 import { FadeArc } from '@/components/common/FadeArc';
+import { PlanetIcon, TicketsIcon } from '@/components/icons/TicketsIcon';
 import { LeaderboardTable } from '@/components/leaderboard/LeaderboardTable';
 import { WalletRankCard } from '@/components/leaderboard/WalletRankCard';
 import { useCurrentLeaderboard, useWalletLeaderboardPosition } from '@/hooks/useLeaderboard';
 
 const SEASON_END_AT = Date.parse('2026-08-28T23:59:00.000Z');
-const SEASON_REWARDS = ['USDC', '1/1 NFT Planets'] as const;
+
+const SEASON_REWARDS = [
+  { label: 'Megapot Tickets', detail: '(USDC)', icon: TicketsIcon },
+  { label: '1/1 NFT Planets', detail: null, icon: PlanetIcon },
+] as const;
 
 function relativeTimeLabel(timestamp: number | undefined, now: number) {
   if (!timestamp || !Number.isFinite(timestamp)) return 'waiting for first refresh';
@@ -82,8 +87,14 @@ export function Leaderboard() {
       <div className="space-y-4">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-secondary)]">Season prizes</p>
-          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-[var(--text-primary)]">
-            {SEASON_REWARDS.map((reward) => <span key={reward}>{reward}</span>)}
+          <div className="mt-2 grid gap-2 text-sm">
+            {SEASON_REWARDS.map(({ label, detail, icon: Icon }, index) => (
+              <div key={label} className={`flex items-center gap-2 ${index > 0 ? 'border-t border-[var(--border)] pt-2' : ''}`}>
+                <Icon className="h-4 w-4 shrink-0 text-[var(--warning)]" />
+                <span className="font-semibold text-[var(--text-primary)]">{label}</span>
+                {detail ? <span className="text-[var(--text-secondary)]">{detail}</span> : null}
+              </div>
+            ))}
           </div>
         </div>
         <div className="border-t border-[var(--border)] pt-4">
@@ -98,18 +109,19 @@ export function Leaderboard() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-[var(--border)] pb-5">
+      <header className="flex flex-col items-start justify-between gap-4 border-b border-[var(--border)] pb-5 sm:flex-row sm:flex-wrap sm:items-end">
         <div>
           <h1 className="font-hud text-3xl font-bold tracking-[-0.04em] text-[var(--text-primary)]">Leaderboard</h1>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="min-w-[5.5rem] text-right">
+        <div className="grid w-full grid-cols-[auto_minmax(0,1fr)] items-end gap-3 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+          <div className="min-w-[5.5rem] text-left sm:text-right">
             <span className="block font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-secondary)]">Active players</span>
             <span className="block font-mono text-sm tabular-nums text-[var(--text-primary)]">{data?.total.toLocaleString() ?? '—'}</span>
           </div>
-          <span className="font-mono text-xs text-[var(--text-secondary)]">Last refresh: {relativeTimeLabel(lastRefreshAt, now)}</span>
+          <span className="min-w-0 text-right font-mono text-xs text-[var(--text-secondary)] sm:text-left">Last refresh: {relativeTimeLabel(lastRefreshAt, now)}</span>
           <Button
             variant="secondary"
+            className="col-span-2 w-full sm:w-auto"
             disabled={refreshing}
             aria-busy={refreshing}
             aria-label={refreshing ? 'Refreshing leaderboard' : 'Refresh'}

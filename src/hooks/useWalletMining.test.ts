@@ -21,6 +21,16 @@ describe('wallet mining refresh', () => {
         currentBalanceMicros: '5000000',
         effectiveMineralsPerDayMicros: '86400000000',
         upgradesEnabled: true,
+        galaxyPulse: {
+          drawingId: '150',
+          settledAt: '2026-08-21T17:00:11.000Z',
+          slots: [
+            { planetType: 'gaia', modifierBps: 5_000 },
+            { planetType: 'nebula', modifierBps: -2_000 },
+            { planetType: 'gaia', modifierBps: 1_000 },
+            { planetType: 'void', modifierBps: 0 },
+          ],
+        },
         planets: [{
           planetId: 'planet-1',
           planetType: 'Nebula',
@@ -30,6 +40,7 @@ describe('wallet mining refresh', () => {
           effectiveMineralsPerDayMicros: '25200000',
           upgradeLevel: 1,
           upgradeBonusBps: 1000,
+          galaxyPulseBps: -2_000,
           nextUpgrade: { targetLevel: 2, bonusBpsAfter: 2500, costMicros: '300000' },
         }],
       },

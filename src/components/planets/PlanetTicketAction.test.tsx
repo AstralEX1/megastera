@@ -45,17 +45,56 @@ describe('PlanetTicketAction', () => {
         status={{ kind: 'claimable', amount: payout, ticketId: 456n }}
       />,
     );
-    expect(screen.getByRole('button', { name: 'Claim $12.50 USDC' })).toHaveClass('bg-white', 'text-black', 'min-h-8');
+    expect(screen.getByRole('button', { name: 'Claim $12.50 USDC' })).toHaveClass('bg-white', 'text-black', 'min-h-10');
 
     rerender(<PlanetTicketAction compact status={{ kind: 'drawn' }} />);
-    expect(screen.getByTestId('planet-ticket-action')).toHaveClass('min-h-8');
-    expect(screen.getByTestId('ticket-status-drawn')).toHaveClass('bg-zinc-800', 'text-zinc-300');
+    expect(screen.getByTestId('planet-ticket-action')).toHaveClass('w-full', 'justify-center', 'sm:justify-end');
+    expect(screen.getByTestId('ticket-status-drawn')).toHaveClass(
+      'bg-zinc-800',
+      'text-zinc-300',
+      'min-h-10',
+      'px-3',
+      'py-2',
+    );
 
     rerender(<PlanetTicketAction compact status={{ kind: 'claimed', amount: payout }} />);
     expect(screen.getByTestId('ticket-status-claimed')).toHaveClass('bg-zinc-800', 'text-zinc-300');
 
     rerender(<PlanetTicketAction compact status={{ kind: 'countdown', time: '01:02:03' }} />);
     expect(screen.getByTestId('ticket-status-countdown')).toHaveClass('border-amber-400', 'text-amber-200');
+  });
+
+  it('uses one bounded action contract for collection cards and planet detail', () => {
+    const { rerender } = render(
+      <PlanetTicketAction
+        compact
+        status={{ kind: 'claimable', amount: payout, ticketId: 456n }}
+      />,
+    );
+
+    const compactButton = screen.getByRole('button', { name: 'Claim $12.50 USDC' });
+    const compactButtonClassName = compactButton.className;
+    expect(compactButton).toHaveClass('w-full', 'max-w-full', 'whitespace-nowrap', 'sm:w-auto');
+    expect(screen.getByTestId('planet-ticket-action')).toHaveClass('w-full', 'items-center', 'sm:items-end');
+
+    rerender(
+      <PlanetTicketAction
+        status={{ kind: 'claimable', amount: payout, ticketId: 456n }}
+      />,
+    );
+
+    const detailButton = screen.getByRole('button', { name: 'Claim $12.50 USDC' });
+    expect(detailButton.className).toBe(compactButtonClassName);
+    expect(screen.getByTestId('planet-ticket-action')).toHaveClass('w-full', 'items-center', 'sm:items-start');
+
+    rerender(<PlanetTicketAction compact status={{ kind: 'drawn' }} />);
+    const compactStatusClassName = screen.getByTestId('ticket-status-drawn').className;
+    expect(screen.getByTestId('planet-ticket-action')).toHaveClass('w-full', 'justify-center', 'sm:justify-end');
+    expect(screen.getByTestId('ticket-status-drawn').parentElement).toHaveClass('sm:w-auto');
+
+    rerender(<PlanetTicketAction status={{ kind: 'drawn' }} />);
+    expect(screen.getByTestId('ticket-status-drawn').className).toBe(compactStatusClassName);
+    expect(screen.getByTestId('planet-ticket-action')).toHaveClass('w-full', 'justify-center', 'sm:justify-start');
   });
 
   it('disables the claim action while the existing claim hook is pending', () => {

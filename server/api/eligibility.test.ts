@@ -59,6 +59,12 @@ describe('Megastera eligibility', () => {
     );
   });
 
+  it('fails closed when the requested log is not a TicketPurchased event', () => {
+    const unrelatedLog = ticketLog({ topics: [`0x${'00'.repeat(32)}`] as Log['topics'] });
+
+    expect(() => decodeEligibleTicket(unrelatedLog)).toThrow(/TicketPurchased event/i);
+  });
+
   it('locates the requested log index before decoding it', () => {
     const otherLog = ticketLog({ logIndex: 3 });
     expect(findEligibleTicket([otherLog, ticketLog()], 4).ticketId).toBe(456n);

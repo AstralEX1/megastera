@@ -11,13 +11,12 @@ type PlanetMiningMetricsProps = {
   mining?: PlanetMiningSnapshot;
 };
 
-function formatCollectionBonus(bps: number): string {
-  return `+${bps / 100}%`;
+function formatBonusBps(bps: number): string {
+  return `${bps < 0 ? '' : '+'}${bps / 100}%`;
 }
 
 const METRIC_TOOLTIPS = {
   rate: 'Minerals per day including boost',
-  boost: 'Bonus from matching planet types',
 } as const;
 
 function MetricTooltip({
@@ -25,26 +24,32 @@ function MetricTooltip({
   description,
   id,
   className,
+  tooltipClassName = '',
+  accessibleDescription,
 }: {
   children: ReactNode;
-  description: string;
+  description: ReactNode;
   id: string;
   className: string;
+  tooltipClassName?: string;
+  accessibleDescription?: string;
 }) {
   return (
-    <div
+    <button
+      type="button"
       aria-describedby={id}
-      className={`group/metric relative min-w-0 ${className}`}
+      className={`group/metric relative min-w-0 cursor-help outline-none focus-visible:ring-1 focus-visible:ring-[var(--rare)] ${className}`}
     >
       {children}
       <span
         id={id}
         role="tooltip"
-        className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-3.5 h-[22px] -translate-x-1/2 whitespace-nowrap rounded-[2px] bg-[rgba(97,97,97,0.9)] px-2 text-center font-sans text-[10px] font-medium leading-[22px] text-white opacity-0 shadow-[0_2px_4px_rgba(0,0,0,0.24)] transition-opacity duration-150 ease-out group-hover/metric:opacity-100"
+        aria-label={accessibleDescription}
+        className={`pointer-events-none absolute bottom-full left-1/2 z-30 mb-3.5 h-[22px] -translate-x-1/2 whitespace-nowrap rounded-[2px] bg-[rgba(97,97,97,0.9)] px-2 text-center font-sans text-[10px] font-medium leading-[22px] text-white opacity-0 shadow-[0_2px_4px_rgba(0,0,0,0.24)] transition-opacity duration-150 ease-out group-hover/metric:opacity-100 group-focus/metric:opacity-100 ${tooltipClassName}`}
       >
         {description}
       </span>
-    </div>
+    </button>
   );
 }
 
@@ -56,7 +61,10 @@ function MetricsContent({ mining, size }: PlanetMiningMetricsProps & { size: Met
     return <span className="telemetry text-[var(--text-secondary)]">Mining unavailable</span>;
   }
 
-  const boosted = mining.collectionBonusBps > 0;
+  const upgradeBonusBps = mining.upgradeBonusBps ?? 0;
+  const galaxyPulseBps = mining.galaxyPulseBps ?? 0;
+  const totalBonusBps = mining.collectionBonusBps + upgradeBonusBps + galaxyPulseBps;
+  const boosted = totalBonusBps > 0;
   const effectiveRateClass = boosted ? 'text-[var(--rare)]' : 'text-[var(--text-primary)]';
   const bonusClass = boosted ? 'text-[var(--rare)]' : 'text-[var(--text-secondary)]';
   const cellSpacing = size === 'compact' ? 'p-2' : 'p-3';
@@ -72,10 +80,25 @@ function MetricsContent({ mining, size }: PlanetMiningMetricsProps & { size: Met
           {formatMinerals(BigInt(mining.effectiveMineralsPerDayMicros))}
         </strong>
       </MetricTooltip>
-      <MetricTooltip description={METRIC_TOOLTIPS.boost} id={`${tooltipId}-boost`} className={`text-center ${cellSpacing}`}>
+      <MetricTooltip
+        description={
+          <span className="grid gap-0.5">
+            <span>Matching Planets {formatBonusBps(mining.collectionBonusBps)}</span>
+            <span>Planet Level {formatBonusBps(upgradeBonusBps)}</span>
+            <span>Galaxy Pulse {formatBonusBps(galaxyPulseBps)}</span>
+            <span className="border-t border-white/20 pt-0.5">
+              Total Boost {formatBonusBps(totalBonusBps)}
+            </span>
+          </span>
+        }
+        id={`${tooltipId}-boost`}
+        className={`text-center ${cellSpacing}`}
+        tooltipClassName="h-auto min-w-[10.5rem] whitespace-normal px-2 py-1.5 text-left leading-4"
+        accessibleDescription={`Matching Planets ${formatBonusBps(mining.collectionBonusBps)} Planet Level ${formatBonusBps(upgradeBonusBps)} Galaxy Pulse ${formatBonusBps(galaxyPulseBps)} Total Boost ${formatBonusBps(totalBonusBps)}`}
+      >
         <p className={labelClass}>BOOST</p>
         <strong className={`mt-1 block font-hud tabular-nums whitespace-nowrap ${valueSize} ${bonusClass}`}>
-          {formatCollectionBonus(mining.collectionBonusBps)}
+          {formatBonusBps(totalBonusBps)}
         </strong>
       </MetricTooltip>
     </>

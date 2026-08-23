@@ -85,10 +85,14 @@ export function parseReceiptReference(value: unknown): ReceiptReference | undefi
     candidate.logIndex < 0
   ) return undefined;
   const recipient = candidate.recipient;
-  if (recipient !== undefined && (typeof recipient !== 'string' || !isAddress(recipient))) return undefined;
+  let normalizedRecipient: Address | undefined;
+  if (recipient !== undefined) {
+    if (typeof recipient !== 'string' || !isAddress(recipient)) return undefined;
+    normalizedRecipient = getAddress(recipient);
+  }
   return {
     transactionHash: candidate.transactionHash,
     logIndex: candidate.logIndex,
-    recipient: recipient === undefined ? undefined : getAddress(recipient),
+    recipient: normalizedRecipient,
   };
 }

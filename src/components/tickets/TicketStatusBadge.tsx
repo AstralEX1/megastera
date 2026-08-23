@@ -21,7 +21,7 @@ function ClockIcon() {
 }
 
 const BASE = 'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide';
-const COMPACT_BASE = 'inline-flex min-h-8 items-center gap-1 rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-wide';
+const COMPACT_BASE = 'inline-flex min-h-10 items-center gap-1 rounded-full border px-3 py-2 text-[10px] font-semibold uppercase tracking-wide';
 
 export function TicketStatusBadge({ status, appearance = 'default' }: { status: TicketStatus; appearance?: 'default' | 'compact' }) {
   const base = appearance === 'compact' ? COMPACT_BASE : BASE;

@@ -1,18 +1,42 @@
 import './Landing.css';
 import { useEffect } from 'react';
-import { COPY } from '@/config/copy';
-import { LandingLiveJackpot } from '@/components/landing/LandingLiveJackpot';
 import { LandingHowItWorks } from '@/components/landing/LandingHowItWorks';
+import { LandingLiveJackpot } from '@/components/landing/LandingLiveJackpot';
 import { LandingMiningLeaderboard } from '@/components/landing/LandingMiningLeaderboard';
-import { LandingPlanetCard } from '@/components/landing/LandingPlanetCard';
 import { LandingSplitText } from '@/components/landing/LandingSplitText';
+import { PlanetCardStack } from '@/components/landing/PlanetCardStack';
 import { PlanetGeneratorHero } from '@/components/landing/PlanetGeneratorHero';
 import { FOOTER_LINKS } from '@/components/layout/Footer';
+import { COPY } from '@/config/copy';
 
 const generatedPlanetAssets = [
-  { image: '/artifacts/megastera-generated/planet-01.gif', name: 'Draheunia', rarity: 'Common', ticketId: '5001', minerals: 25, numbers: [7, 14, 18, 23, 29], bonus: 3 },
-  { image: '/artifacts/megastera-generated/planet-05.gif', name: 'Wheuagawa III', rarity: 'Uncommon', ticketId: '5005', minerals: 75, numbers: [4, 11, 19, 27, 36], bonus: 8 },
-  { image: '/artifacts/megastera-generated/planet-09.gif', name: 'Auclagua-94', rarity: 'Common', ticketId: '5009', minerals: 10, numbers: [2, 13, 21, 30, 37], bonus: 6 },
+  {
+    image: '/landing/gifs-512/planet-006.gif',
+    name: 'Draheunia',
+    rarity: 'Common',
+    ticketId: '5001',
+    minerals: 25,
+    numbers: [7, 14, 18, 23, 29],
+    bonus: 3,
+  },
+  {
+    image: '/landing/gifs-512/planet-055.gif',
+    name: 'Wheuagawa III',
+    rarity: 'Uncommon',
+    ticketId: '5005',
+    minerals: 75,
+    numbers: [4, 11, 19, 27, 36],
+    bonus: 8,
+  },
+  {
+    image: '/landing/gifs-512/planet-092.gif',
+    name: 'Auclagua-94',
+    rarity: 'Common',
+    ticketId: '5009',
+    minerals: 10,
+    numbers: [2, 13, 21, 30, 37],
+    bonus: 6,
+  },
 ] as const;
 
 export function Landing() {
@@ -26,7 +50,9 @@ export function Landing() {
 
   return (
     <div className="landing" data-testid="megastera-landing">
-      <a className="landing-skip-link" href="#landing-main">Skip to content</a>
+      <a className="landing-skip-link" href="#landing-main">
+        Skip to content
+      </a>
       <header className="landing-header">
         <a className="landing-wordmark" href="/" aria-label="Megastera home">
           <LandingSplitText text={COPY.brandName} className="landing-wordmark-name" />
@@ -85,12 +111,20 @@ export function Landing() {
           </div>
         </section>
 
-        <section className="landing-section landing-container landing-mechanics" aria-labelledby="mechanics-title" aria-label="Two mechanics: Megapot Ticket and Planet">
+        <section
+          className="landing-section landing-container landing-mechanics"
+          aria-labelledby="mechanics-title"
+          aria-label="Two mechanics: Megapot Ticket and Planet"
+        >
           <div className="landing-mechanics-heading">
             <div>
               <LandingSplitText tag="span" className="landing-kicker" text="Two mechanics" />
               <h2 id="mechanics-title">
-                <LandingSplitText tag="span" className="landing-mechanics-title-line" text="One ticket." />
+                <LandingSplitText
+                  tag="span"
+                  className="landing-mechanics-title-line"
+                  text="One ticket."
+                />
                 <LandingSplitText
                   tag="span"
                   className="landing-mechanics-title-line landing-split-line-accent"
@@ -123,23 +157,57 @@ export function Landing() {
                       aria-label={`Megapot Ticket ${ticket.ticketId} preview with five numbers and one bonus ball`}
                     >
                       <div className="landing-megapot-ticket-head">
-                        <LandingSplitText tag="span" className="landing-ticket-visual-top" text="MEGAPOT / DAILY DRAW" delay={24} />
-                        <LandingSplitText tag="span" className="landing-megapot-ticket-price" text="$1 USDC" delay={28} />
+                        <LandingSplitText
+                          tag="span"
+                          className="landing-ticket-visual-top"
+                          text="MEGAPOT / DAILY DRAW"
+                          delay={24}
+                        />
+                        <LandingSplitText
+                          tag="span"
+                          className="landing-megapot-ticket-price"
+                          text="$1 USDC"
+                          delay={28}
+                        />
                       </div>
-                      <LandingSplitText tag="strong" className="landing-ticket-visual-title" text="TICKET" splitType="chars" delay={42} />
+                      <LandingSplitText
+                        tag="strong"
+                        className="landing-ticket-visual-title"
+                        text="TICKET"
+                        splitType="chars"
+                        delay={42}
+                      />
                       <div className="landing-ticket-balls" aria-hidden="true">
-                        {ticket.numbers.map((number) => <span className="landing-ticket-ball" key={number}>{number}</span>)}
-                        <span className="landing-ticket-ball landing-ticket-ball-bonus">{ticket.bonus}</span>
+                        {ticket.numbers.map((number) => (
+                          <span className="landing-ticket-ball" key={number}>
+                            {number}
+                          </span>
+                        ))}
+                        <span className="landing-ticket-ball landing-ticket-ball-bonus">
+                          {ticket.bonus}
+                        </span>
                       </div>
                       <div className="landing-megapot-ticket-foot">
-                        <LandingSplitText tag="span" className="landing-ticket-visual-bottom" text="5 NUMBERS + BONUS" delay={24} />
-                        <LandingSplitText tag="span" className="landing-megapot-ticket-id" text={`TICKET / ${ticket.ticketId}`} delay={28} />
+                        <LandingSplitText
+                          tag="span"
+                          className="landing-ticket-visual-bottom"
+                          text="5 NUMBERS + BONUS"
+                          delay={24}
+                        />
+                        <LandingSplitText
+                          tag="span"
+                          className="landing-megapot-ticket-id"
+                          text={`TICKET / ${ticket.ticketId}`}
+                          delay={28}
+                        />
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-              <h3><LandingSplitText tag="span" text="Megapot Tickets" /></h3>
+              <h3>
+                <LandingSplitText tag="span" text="Megapot Tickets" />
+              </h3>
               <LandingSplitText
                 tag="p"
                 text="Each ticket enters the Megapot draw and can win the jackpot."
@@ -150,19 +218,10 @@ export function Landing() {
             </article>
 
             <article className="landing-mechanic landing-planet-mechanic">
-              <div className="landing-mechanic-planet-stack">
-                {generatedPlanetAssets.map((planet) => (
-                  <LandingPlanetCard
-                    key={planet.ticketId}
-                    image={planet.image}
-                    name={planet.name}
-                    rarity={planet.rarity}
-                    ticketId={planet.ticketId}
-                    minerals={planet.minerals}
-                  />
-                ))}
-              </div>
-              <h3><LandingSplitText tag="span" text="Planets" /></h3>
+              <PlanetCardStack />
+              <h3>
+                <LandingSplitText tag="span" text="Planets" />
+              </h3>
               <LandingSplitText
                 tag="span"
                 className="landing-planet-coordinates-kicker"
@@ -195,14 +254,11 @@ export function Landing() {
         </a>
         <nav className="landing-footer-links" aria-label="Megastera and Megapot links">
           {FOOTER_LINKS.map(({ label, href }) => (
-            <a href={href} target="_blank" rel="noreferrer" key={href}>{label}</a>
+            <a href={href} target="_blank" rel="noreferrer" key={href}>
+              {label}
+            </a>
           ))}
         </nav>
-        <LandingSplitText
-          tag="span"
-          className="landing-footer-meta"
-          text="Ticket → Planet → Rewards"
-        />
       </footer>
     </div>
   );

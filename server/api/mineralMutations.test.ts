@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from './generated/prisma/client.js';
+import { calculateEffectiveMineralsPerDayMicros } from './collectionMining.js';
+import { BASE_CHAIN_ID } from './config.js';
+import { BASE_JACKPOT } from './eligibility.js';
+import { aggregateGalaxyPulseByType, deriveGalaxyPulseV1 } from './galaxyPulse.js';
 import { purchasePlanetUpgrade, settleMineralAccount } from './mineralAccounts.js';
 
 const OWNER = '0x1111111111111111111111111111111111111111';
@@ -24,6 +28,7 @@ function makePrisma(overrides: {
   account?: Record<string, unknown>;
   existingPurchase?: Record<string, unknown> | null;
   clockAt?: Date;
+  pulseRows?: Array<{ drawingId: bigint; seed: `0x${string}`; settledAt: Date }>;
 } = {}) {
   const planet = makePlanet();
   const balanceMicros = typeof overrides.account?.balanceMicros === 'bigint' ? overrides.account.balanceMicros : 500_000n;
@@ -85,6 +90,7 @@ function makePrisma(overrides: {
       findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => ({ id: 'purchase-1', ...data })),
     },
+    galaxyPulseRound: { findMany: vi.fn().mockResolvedValue(overrides.pulseRows ?? []) },
   };
   return {
     prisma: {
@@ -98,6 +104,33 @@ function makePrisma(overrides: {
 }
 
 describe('mineral upgrade mutations', () => {
+  it('loads authoritative Pulse rounds before fixing an account balance', async () => {
+    const pulse = {
+      drawingId: 150n,
+      seed: `0x${'33'.repeat(32)}` as const,
+      settledAt: CUTOVER,
+    };
+    const fixture = makePrisma({ account: { balanceMicros: 0n }, pulseRows: [pulse] });
+    const pulseBps = aggregateGalaxyPulseByType(deriveGalaxyPulseV1({
+      drawingId: pulse.drawingId,
+      seed: pulse.seed,
+      chainId: BASE_CHAIN_ID,
+      jackpotAddress: BASE_JACKPOT,
+    })).get('gaia') ?? 0;
+
+    const settled = await settleMineralAccount({
+      prisma: fixture.tx as never,
+      account: fixture.account,
+      planets: [makePlanet()],
+      purchases: [],
+      settledAt: PURCHASED_AT,
+      anchor: CUTOVER,
+    });
+
+    expect(settled.balanceMicros).toBe(calculateEffectiveMineralsPerDayMicros(1n, pulseBps));
+    expect(fixture.tx.galaxyPulseRound.findMany).toHaveBeenCalledOnce();
+  });
+
   it('keeps split account settlement equal to one continuous anchored settlement', async () => {
     const fixture = makePrisma({ account: { balanceMicros: 0n } });
     const firstAt = new Date('2026-08-20T12:34:56.789Z');

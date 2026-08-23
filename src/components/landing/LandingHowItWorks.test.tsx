@@ -21,11 +21,17 @@ describe('LandingHowItWorks', () => {
     expect(screen.getByText('How does the Planet leaderboard fit in?')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Is the Planet another ticket?'));
     fireEvent.click(screen.getByText('Who powers the jackpot?'));
-    expect(screen.getByText(/A Megapot Ticket is a \$1 USDC entry for the daily draw/i)).toBeInTheDocument();
-    expect(screen.getByText(/Megastera binds one generated Planet to that ticket/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/A Megapot Ticket is a \$1 USDC entry for the daily draw/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Megastera binds one generated Planet to that ticket/i),
+    ).toBeInTheDocument();
     expect(screen.getByText(/Pyth supplies verifiable randomness/i)).toBeInTheDocument();
     expect(screen.getByText(/70% of ticket value enters the jackpot pool/i)).toBeInTheDocument();
     expect(screen.getByText(/The Planet is not a second ticket/i)).toBeInTheDocument();
-    expect(container.querySelectorAll('.landing-how-it-works .split-parent').length).toBeGreaterThanOrEqual(17);
+    expect(
+      container.querySelectorAll('.landing-how-it-works .split-parent').length,
+    ).toBeGreaterThanOrEqual(17);
   });
 });

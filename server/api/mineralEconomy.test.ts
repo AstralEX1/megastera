@@ -145,6 +145,74 @@ describe('Minerals Economy v2 temporal calculations', () => {
     expect(first + second).toBe(whole);
   });
 
+  it('uses the Pulse active in each half-open historical interval', () => {
+    const planet: MineralCollectionPlanet = {
+      id: 'pulse-boundaries',
+      ownerAddress: '0xabc',
+      planetType: 'Gaia',
+      baseMineralsPerDay: 1n,
+      activatedAt: ANCHOR,
+    };
+
+    expect(calculateHistoricalPlanetProduction({
+      planet,
+      planets: [planet],
+      purchases: [],
+      pulseRounds: [
+        { settledAt: new Date('2026-08-11T00:00:00.000Z'), modifiersBps: { gaia: 5_000 } },
+        { settledAt: new Date('2026-08-12T00:00:00.000Z'), modifiersBps: { gaia: -2_500 } },
+      ],
+      from: ANCHOR,
+      to: new Date('2026-08-13T00:00:00.000Z'),
+      anchor: ANCHOR,
+    })).toBe(3_250_000n);
+  });
+
+  it('adds collection, permanent upgrade, and Pulse BPS in one rate calculation', () => {
+    const planets: MineralCollectionPlanet[] = ['one', 'two', 'three'].map((id) => ({
+      id,
+      ownerAddress: '0xabc',
+      planetType: 'Gaia',
+      baseMineralsPerDay: 1n,
+      activatedAt: ANCHOR,
+    }));
+
+    expect(calculateHistoricalPlanetProduction({
+      planet: planets[0] as MineralCollectionPlanet,
+      planets,
+      purchases: [{
+        planetId: 'one',
+        targetLevel: 1,
+        bonusBpsAfter: 1_000,
+        purchasedAt: ANCHOR,
+      }],
+      pulseRounds: [{ settledAt: ANCHOR, modifiersBps: { gaia: 2_000 } }],
+      from: ANCHOR,
+      to: new Date('2026-08-11T00:00:00.000Z'),
+      anchor: ANCHOR,
+    })).toBe(1_350_000n);
+  });
+
+  it('clamps stacked Pulse debuffs so production cannot become negative', () => {
+    const planet: MineralCollectionPlanet = {
+      id: 'pulse-clamp',
+      ownerAddress: '0xabc',
+      planetType: 'Gaia',
+      baseMineralsPerDay: 1n,
+      activatedAt: ANCHOR,
+    };
+
+    expect(calculateHistoricalPlanetProduction({
+      planet,
+      planets: [planet],
+      purchases: [],
+      pulseRounds: [{ settledAt: ANCHOR, modifiersBps: { gaia: -15_000 } }],
+      from: ANCHOR,
+      to: new Date('2026-08-11T00:00:00.000Z'),
+      anchor: ANCHOR,
+    })).toBe(0n);
+  });
+
   it('activates collection bonuses at the historical third activation', () => {
     const planets: MineralCollectionPlanet[] = [
       {

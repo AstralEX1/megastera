@@ -9,6 +9,7 @@ export type BackendPlanetConfig = {
   /** Optional in dependency overrides so pre-v2 Planet APIs remain source-compatible. */
   mineralEconomyCutoverAt?: Date | null;
   mineralUpgradesEnabled?: boolean;
+  galaxyPulseStartBlock?: bigint | null;
   siweOrigin?: string;
   siweSessionSecret?: string;
 };
@@ -46,6 +47,15 @@ function parseMineralUpgradesEnabled(env: Record<string, string | undefined>): b
   if (raw === 'true' || raw === '1' || raw === 'yes' || raw === 'on') return true;
   if (raw === 'false' || raw === '0' || raw === 'no' || raw === 'off') return false;
   throw new Error('MINERAL_UPGRADES_ENABLED must be a boolean.');
+}
+
+function parseGalaxyPulseStartBlock(env: Record<string, string | undefined>): bigint | null {
+  const raw = env.GALAXY_PULSE_START_BLOCK?.trim();
+  if (!raw) return null;
+  if (!/^\d+$/.test(raw)) {
+    throw new Error('GALAXY_PULSE_START_BLOCK must be a non-negative integer.');
+  }
+  return BigInt(raw);
 }
 
 function parseSiweOrigin(
@@ -124,6 +134,7 @@ export function loadBackendPlanetConfig(
     rpcFallbackUrls,
     databaseUrl,
     confirmations,
+    galaxyPulseStartBlock: parseGalaxyPulseStartBlock(env),
     ...mineralEconomy,
     siweOrigin: parseSiweOrigin(env, mineralEconomy.mineralUpgradesEnabled),
     siweSessionSecret: parseSiweSessionSecret(env, mineralEconomy.mineralUpgradesEnabled),

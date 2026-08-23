@@ -111,6 +111,8 @@ The automated reward contract is a future upgrade; it is not presented as part o
 
 Seasonal rewards can expand beyond monetary payouts over time and may include gameplay assets, planets or other items introduced by future mechanics.
 
+Implementation note: the active backend exposes live standings with a current UTC-day period label and has a separate daily finalization worker for archived rows. Reward settlement is not an automated smart-contract or HTTP path in this repository; the Season 1 countdown and prize copy are presented by the client.
+
 ## Why Megapot is core
 
 Megapot is not a secondary widget, a link-out, or an unrelated protocol attached to the game.
@@ -234,6 +236,7 @@ The browser handles interaction, but it is not the authority for planet creation
 - Planet generation is deterministic and idempotent.
 - Conflicting persisted provenance fails closed.
 - Mining is derived from persisted planet data rather than mutable browser state.
+- Same-type collection bonuses are derived from persisted Planet generation times rather than a browser-owned ledger.
 - After the mineral-economy cutover, wallet balances and current leaderboard scores are derived from persisted integer-micro account and upgrade history; V1 remains the pre-cutover fallback.
 - Generated GIF bytes are stored with an immutable content hash.
 - Server credentials and database secrets never enter the Vite client environment.
@@ -251,7 +254,7 @@ Future seasons can expand that foundation with colonies, stars, ships, trading, 
 ## Repository
 
 ```text
-megastera/
+MegasteraGame/
 ├── src/                       # React application and game UI
 ├── api/                       # Receipt verification, planet API, mining, leaderboard
 ├── packages/planet-generator # Shared deterministic planet generator
@@ -265,10 +268,10 @@ megastera/
 
 ### Stack
 
-**Frontend:** React 19, TypeScript, Vite, wagmi, viem, RainbowKit  
-**Protocol:** Megapot on Base  
-**Backend:** Hono, PostgreSQL, Prisma  
-**Rendering:** shared deterministic planet generator  
+**Frontend:** React 19, TypeScript, Vite, wagmi, viem, RainbowKit<br>
+**Protocol:** Megapot on Base<br>
+**Backend:** Hono, PostgreSQL, Prisma<br>
+**Rendering:** shared deterministic planet generator<br>
 **Quality:** Vitest, TypeScript, Biome, GitHub Actions
 
 ## Run locally
@@ -290,13 +293,13 @@ Copy the required values from [`.env.example`](.env.example) into your local env
 Every pull request and push to `main` runs the repository quality gate:
 
 ```bash
+pnpm db:generate
+pnpm db:validate
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm --filter @megaplanets/planet-generator golden
 pnpm build
-pnpm db:generate
-pnpm db:validate
 ```
 
 ## License

@@ -1,9 +1,11 @@
 import { type CollectionMiningPlanet, calculateCollectionMining } from './collectionMining.js';
 import {
   calculateHistoricalProduction,
+  type GalaxyPulseMiningRound,
   type MineralCollectionPlanet,
   type MineralUpgradePurchase,
 } from './mineralEconomy.js';
+import { loadGalaxyPulseRounds } from './galaxyPulseStore.js';
 import { calculateUpgradeCostMicros, getMineralUpgradeConfig } from './mineralUpgrades.js';
 import { Prisma, type PrismaClient } from './generated/prisma/client.js';
 
@@ -229,6 +231,7 @@ export function calculateCurrentMineralBalanceMicros(input: {
   asOf: Date;
   planets: readonly MineralCollectionPlanet[];
   purchases: readonly MineralUpgradePurchase[];
+  pulseRounds?: readonly GalaxyPulseMiningRound[];
 }): bigint {
   assertCutover(input.cutoverAt);
   assertTimestamp(input.asOf, 'Current balance');
@@ -249,6 +252,7 @@ export function calculateCurrentMineralBalanceMicros(input: {
     from,
     to: input.asOf,
     anchor: input.cutoverAt,
+    pulseRounds: input.pulseRounds,
   });
   const balanceMicros = (input.account?.balanceMicros ?? input.openingBalanceMicros) + producedMicros;
   if (balanceMicros < 0n) throw new Error('Mineral balance cannot be negative.');
@@ -465,6 +469,7 @@ export async function settleMineralAccount(input: {
   };
   planets: readonly MineralSettlementPlanet[];
   purchases: readonly MineralSettlementPurchase[];
+  pulseRounds?: readonly GalaxyPulseMiningRound[];
   settledAt: Date;
   anchor: Date;
 }) {
@@ -473,12 +478,16 @@ export async function settleMineralAccount(input: {
   if (input.settledAt < input.account.lastSettledAt) {
     throw new Error('Settlement timestamp cannot move backwards.');
   }
+  const pulseRounds = input.pulseRounds ?? (input.prisma.galaxyPulseRound
+    ? await loadGalaxyPulseRounds(input.prisma, input.settledAt)
+    : []);
   const producedMicros = calculateHistoricalProduction({
     planets: input.planets,
     purchases: input.purchases,
     from: input.account.lastSettledAt,
     to: input.settledAt,
     anchor: input.anchor,
+    pulseRounds,
   });
   if (producedMicros === 0n && input.settledAt.getTime() === input.account.lastSettledAt.getTime()) {
     return { ...input.account, balanceMicros: input.account.balanceMicros };

@@ -256,6 +256,34 @@ describe('live leaderboard', () => {
 });
 
 describe('post-cutover spendable leaderboard', () => {
+  it('uses the same Galaxy Pulse boundaries for score and current rate', () => {
+    const rows = calculatePostCutoverLeaderboardRows({
+      period: POST_CUTOVER_PERIOD,
+      asOf: new Date('2026-08-22T00:00:00.000Z'),
+      cutoverAt: CUTOVER,
+      accounts: [{ ownerAddress: ADDRESS_A, openingBalanceMicros: 0n }],
+      planets: [{
+        id: 'pulse-planet',
+        ownerAddress: ADDRESS_A,
+        planetType: 'Gaia',
+        baseMineralsPerDay: 1n,
+        generatedAt: CUTOVER,
+      }],
+      purchases: [],
+      pulseRounds: [{
+        settledAt: new Date('2026-08-20T12:00:00.000Z'),
+        modifiersBps: { gaia: 5_000 },
+      }],
+    });
+
+    expect(rows).toEqual([{
+      rank: 1,
+      walletAddress: ADDRESS_A,
+      scoreMicros: 1_250_000n,
+      effectiveMineralsPerDayMicros: 1_500_000n,
+    }]);
+  });
+
   it('rejects a reconstructed negative spendable balance', () => {
     expect(() => calculatePostCutoverLeaderboardRows({
       period: POST_CUTOVER_PERIOD,

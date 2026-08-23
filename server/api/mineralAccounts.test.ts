@@ -33,6 +33,27 @@ describe('MineralAccount initialization', () => {
     })).toBe(1_000_100n);
   });
 
+  it('uses Galaxy Pulse boundaries for the current wallet balance', () => {
+    expect(calculateCurrentMineralBalanceMicros({
+      account: { balanceMicros: 0n, lastSettledAt: CUTOVER },
+      openingBalanceMicros: 0n,
+      cutoverAt: CUTOVER,
+      asOf: new Date('2026-08-22T00:00:00.000Z'),
+      planets: [{
+        id: 'pulse-wallet',
+        ownerAddress: OWNER,
+        planetType: 'Gaia',
+        baseMineralsPerDay: 1n,
+        generatedAt: CUTOVER,
+      }],
+      purchases: [],
+      pulseRounds: [{
+        settledAt: new Date('2026-08-21T00:00:00.000Z'),
+        modifiersBps: { gaia: 5_000 },
+      }],
+    })).toBe(2_500_000n);
+  });
+
   it('rejects a missing account when spending history exists', () => {
     expect(() => calculateCurrentMineralBalanceMicros({
       account: null,

@@ -61,6 +61,7 @@ function makeUpgradeApp() {
     purchasedAt: NOW.toISOString(),
   });
   const getPrisma = vi.fn(() => ({} as never));
+  const assertPulseFresh = vi.fn().mockResolvedValue(undefined);
   const app = new Hono();
   app.route('/api', createBackendPlanetRoutes({
     ...makeAppDependencies(),
@@ -68,8 +69,9 @@ function makeUpgradeApp() {
     loadConfig: () => upgradeConfig,
     now: () => NOW,
     purchaseUpgrade,
+    assertPulseFresh,
   }));
-  return { app, getPrisma, purchaseUpgrade };
+  return { app, assertPulseFresh, getPrisma, purchaseUpgrade };
 }
 
 function makeAppDependencies() {
@@ -81,6 +83,7 @@ function makeAppDependencies() {
     getStore: () => store,
     allows: () => true,
     now: () => new Date('2026-08-21T00:00:00.000Z'),
+    assertPulseFresh: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -129,6 +132,20 @@ describe('backend Planet routes', () => {
     expect(gif.status).toBe(200);
     expect(gif.headers.get('content-type')).toBe('image/gif');
     expect((await gif.arrayBuffer()).byteLength).toBeGreaterThan(6);
+  });
+
+  it('checks Pulse freshness before a generation that can settle balance', async () => {
+    const dependencies = makeAppDependencies();
+    const app = new Hono();
+    app.route('/api', createBackendPlanetRoutes(dependencies));
+    const response = await app.request('/api/planets/generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ transactionHash: proof.originTxHash, logIndex: Number(proof.logIndex) }),
+    });
+
+    expect(response.status).toBe(201);
+    expect(dependencies.assertPulseFresh).toHaveBeenCalledOnce();
   });
 
   it('retires the per-Planet mining route', async () => {
@@ -246,7 +263,7 @@ describe('backend Planet routes', () => {
   });
 
   it('passes only the authenticated session wallet into an owner upgrade', async () => {
-    const { app, purchaseUpgrade } = makeUpgradeApp();
+    const { app, assertPulseFresh, purchaseUpgrade } = makeUpgradeApp();
 
     const response = await app.request(`${SIWE_ORIGIN}/api/planets/planet-1/upgrade`, {
       method: 'POST',
@@ -260,6 +277,7 @@ describe('backend Planet routes', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ upgrade: { purchaseId: 'purchase-1' } });
+    expect(assertPulseFresh).toHaveBeenCalledOnce();
     expect(purchaseUpgrade).toHaveBeenCalledWith(expect.anything(), {
       authenticatedWalletAddress: proof.recipient.toLowerCase(),
       cutoverAt: upgradeConfig.mineralEconomyCutoverAt,
