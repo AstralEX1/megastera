@@ -15,6 +15,11 @@ const mocks = vi.hoisted(() => ({
     currentBalanceMicros: '5000000',
     effectiveMineralsPerDayMicros: '437000000',
     upgradesEnabled: true,
+    galaxyPulse: null as {
+      drawingId: string;
+      settledAt: string;
+      slots: Array<{ planetType: string; modifierBps: number }>;
+    } | null,
     planets: [] as Array<{
       planetId: string;
       planetType: string;
@@ -193,6 +198,7 @@ describe('backend My Planets', () => {
     mocks.mining.effectiveMineralsPerDayMicros = '437000000';
     mocks.mining.asOf = '2026-08-13T12:00:00.000Z';
     mocks.mining.upgradesEnabled = true;
+    mocks.mining.galaxyPulse = null;
     mocks.round = undefined;
     mocks.planetsRefetch.mockReset();
     mocks.ticketRefetch.mockReset();
@@ -235,6 +241,29 @@ describe('backend My Planets', () => {
     );
     expect(screen.getAllByText('Nebula').length).toBeGreaterThan(0);
     expect(screen.queryByText(/Mint|Reveal|NFT BaseScan/)).not.toBeInTheDocument();
+  });
+
+  it('places the active Galaxy Pulse above the collection summary', () => {
+    mocks.planets = [generatedRow(backendPlanet)];
+    mocks.mining.galaxyPulse = {
+      drawingId: '8421',
+      settledAt: '2026-08-22T12:34:56.000Z',
+      slots: [
+        { planetType: 'Gaia', modifierBps: 125 },
+        { planetType: 'Gaia', modifierBps: -50 },
+        { planetType: 'Volcanic', modifierBps: 0 },
+        { planetType: 'Toxic', modifierBps: 100 },
+      ],
+    };
+
+    render(<Planets onNavigate={vi.fn()} onViewPlanet={vi.fn()} />);
+
+    const panel = screen.getByTestId('galaxy-pulse-panel');
+    const summary = screen.getByTestId('collection-summary');
+    expect(panel.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(panel).getByRole('heading', { name: 'Galaxy Pulse' })).toBeInTheDocument();
+    expect(within(panel).getAllByRole('listitem')).toHaveLength(4);
+    expect(within(panel).getByText('DRAWING #8421')).toBeInTheDocument();
   });
 
   it('shows collection counts and mining totals in the requested label-above-value order', () => {
@@ -379,7 +408,7 @@ describe('backend My Planets', () => {
       ).toBeInTheDocument();
       expect(
         within(group).getByRole('tooltip', {
-          name: 'Matching Planets +5% Planet Level +10% Total Boost +15%',
+          name: 'Matching Planets +5% Planet Level +10% Galaxy Pulse +0% Total Boost +15%',
         }),
       ).toBeInTheDocument();
       expect(

@@ -13,7 +13,9 @@ import {
 } from './leaderboard.js';
 import {
   calculateHistoricalProduction,
+  galaxyPulseBpsAt,
   upgradeBonusBpsAt,
+  type GalaxyPulseMiningRound,
   type MineralCollectionPlanet,
   type MineralUpgradePurchase,
 } from './mineralEconomy.js';
@@ -24,6 +26,7 @@ import {
   getPostgresClockTimestamp,
   resolveMineralEconomyForOperation,
 } from './mineralAccounts.js';
+import { loadGalaxyPulseRounds, type GalaxyPulseTemporalRound } from './galaxyPulseStore.js';
 import { calculateLifetimeMinerals, MINERAL_SCALE } from './mining.js';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
@@ -214,6 +217,7 @@ export function calculatePostCutoverLeaderboardRows(input: {
   accounts: readonly SpendableLeaderboardAccount[];
   planets: readonly SpendableLeaderboardPlanet[];
   purchases: readonly SpendableLeaderboardPurchase[];
+  pulseRounds?: readonly GalaxyPulseMiningRound[];
   useCurrentBalance?: boolean;
 }): RankedLeaderboardRow[] {
   if (!Number.isFinite(input.cutoverAt.getTime()))
@@ -274,6 +278,7 @@ export function calculatePostCutoverLeaderboardRows(input: {
       from: input.cutoverAt,
       to: cutoff,
       anchor: input.cutoverAt,
+      pulseRounds: input.pulseRounds,
     });
     const purchaseCostsMicros = purchases.reduce((total, purchase) => total + purchase.costMicros, 0n);
     const currentAccount = account && account.balanceMicros !== undefined && account.lastSettledAt instanceof Date
@@ -287,6 +292,7 @@ export function calculatePostCutoverLeaderboardRows(input: {
           asOf: cutoff,
           planets,
           purchases,
+          pulseRounds: input.pulseRounds,
         })
       : openingBalanceMicros + producedMicros - purchaseCostsMicros;
     if (scoreMicros < 0n) {
@@ -302,7 +308,9 @@ export function calculatePostCutoverLeaderboardRows(input: {
         ownerAddress,
         calculateEffectiveMineralsPerDayMicros(
           planet.baseMineralsPerDay,
-          (collection?.collectionBonusBps ?? 0) + upgradeBonusBps,
+          (collection?.collectionBonusBps ?? 0) +
+            upgradeBonusBps +
+            galaxyPulseBpsAt(input.pulseRounds ?? [], planet.planetType, cutoff.getTime()),
         ),
       );
     }
@@ -399,7 +407,7 @@ async function getLiveLeaderboardSnapshot(
       if (!cutoverAt || asOf < cutoverAt) {
         return { asOf, rows: calculateLiveLeaderboardRows({ asOf, planets }) };
       }
-      const [accounts, purchases] = await Promise.all([
+      const [accounts, purchases, pulseRounds] = await Promise.all([
         transaction.mineralAccount.findMany({
           select: {
             ownerAddress: true,
@@ -420,6 +428,7 @@ async function getLiveLeaderboardSnapshot(
             purchasedAt: true,
           },
         }),
+        transaction.galaxyPulseRound ? loadGalaxyPulseRounds(transaction, asOf) : [],
       ]);
       return {
         asOf,
@@ -430,6 +439,7 @@ async function getLiveLeaderboardSnapshot(
           accounts,
           planets,
           purchases,
+          pulseRounds,
           useCurrentBalance: true,
         }),
       };
@@ -448,6 +458,7 @@ type FinalizationRead = {
   planets: unknown[];
   accounts?: unknown[];
   purchases?: unknown[];
+  pulseRounds?: readonly GalaxyPulseTemporalRound[];
 };
 
 async function readFinalizationData(
@@ -481,7 +492,7 @@ async function readFinalizationData(
   }).planetUpgradePurchase;
   if (!accountModel || !purchaseModel)
     throw new Error('Post-cutover leaderboard models are unavailable.');
-  const [accounts, purchases] = await Promise.all([
+  const [accounts, purchases, pulseRounds] = await Promise.all([
     accountModel.findMany({ select: { ownerAddress: true, openingBalanceMicros: true } }),
     purchaseModel.findMany({
       where: { purchasedAt: { lt: period.endsAt } },
@@ -495,8 +506,11 @@ async function readFinalizationData(
         purchasedAt: true,
       },
     }),
+    transaction.galaxyPulseRound
+      ? loadGalaxyPulseRounds(transaction, new Date(period.endsAt.getTime() - 1))
+      : [],
   ]);
-  return { postCutover, planets, accounts, purchases };
+  return { postCutover, planets, accounts, purchases, pulseRounds };
 }
 
 function rowsForFinalization(
@@ -512,6 +526,7 @@ function rowsForFinalization(
       planets: data.planets as SpendableLeaderboardPlanet[],
       accounts: data.accounts as SpendableLeaderboardAccount[],
       purchases: data.purchases as SpendableLeaderboardPurchase[],
+      pulseRounds: data.pulseRounds,
     });
   }
   return calculateLeaderboardRows({

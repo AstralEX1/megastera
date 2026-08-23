@@ -27,6 +27,11 @@ export type MineralUpgradePurchase = {
   purchasedAt: Date;
 };
 
+export type GalaxyPulseMiningRound = {
+  settledAt: Date;
+  modifiersBps: Readonly<Record<string, number>>;
+};
+
 function activationAt(planet: MineralCollectionPlanet): Date {
   const value = planet.activatedAt ?? planet.generatedAt;
   if (!value) throw new Error(`Planet ${planet.id} activation timestamp is missing.`);
@@ -220,11 +225,31 @@ export function upgradeBonusBpsAt(
   return bonusBps;
 }
 
+export function galaxyPulseBpsAt(
+  rounds: readonly GalaxyPulseMiningRound[],
+  planetType: string,
+  atMilliseconds: number,
+): number {
+  let active: GalaxyPulseMiningRound | undefined;
+  let activeAt = Number.NEGATIVE_INFINITY;
+  for (const round of rounds) {
+    const settledAt = timestamp(round.settledAt, 'Galaxy Pulse settlement');
+    if (settledAt <= atMilliseconds && settledAt >= activeAt) {
+      active = round;
+      activeAt = settledAt;
+    }
+  }
+  const modifierBps = active?.modifiersBps[planetType.toLowerCase()] ?? 0;
+  if (!Number.isInteger(modifierBps)) throw new Error('Galaxy Pulse modifier must be an integer.');
+  return modifierBps;
+}
+
 /** Calculates historical production with collection and upgrade events over [from, to). */
 export function calculateHistoricalPlanetProduction(input: {
   planet: MineralCollectionPlanet;
   planets: readonly MineralCollectionPlanet[];
   purchases: readonly MineralUpgradePurchase[];
+  pulseRounds?: readonly GalaxyPulseMiningRound[];
   from: Date;
   to: Date;
   anchor: Date;
@@ -251,19 +276,24 @@ export function calculateHistoricalPlanetProduction(input: {
       eventTimes.add(purchaseTime);
     }
   }
+  for (const pulse of input.pulseRounds ?? []) {
+    const pulseTime = timestamp(pulse.settledAt, 'Galaxy Pulse settlement');
+    if (pulseTime > startMilliseconds && pulseTime < toMilliseconds) eventTimes.add(pulseTime);
+  }
 
   const orderedEvents = [...eventTimes].sort((left, right) => left - right);
   let cursor = new Date(startMilliseconds);
   let activeCount = group.filter((candidate) => activationAt(candidate).getTime() <= startMilliseconds).length;
   let activeBonusBps = collectionBonusBpsForCount(activeCount);
   let activeUpgradeBonusBps = upgradeBonusBpsAt(input.purchases, input.planet.id, startMilliseconds);
+  let activePulseBps = galaxyPulseBpsAt(input.pulseRounds ?? [], input.planet.planetType, startMilliseconds);
   let total = 0n;
 
   for (const eventTime of orderedEvents) {
     total += calculateConstantRateSegment({
       rateMicrosPerDay: calculateEffectiveMineralsPerDayMicros(
         input.planet.baseMineralsPerDay,
-        activeBonusBps + activeUpgradeBonusBps,
+        activeBonusBps + activeUpgradeBonusBps + activePulseBps,
       ),
       from: cursor,
       to: new Date(eventTime),
@@ -273,13 +303,14 @@ export function calculateHistoricalPlanetProduction(input: {
     activeCount += eventActivations;
     activeBonusBps = collectionBonusBpsForCount(activeCount);
     activeUpgradeBonusBps = upgradeBonusBpsAt(input.purchases, input.planet.id, eventTime);
+    activePulseBps = galaxyPulseBpsAt(input.pulseRounds ?? [], input.planet.planetType, eventTime);
     cursor = new Date(eventTime);
   }
 
   total += calculateConstantRateSegment({
     rateMicrosPerDay: calculateEffectiveMineralsPerDayMicros(
       input.planet.baseMineralsPerDay,
-      activeBonusBps + activeUpgradeBonusBps,
+      activeBonusBps + activeUpgradeBonusBps + activePulseBps,
     ),
     from: cursor,
     to: input.to,
@@ -292,6 +323,7 @@ export function calculateHistoricalPlanetProduction(input: {
 export function calculateHistoricalProduction(input: {
   planets: readonly MineralCollectionPlanet[];
   purchases: readonly MineralUpgradePurchase[];
+  pulseRounds?: readonly GalaxyPulseMiningRound[];
   from: Date;
   to: Date;
   anchor: Date;

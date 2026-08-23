@@ -251,6 +251,16 @@ model IndexerCursor {
   @@map("indexer_cursors")
 }
 
+model GalaxyPulseRound {
+  drawingId        Decimal  @id @db.Decimal(78, 0)
+  entropy          String   @db.Char(66)
+  settlementTxHash String   @db.Char(66)
+  settledAt        DateTime @db.Timestamptz(3)
+
+  @@index([settledAt])
+  @@map("galaxy_pulse_rounds")
+}
+
 model DailySnapshotRecord {
   id          String   @id @default(uuid()) @db.Uuid
   blockNumber BigInt

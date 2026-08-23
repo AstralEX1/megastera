@@ -4,6 +4,7 @@ import { Button } from '@/components/common/Button';
 import { FadeArc } from '@/components/common/FadeArc';
 import { Ball } from '@/components/lottery/Ball';
 import { BackendPlanetPreview } from '@/components/planets/BackendPlanetPreview';
+import { GalaxyPulsePanel } from '@/components/planets/GalaxyPulsePanel';
 import { LiveMineralAmount } from '@/components/planets/LiveMineralAmount';
 import { PlanetMiningMetrics } from '@/components/planets/PlanetMiningOverlay';
 import { PlanetTicketAction } from '@/components/planets/PlanetTicketAction';
@@ -959,6 +960,8 @@ export function Planets({ onNavigate, onViewPlanet, routePlanetId }: PlanetsProp
           </Button>
         </div>
       </header>
+
+      <GalaxyPulsePanel pulse={mining.data?.galaxyPulse ?? null} />
 
       <CollectionSummary
         planetCount={generatedCount}

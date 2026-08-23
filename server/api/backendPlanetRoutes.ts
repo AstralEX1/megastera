@@ -18,6 +18,10 @@ import { reportBackendError } from './errorDiagnostics.js';
 import type { PrismaClient } from './generated/prisma/client.js';
 import { purchasePlanetUpgrade } from './mineralAccounts.js';
 import {
+  assertGalaxyPulseFresh,
+  isGalaxyPulseFreshnessError,
+} from './galaxyPulseFreshness.js';
+import {
   createSiweAuthRoutes,
   getSiweSessionAddress,
   isExactSiweRequestOrigin,
@@ -34,6 +38,11 @@ export type BackendPlanetRouteDependencies = {
   now: () => Date;
   getPrisma?: (config: BackendPlanetConfig) => PrismaClient;
   purchaseUpgrade: typeof purchasePlanetUpgrade;
+  assertPulseFresh: (
+    config: BackendPlanetConfig,
+    prisma: PrismaClient,
+    now: Date,
+  ) => Promise<void>;
 };
 
 const MAX_BATCH = 50;
@@ -75,6 +84,11 @@ function defaultDependencies(): BackendPlanetRouteDependencies {
     allows: createRateLimiter(),
     now: () => new Date(),
     purchaseUpgrade: purchasePlanetUpgrade,
+    assertPulseFresh: (config, prisma, now) => assertGalaxyPulseFresh({
+      prisma,
+      galaxyPulseStartBlock: config.galaxyPulseStartBlock ?? null,
+      now,
+    }),
   };
 }
 
@@ -117,6 +131,7 @@ export function createBackendPlanetRoutes(
       if (!dependencies.allows(key)) throw new Error('Planet generation is rate limited.');
       const proof = await dependencies.findTicket(config, reference);
       await dependencies.saveProof(config, proof);
+      await dependencies.assertPulseFresh(config, getPrisma(config), dependencies.now());
       return dependencies.getStore(config).generatePlanet(proof);
     })();
     inFlight.set(key, operation);
@@ -143,7 +158,10 @@ export function createBackendPlanetRoutes(
       if (!reference) return c.json({ error: 'Every reference must contain a valid transactionHash and logIndex.' }, 400);
       try {
         planets.push(serializePlanet(await generate(reference)));
-      } catch {
+      } catch (error) {
+        if (isGalaxyPulseFreshnessError(error)) {
+          return c.json({ error: 'Galaxy Pulse is updating. Retry later.' }, 503);
+        }
         return c.json({ error: 'Planet generation failed.' }, 422);
       }
     }
@@ -163,6 +181,9 @@ export function createBackendPlanetRoutes(
       return c.json({ planet: serializePlanet(await generate(reference)) }, 201);
     } catch (error) {
       if (error instanceof Error && error.message.includes('rate limited')) return c.json({ error: error.message }, 429);
+      if (isGalaxyPulseFreshnessError(error)) {
+        return c.json({ error: 'Galaxy Pulse is updating. Retry later.' }, 503);
+      }
       return c.json({ error: 'Planet generation failed.' }, 422);
     }
   });
@@ -297,6 +318,7 @@ export function createBackendPlanetRoutes(
     ) return c.json({ error: 'Wallet authentication is required.' }, 401);
 
     try {
+      await dependencies.assertPulseFresh(config, getPrisma(config), dependencies.now());
       const upgrade = await dependencies.purchaseUpgrade(getPrisma(config), {
         authenticatedWalletAddress,
         cutoverAt: config.mineralEconomyCutoverAt,

@@ -15,7 +15,7 @@ describe('backend mining fetchers', () => {
   });
 
   it('loads one aggregated wallet mining snapshot', async () => {
-    const payload = { mining: { ownerAddress: ADDRESS, asOf: '2026-08-12T12:00:00.000Z', ownedPlanetCount: 1, currentBalanceMicros: '2', effectiveMineralsPerDayMicros: '3', upgradesEnabled: false, planets: [] } };
+    const payload = { mining: { ownerAddress: ADDRESS, asOf: '2026-08-12T12:00:00.000Z', ownedPlanetCount: 1, currentBalanceMicros: '2', effectiveMineralsPerDayMicros: '3', upgradesEnabled: false, galaxyPulse: null, planets: [] } };
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 

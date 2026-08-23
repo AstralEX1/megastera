@@ -11,8 +11,8 @@ type PlanetMiningMetricsProps = {
   mining?: PlanetMiningSnapshot;
 };
 
-function formatCollectionBonus(bps: number): string {
-  return `+${bps / 100}%`;
+function formatBonusBps(bps: number): string {
+  return `${bps < 0 ? '' : '+'}${bps / 100}%`;
 }
 
 const METRIC_TOOLTIPS = {
@@ -62,7 +62,8 @@ function MetricsContent({ mining, size }: PlanetMiningMetricsProps & { size: Met
   }
 
   const upgradeBonusBps = mining.upgradeBonusBps ?? 0;
-  const totalBonusBps = mining.collectionBonusBps + upgradeBonusBps;
+  const galaxyPulseBps = mining.galaxyPulseBps ?? 0;
+  const totalBonusBps = mining.collectionBonusBps + upgradeBonusBps + galaxyPulseBps;
   const boosted = totalBonusBps > 0;
   const effectiveRateClass = boosted ? 'text-[var(--rare)]' : 'text-[var(--text-primary)]';
   const bonusClass = boosted ? 'text-[var(--rare)]' : 'text-[var(--text-secondary)]';
@@ -82,21 +83,22 @@ function MetricsContent({ mining, size }: PlanetMiningMetricsProps & { size: Met
       <MetricTooltip
         description={
           <span className="grid gap-0.5">
-            <span>Matching Planets {formatCollectionBonus(mining.collectionBonusBps)}</span>
-            <span>Planet Level {formatCollectionBonus(upgradeBonusBps)}</span>
+            <span>Matching Planets {formatBonusBps(mining.collectionBonusBps)}</span>
+            <span>Planet Level {formatBonusBps(upgradeBonusBps)}</span>
+            <span>Galaxy Pulse {formatBonusBps(galaxyPulseBps)}</span>
             <span className="border-t border-white/20 pt-0.5">
-              Total Boost {formatCollectionBonus(totalBonusBps)}
+              Total Boost {formatBonusBps(totalBonusBps)}
             </span>
           </span>
         }
         id={`${tooltipId}-boost`}
         className={`text-center ${cellSpacing}`}
         tooltipClassName="h-auto min-w-[10.5rem] whitespace-normal px-2 py-1.5 text-left leading-4"
-        accessibleDescription={`Matching Planets ${formatCollectionBonus(mining.collectionBonusBps)} Planet Level ${formatCollectionBonus(upgradeBonusBps)} Total Boost ${formatCollectionBonus(totalBonusBps)}`}
+        accessibleDescription={`Matching Planets ${formatBonusBps(mining.collectionBonusBps)} Planet Level ${formatBonusBps(upgradeBonusBps)} Galaxy Pulse ${formatBonusBps(galaxyPulseBps)} Total Boost ${formatBonusBps(totalBonusBps)}`}
       >
         <p className={labelClass}>BOOST</p>
         <strong className={`mt-1 block font-hud tabular-nums whitespace-nowrap ${valueSize} ${bonusClass}`}>
-          {formatCollectionBonus(totalBonusBps)}
+          {formatBonusBps(totalBonusBps)}
         </strong>
       </MetricTooltip>
     </>

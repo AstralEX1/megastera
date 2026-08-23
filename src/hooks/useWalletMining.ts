@@ -16,7 +16,14 @@ export type PlanetMiningSnapshot = {
   effectiveMineralsPerDayMicros: string;
   upgradeLevel: number;
   upgradeBonusBps: number;
+  galaxyPulseBps: number;
   nextUpgrade: PlanetUpgradeSnapshot | null;
+};
+
+export type GalaxyPulseSnapshot = {
+  drawingId: string;
+  settledAt: string;
+  slots: Array<{ planetType: string; modifierBps: number }>;
 };
 
 export type WalletMiningSnapshot = {
@@ -26,6 +33,7 @@ export type WalletMiningSnapshot = {
   currentBalanceMicros: string;
   effectiveMineralsPerDayMicros: string;
   upgradesEnabled: boolean;
+  galaxyPulse: GalaxyPulseSnapshot | null;
   planets: PlanetMiningSnapshot[];
 };
 
@@ -60,6 +68,13 @@ function requiredInteger(value: unknown, label: string, minimum: number): number
   return value;
 }
 
+function requiredSignedInteger(value: unknown, label: string, minimum: number, maximum: number): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < minimum || value > maximum) {
+    throw new Error(`Wallet mining ${label} is malformed.`);
+  }
+  return value;
+}
+
 function isWalletAddress(value: unknown): value is `0x${string}` {
   return typeof value === 'string' && /^0x[\da-fA-F]{40}$/.test(value);
 }
@@ -89,6 +104,30 @@ function parseNextUpgrade(value: unknown): PlanetUpgradeSnapshot | null {
   };
 }
 
+function parseGalaxyPulse(value: unknown): GalaxyPulseSnapshot | null {
+  if (value === null || value === undefined) return null;
+  const pulse = requiredObject(value, 'galaxyPulse');
+  if (!Array.isArray(pulse.slots) || pulse.slots.length !== 4) {
+    throw new Error('Wallet mining galaxyPulse.slots is malformed.');
+  }
+  return {
+    drawingId: requiredMicros(pulse.drawingId, 'galaxyPulse.drawingId'),
+    settledAt: requiredTimestamp(pulse.settledAt, 'galaxyPulse.settledAt'),
+    slots: pulse.slots.map((value) => {
+      const slot = requiredObject(value, 'galaxyPulse slot');
+      return {
+        planetType: requiredString(slot.planetType, 'galaxyPulse slot planetType'),
+        modifierBps: requiredSignedInteger(
+          slot.modifierBps,
+          'galaxyPulse slot modifierBps',
+          -5_000,
+          5_000,
+        ),
+      };
+    }),
+  };
+}
+
 function parsePlanet(value: unknown, upgradesEnabled: boolean): PlanetMiningSnapshot {
   const planet = requiredObject(value, 'Planet');
   const upgradeLevel = planet.upgradeLevel === undefined && !upgradesEnabled
@@ -111,6 +150,9 @@ function parsePlanet(value: unknown, upgradesEnabled: boolean): PlanetMiningSnap
     effectiveMineralsPerDayMicros: requiredMicros(planet.effectiveMineralsPerDayMicros, 'Planet effectiveMineralsPerDayMicros'),
     upgradeLevel,
     upgradeBonusBps,
+    galaxyPulseBps: planet.galaxyPulseBps === undefined
+      ? 0
+      : requiredSignedInteger(planet.galaxyPulseBps, 'Planet galaxyPulseBps', -20_000, 20_000),
     nextUpgrade,
   };
 }
@@ -128,6 +170,7 @@ export function parseWalletMiningSnapshot(value: unknown): WalletMiningSnapshot 
     currentBalanceMicros: requiredMicros(mining.currentBalanceMicros, 'currentBalanceMicros'),
     effectiveMineralsPerDayMicros: requiredMicros(mining.effectiveMineralsPerDayMicros, 'effectiveMineralsPerDayMicros'),
     upgradesEnabled,
+    galaxyPulse: parseGalaxyPulse(mining.galaxyPulse),
     planets: mining.planets.map((planet) => parsePlanet(planet, upgradesEnabled)),
   };
 }

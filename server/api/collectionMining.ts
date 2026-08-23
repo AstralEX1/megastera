@@ -44,16 +44,17 @@ export function collectionBonusBpsForCount(count: number): number {
 
 export function calculateEffectiveMineralsPerDayMicros(
   baseMineralsPerDay: bigint,
-  collectionBonusBps: number,
+  totalModifierBps: number,
 ): bigint {
   if (baseMineralsPerDay < 0n) throw new Error('baseMineralsPerDay cannot be negative.');
-  if (!Number.isInteger(collectionBonusBps) || collectionBonusBps < 0) {
-    throw new RangeError('Collection bonus basis points must be a non-negative integer.');
+  if (!Number.isInteger(totalModifierBps)) {
+    throw new RangeError('Mining modifier basis points must be an integer.');
   }
+  const multiplierBps = Math.max(0, 10_000 + totalModifierBps);
   return (
     baseMineralsPerDay *
     MINERAL_SCALE *
-    BigInt(10_000 + collectionBonusBps)
+    BigInt(multiplierBps)
   ) / BONUS_DENOMINATOR_BPS;
 }
 

@@ -13,6 +13,7 @@ const mining = {
   effectiveMineralsPerDayMicros: '25200000',
   upgradeLevel: 1,
   upgradeBonusBps: 1000,
+  galaxyPulseBps: 0,
   nextUpgrade: { targetLevel: 2, bonusBpsAfter: 2500, costMicros: '300000' },
 };
 
@@ -29,7 +30,7 @@ describe('PlanetMiningOverlay', () => {
     expect(rate.compareDocumentPosition(boost) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const rateTooltip = screen.getByRole('tooltip', { name: 'Minerals per day including boost' });
     const boostTooltip = screen.getByRole('tooltip', {
-      name: 'Matching Planets +5% Planet Level +10% Total Boost +15%',
+      name: 'Matching Planets +5% Planet Level +10% Galaxy Pulse +0% Total Boost +15%',
     });
     expect(rateTooltip).toHaveClass('h-[22px]', 'px-2', 'text-[10px]', 'font-medium', 'duration-150', 'group-hover/metric:opacity-100');
     expect(rateTooltip).not.toHaveClass('group-hover:opacity-100');
@@ -53,9 +54,18 @@ describe('PlanetMiningOverlay', () => {
     expect(screen.getByText('+10%')).toBeInTheDocument();
     expect(screen.getByText('+10%')).toHaveClass('text-[var(--rare)]');
     expect(screen.getByRole('tooltip', {
-      name: 'Matching Planets +0% Planet Level +10% Total Boost +10%',
+      name: 'Matching Planets +0% Planet Level +10% Galaxy Pulse +0% Total Boost +10%',
     })).toBeInTheDocument();
     expect(screen.getByText('BOOST')).toBeInTheDocument();
+  });
+
+  it('includes the Galaxy Pulse modifier in the boost breakdown and total', () => {
+    render(<PlanetMiningOverlay mining={{ ...mining, galaxyPulseBps: -250 }} />);
+
+    expect(screen.getByRole('tooltip', {
+      name: 'Matching Planets +5% Planet Level +10% Galaxy Pulse -2.5% Total Boost +12.5%',
+    })).toBeInTheDocument();
+    expect(screen.getByText('+12.5%')).toBeInTheDocument();
   });
 
   it('does not invent mining values when the backend snapshot is unavailable', () => {
