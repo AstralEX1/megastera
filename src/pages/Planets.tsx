@@ -934,13 +934,17 @@ export function Planets({ onNavigate, onViewPlanet, routePlanetId }: PlanetsProp
 
   return (
     <section className="mx-auto space-y-6 pb-10">
-      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-[var(--border)] pb-5">
+      <header
+        data-testid="planets-page-header"
+        className="relative z-20 grid grid-cols-1 items-center gap-4 border-b border-[var(--border)] pb-5 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]"
+      >
         <div>
           <h1 className="font-hud text-3xl font-bold tracking-[-0.05em] text-[var(--text-primary)] sm:text-4xl">
             My Planets
           </h1>
         </div>
-        <div className="flex items-center gap-3">
+        <GalaxyPulsePanel pulse={mining.data?.galaxyPulse ?? null} />
+        <div className="flex items-center gap-3 lg:justify-self-end">
           <Button
             variant="secondary"
             disabled={refreshing}
@@ -962,8 +966,6 @@ export function Planets({ onNavigate, onViewPlanet, routePlanetId }: PlanetsProp
           </Button>
         </div>
       </header>
-
-      <GalaxyPulsePanel pulse={mining.data?.galaxyPulse ?? null} />
 
       <CollectionSummary
         planetCount={generatedCount}

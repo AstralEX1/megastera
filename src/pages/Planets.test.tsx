@@ -243,7 +243,7 @@ describe('backend My Planets', () => {
     expect(screen.queryByText(/Mint|Reveal|NFT BaseScan/)).not.toBeInTheDocument();
   });
 
-  it('places the active Galaxy Pulse above the collection summary', () => {
+  it('places the active Galaxy Pulse between the page title and Refresh', () => {
     mocks.planets = [generatedRow(backendPlanet)];
     mocks.mining.galaxyPulse = {
       drawingId: '8421',
@@ -258,12 +258,21 @@ describe('backend My Planets', () => {
 
     render(<Planets onNavigate={vi.fn()} onViewPlanet={vi.fn()} />);
 
-    const panel = screen.getByTestId('galaxy-pulse-panel');
+    const header = screen.getByTestId('planets-page-header');
+    const panel = within(header).getByTestId('galaxy-pulse-panel');
+    const refresh = within(header).getByRole('button', { name: 'Refresh' });
     const summary = screen.getByTestId('collection-summary');
+    expect(header).toHaveClass('lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]');
+    expect(panel).toHaveClass('lg:justify-self-center');
+    expect(refresh.parentElement).toHaveClass('lg:justify-self-end');
+    expect(panel.compareDocumentPosition(refresh) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(panel.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(within(panel).getByRole('heading', { name: 'Galaxy Pulse' })).toBeInTheDocument();
-    expect(within(panel).getAllByRole('listitem')).toHaveLength(4);
-    expect(within(panel).getByText('DRAWING #8421')).toBeInTheDocument();
+    expect(within(panel).getByRole('heading', { name: 'GALAXY PULSE' })).toBeInTheDocument();
+    expect(within(panel).getByRole('list', { name: 'Galaxy Pulse effects' })).toBeInTheDocument();
+    expect(
+      within(panel).getByRole('list', { name: 'Galaxy Pulse effects' }).querySelectorAll('li'),
+    ).toHaveLength(4);
+    expect(within(panel).getByRole('tooltip')).toHaveTextContent('DRAWING #8421');
   });
 
   it('shows collection counts and mining totals in the requested label-above-value order', () => {

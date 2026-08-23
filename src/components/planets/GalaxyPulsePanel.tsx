@@ -13,6 +13,8 @@ export type GalaxyPulsePanelProps = {
   pulse: GalaxyPulse | null;
 };
 
+const GALAXY_PULSE_TOOLTIP_ID = 'galaxy-pulse-details';
+
 const PLANET_TYPE_ICONS: Record<string, string> = {
   Nebula: '/galaxy-pulse/nebula.png',
   Desert: '/galaxy-pulse/desert.png',
@@ -45,71 +47,140 @@ function formatSettledAt(settledAt: string): string {
 }
 
 export function GalaxyPulsePanel({ pulse }: GalaxyPulsePanelProps) {
-  const slotOccurrences = new Map<string, number>();
+  const previewSlotOccurrences = new Map<string, number>();
+  const effectSlotOccurrences = new Map<string, number>();
 
   return (
     <section
       data-testid="galaxy-pulse-panel"
       aria-labelledby="galaxy-pulse-heading"
-      className="mx-auto w-full max-w-xl rounded-2xl border border-[var(--border)] bg-[var(--surface-raised)] p-3.5"
+      className="w-full min-w-0 lg:w-fit lg:justify-self-center"
     >
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border)] pb-3">
-        <div>
-          <p className="telemetry text-[var(--text-secondary)]">ACTIVE DRAWING</p>
-          <h2
-            id="galaxy-pulse-heading"
-            className="mt-1 font-hud text-lg font-bold tracking-[-0.03em] text-[var(--text-primary)]"
-          >
-            Galaxy Pulse
-          </h2>
-        </div>
-        {pulse ? (
-          <div className="flex flex-col items-end gap-1 text-right font-mono text-[10px] text-[var(--text-secondary)]">
-            <span>DRAWING #{pulse.drawingId}</span>
-            <time dateTime={pulse.settledAt}>Settled {formatSettledAt(pulse.settledAt)} UTC</time>
+      <div className="group relative min-w-0">
+        <div className="flex min-h-14 w-full min-w-0 items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-raised)] px-3 py-2 text-left transition-[border-color,background-color] duration-150 group-hover:border-[var(--border-strong)] group-hover:bg-[var(--surface-hover)] motion-reduce:transition-none">
+          <div className="flex min-w-0 shrink-0 flex-col">
+            <h2
+              id="galaxy-pulse-heading"
+              className="font-hud text-sm font-bold tracking-[-0.03em] text-[var(--text-primary)]"
+            >
+              GALAXY PULSE
+            </h2>
+            {pulse ? (
+              <span className="font-mono text-[10px] text-[var(--text-secondary)]">
+                DRAWING #{pulse.drawingId}
+              </span>
+            ) : (
+              <span className="font-mono text-[10px] text-[var(--text-secondary)]">
+                No active GALAXY PULSE
+              </span>
+            )}
           </div>
-        ) : null}
-      </header>
 
-      {pulse ? (
-        <ol aria-label="Galaxy Pulse slots" className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {pulse.slots.map((slot) => {
-            const baseKey = `${slot.planetType}-${slot.modifierBps}`;
-            const occurrence = slotOccurrences.get(baseKey) ?? 0;
-            slotOccurrences.set(baseKey, occurrence + 1);
-            const icon = PLANET_TYPE_ICONS[slot.planetType];
-
-            return (
-              <li
-                key={`${baseKey}-${occurrence}`}
-                className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2"
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  {icon ? (
-                    <img
-                      src={icon}
-                      alt=""
-                      aria-hidden="true"
-                      width={40}
-                      height={40}
-                      loading="lazy"
-                      className="size-10 shrink-0 object-contain [image-rendering:pixelated]"
-                    />
-                  ) : null}
-                  <span className="min-w-0 truncate font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--text-primary)]">
-                    {slot.planetType}
+          {pulse ? (
+            <span aria-hidden="true" className="ml-auto flex min-w-0 items-center gap-1">
+              {pulse.slots.map((slot) => {
+                const icon = PLANET_TYPE_ICONS[slot.planetType];
+                const baseKey = `${slot.planetType}-${slot.modifierBps}`;
+                const occurrence = previewSlotOccurrences.get(baseKey) ?? 0;
+                previewSlotOccurrences.set(baseKey, occurrence + 1);
+                return (
+                  <span
+                    key={`${baseKey}-${occurrence}`}
+                    className="grid size-10 shrink-0 place-items-center"
+                  >
+                    {icon ? (
+                      <img
+                        src={icon}
+                        alt=""
+                        aria-hidden="true"
+                        width={32}
+                        height={32}
+                        className="size-8 object-contain [image-rendering:pixelated]"
+                      />
+                    ) : null}
                   </span>
-                </span>
-                <span className="shrink-0 font-mono text-xs tabular-nums text-[var(--text-secondary)]">
-                  {formatModifierBps(slot.modifierBps)}
-                </span>
-              </li>
-            );
-          })}
-        </ol>
-      ) : (
-        <p className="pt-3 text-sm text-[var(--text-secondary)]">No active Galaxy Pulse</p>
-      )}
+                );
+              })}
+            </span>
+          ) : null}
+        </div>
+
+        <button
+          type="button"
+          data-testid="galaxy-pulse-tooltip-trigger"
+          aria-label="Galaxy Pulse details"
+          aria-describedby={GALAXY_PULSE_TOOLTIP_ID}
+          className="absolute inset-0 z-10 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] motion-reduce:transition-none"
+        />
+
+        <div
+          id={GALAXY_PULSE_TOOLTIP_ID}
+          role="tooltip"
+          className="pointer-events-none absolute left-0 top-full z-30 mt-2 w-full translate-y-1 rounded-xl border border-[var(--border-strong)] bg-[var(--surface-raised)] p-4 text-left opacity-0 shadow-[0_18px_42px_rgba(0,0,0,0.45)] transition-[opacity,transform] duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100 motion-reduce:transition-none"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <p className="telemetry text-[var(--text-secondary)]">GALAXY PULSE</p>
+            {pulse ? (
+              <span className="font-mono text-[10px] text-[var(--text-secondary)]">
+                DRAWING #{pulse.drawingId}
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-2 text-xs leading-5 text-[var(--text-primary)]">
+            GALAXY PULSE is a set of mining modifiers selected for this drawing. Each effect applies
+            to planets of the matching type.
+          </p>
+
+          {pulse ? (
+            <>
+              <h3 className="mt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--text-secondary)]">
+                Effects
+              </h3>
+              <ol aria-label="Galaxy Pulse effects" className="mt-2 space-y-1.5">
+                {pulse.slots.map((slot) => {
+                  const icon = PLANET_TYPE_ICONS[slot.planetType];
+                  const baseKey = `${slot.planetType}-${slot.modifierBps}`;
+                  const occurrence = effectSlotOccurrences.get(baseKey) ?? 0;
+                  effectSlotOccurrences.set(baseKey, occurrence + 1);
+                  return (
+                    <li
+                      key={`${baseKey}-detail-${occurrence}`}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        {icon ? (
+                          <img
+                            src={icon}
+                            alt=""
+                            aria-hidden="true"
+                            width={28}
+                            height={28}
+                            className="size-7 shrink-0 object-contain [image-rendering:pixelated]"
+                          />
+                        ) : null}
+                        <span className="truncate font-mono text-xs text-[var(--text-primary)]">
+                          {slot.planetType}
+                        </span>
+                      </span>
+                      <span className="shrink-0 font-mono text-xs tabular-nums text-[var(--text-secondary)]">
+                        {formatModifierBps(slot.modifierBps)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+              <time
+                dateTime={pulse.settledAt}
+                className="mt-3 block font-mono text-[10px] text-[var(--text-secondary)]"
+              >
+                Settled {formatSettledAt(pulse.settledAt)} UTC
+              </time>
+            </>
+          ) : (
+            <p className="mt-3 text-xs text-[var(--text-secondary)]">No active GALAXY PULSE</p>
+          )}
+        </div>
+      </div>
     </section>
   );
 }
