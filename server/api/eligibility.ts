@@ -1,4 +1,4 @@
-import { getAddress, isHash, parseEventLogs, stringToHex, type Address, type Hex, type Log, type TransactionReceipt } from 'viem';
+import { getAddress, isAddress, isHash, isHex, parseEventLogs, stringToHex, type Address, type Hex, type Log, type TransactionReceipt } from 'viem';
 import { BASE_CHAIN_ID, MEGASTERA_SOURCE } from './config.js';
 import { validateTicketPurchasedFields } from '../../shared/ticketValidation.js';
 
@@ -31,6 +31,30 @@ export type MegasteraProofReference = {
 };
 
 const CANONICAL_SOURCE = stringToHex(MEGASTERA_SOURCE, { size: 32 });
+
+type TicketPurchasedEventArgs = {
+  recipient: Address;
+  currentDrawingId: bigint;
+  source: Hex;
+  userTicketId: bigint;
+  normals: readonly number[];
+  bonusball: number;
+};
+
+function isTicketPurchasedEventArgs(value: unknown): value is TicketPurchasedEventArgs {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const args = value as Record<string, unknown>;
+  return (
+    typeof args.recipient === 'string' &&
+    isAddress(args.recipient) &&
+    typeof args.currentDrawingId === 'bigint' &&
+    isHex(args.source) &&
+    typeof args.userTicketId === 'bigint' &&
+    Array.isArray(args.normals) &&
+    args.normals.every((normal: unknown) => typeof normal === 'number') &&
+    typeof args.bonusball === 'number'
+  );
+}
 
 function asBigInt(value: unknown, label: string): bigint {
   try {
@@ -86,15 +110,15 @@ export function decodeEligibleTicket(log: Log): EligibleTicket {
     logs: [log],
     strict: true,
   });
-  if (!event) throw new Error('Malformed TicketPurchased event.');
-  if (event.args.source !== stringToHex(MEGASTERA_SOURCE, { size: 32 })) throw new Error('Ticket was not purchased through MEGASTERA.');
-  const { recipient } = event.args;
-  if (!recipient) throw new Error('Malformed TicketPurchased event.');
+  const args = event?.args;
+  if (!isTicketPurchasedEventArgs(args)) throw new Error('Malformed TicketPurchased event.');
+  if (args.source !== stringToHex(MEGASTERA_SOURCE, { size: 32 })) throw new Error('Ticket was not purchased through MEGASTERA.');
+  const { recipient } = args;
   const validated = validateTicketPurchasedFields({
-    ticketId: event.args.userTicketId,
-    drawingId: event.args.currentDrawingId,
-    normals: event.args.normals,
-    bonusBall: event.args.bonusball,
+    ticketId: args.userTicketId,
+    drawingId: args.currentDrawingId,
+    normals: args.normals,
+    bonusBall: args.bonusball,
     logIndex: log.logIndex,
   });
   return { recipient, ...validated, originTxHash: log.transactionHash, blockNumber: log.blockNumber };
