@@ -15,6 +15,17 @@ const pulse = {
   ],
 } as const;
 
+const lowercasePulse = {
+  drawingId: '151',
+  settledAt: '2026-08-22T17:00:00.000Z',
+  slots: [
+    { planetType: 'nebula', modifierBps: -2691 },
+    { planetType: 'rocky', modifierBps: 2066 },
+    { planetType: 'triplex', modifierBps: -1576 },
+    { planetType: 'toxic', modifierBps: 4494 },
+  ],
+} as const;
+
 describe('GalaxyPulsePanel', () => {
   afterEach(cleanup);
 
@@ -56,6 +67,31 @@ describe('GalaxyPulsePanel', () => {
     expect(icons[2]).toHaveAttribute('src', '/galaxy-pulse/volcanic.png');
     expect(icons[3]).toHaveAttribute('src', '/galaxy-pulse/toxic.png');
     expect(icons[0]).toHaveAttribute('alt', '');
+  });
+
+  it('loads icons for canonical lowercase planet type ids', () => {
+    render(<GalaxyPulsePanel pulse={lowercasePulse} />);
+
+    const icons = screen.getByRole('tooltip').querySelectorAll('img');
+    expect([...icons].map((icon) => icon.getAttribute('src'))).toEqual([
+      '/galaxy-pulse/nebula.png',
+      '/galaxy-pulse/rocky.png',
+      '/galaxy-pulse/triplex.png',
+      '/galaxy-pulse/toxic.png',
+    ]);
+  });
+
+  it('uses a red-violet gradient frame for the header and tooltip', () => {
+    render(<GalaxyPulsePanel pulse={pulse} />);
+
+    const gradientClasses = [
+      'bg-gradient-to-r',
+      'from-red-500',
+      'via-fuchsia-500',
+      'to-violet-600',
+    ];
+    expect(screen.getByTestId('galaxy-pulse-frame')).toHaveClass(...gradientClasses);
+    expect(screen.getByRole('tooltip')).toHaveClass(...gradientClasses);
   });
 
   it('exposes a detailed tooltip with the pulse explanation and effects', () => {
