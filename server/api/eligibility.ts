@@ -1,4 +1,4 @@
-import { decodeEventLog, getAddress, isHash, stringToHex, type Address, type Hex, type Log, type TransactionReceipt } from 'viem';
+import { getAddress, isHash, parseEventLogs, stringToHex, type Address, type Hex, type Log, type TransactionReceipt } from 'viem';
 import { BASE_CHAIN_ID, MEGASTERA_SOURCE } from './config.js';
 import { validateTicketPurchasedFields } from '../../shared/ticketValidation.js';
 
@@ -80,12 +80,13 @@ export function normalizeMegasteraProof(value: MegasteraProof | Record<string, u
 /** Decodes only a canonical Megastera purchase log; all other logs fail closed. */
 export function decodeEligibleTicket(log: Log): EligibleTicket {
   if (getAddress(log.address) !== BASE_JACKPOT || log.blockNumber === null || log.blockNumber === undefined || !log.transactionHash) throw new Error('Ticket log is not a canonical Megastera purchase.');
-  const event = decodeEventLog({
+  const [event] = parseEventLogs({
     abi: TICKET_PURCHASED_ABI,
     eventName: 'TicketPurchased',
-    data: log.data,
-    topics: log.topics,
+    logs: [log],
+    strict: true,
   });
+  if (!event) throw new Error('Malformed TicketPurchased event.');
   if (event.args.source !== stringToHex(MEGASTERA_SOURCE, { size: 32 })) throw new Error('Ticket was not purchased through MEGASTERA.');
   const { recipient } = event.args;
   if (!recipient) throw new Error('Malformed TicketPurchased event.');

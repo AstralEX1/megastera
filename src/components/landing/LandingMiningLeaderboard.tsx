@@ -24,6 +24,8 @@ const UPGRADE_STAGES = [
   },
 ] as const;
 
+const UPGRADE_CRYSTAL_KEYS = ['primary', 'secondary', 'tertiary'] as const;
+
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
@@ -79,8 +81,8 @@ export function LandingMiningLeaderboard() {
                 key={stage.level}
               >
                 <span className="landing-mining-upgrade-ornament" aria-hidden="true">
-                  {Array.from({ length: Number(stage.level) }, (_, crystalIndex) => (
-                    <i key={crystalIndex} />
+                  {UPGRADE_CRYSTAL_KEYS.slice(0, Number(stage.level)).map((crystalKey) => (
+                    <i key={crystalKey} />
                   ))}
                 </span>
                 <div className="landing-mining-upgrade-media">

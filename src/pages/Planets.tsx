@@ -58,6 +58,7 @@ const RARITY_RANK: Record<string, number> = {
 };
 
 const UNAVAILABLE_TICKET_STATUS: TicketStatus = { kind: 'unavailable' };
+const LEVEL_SIGNAL_KEYS = ['one', 'two', 'three'] as const;
 
 function rarityClass(rarity: string) {
   return (
@@ -72,14 +73,15 @@ function PlanetLevelSignal({ planetId, level }: { planetId: string; level?: numb
   return (
     <span
       data-testid={`planet-level-signal-${planetId}`}
+      role="img"
       aria-label={`Level ${count} upgrade signal`}
       className="pointer-events-none absolute left-1/2 top-0 z-20 flex h-5 -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-full border border-violet-300/45 bg-[#080914] px-2 shadow-[0_0_18px_rgba(154,132,255,0.32)]"
     >
-      {Array.from({ length: count }, (_, index) => (
+      {LEVEL_SIGNAL_KEYS.slice(0, count).map((signalKey) => (
         <i
-          key={index}
+          key={signalKey}
           aria-hidden
-          className={`${count === 3 && index === 1 ? 'h-2.5 w-2.5' : 'h-2 w-2'} rotate-45 border border-violet-100/70 bg-[var(--rare)] shadow-[0_0_8px_rgba(154,132,255,0.7)]`}
+          className={`${count === 3 && signalKey === 'two' ? 'h-2.5 w-2.5' : 'h-2 w-2'} rotate-45 border border-violet-100/70 bg-[var(--rare)] shadow-[0_0_8px_rgba(154,132,255,0.7)]`}
         />
       ))}
     </span>

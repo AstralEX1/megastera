@@ -18,7 +18,6 @@
     "minerals:prepare": "node --import tsx/esm server/api/mineralCutoverPrepare.ts",
     "minerals:backfill": "node --import tsx/esm server/api/mineralBackfill.ts",
     "minerals:backfill:dry-run": "pnpm minerals:backfill --dry-run",
-    "test:postgres": "pnpm --filter @megaplanets/planet-generator build && MINERAL_ECONOMY_REQUIRE_POSTGRES=1 vitest run server/api/mineralConcurrency.postgres.test.ts",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit && tsc -p tsconfig.vercel.json --noEmit",
     "typecheck:vercel": "tsc -p tsconfig.vercel.json --noEmit",
