@@ -80,7 +80,7 @@ export function normalizeMegasteraProof(value: MegasteraProof | Record<string, u
 /** Decodes only a canonical Megastera purchase log; all other logs fail closed. */
 export function decodeEligibleTicket(log: Log): EligibleTicket {
   if (getAddress(log.address) !== BASE_JACKPOT || log.blockNumber === null || log.blockNumber === undefined || !log.transactionHash) throw new Error('Ticket log is not a canonical Megastera purchase.');
-  const [event] = parseEventLogs({
+  const [event] = parseEventLogs<typeof TICKET_PURCHASED_ABI, true, 'TicketPurchased'>({
     abi: TICKET_PURCHASED_ABI,
     eventName: 'TicketPurchased',
     logs: [log],
