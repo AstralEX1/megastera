@@ -19,6 +19,7 @@ MEGAPLANETS_API_PORT                 # optional standalone server port
 MINERAL_ECONOMY_CUTOVER_AT           # optional exact UTC-midnight ISO timestamp; empty keeps V1
 MINERAL_UPGRADES_ENABLED=false       # reserved; public upgrades remain server-disabled
 GALAXY_PULSE_START_BLOCK             # optional first JackpotSettled block; empty disables Galaxy Pulse
+CRON_SECRET                           # required by the protected Vercel leaderboard worker Cron
 ```
 
 Frontend values use `VITE_*` only for public configuration, including `VITE_CHAIN`, wallet/RPC settings, `VITE_API_BASE_URL`, and optional `VITE_BACKEND_API_BASE_URL`. The Megapot Data API defaults to `https://api.megapot.io/v1` for Base mainnet. If `VITE_API_BASE_URL=/api/megapot` is used, the checked-in proxy targets that same mainnet host and may use server-only `MEGAPOT_API_KEY`. Never put `DATABASE_URL`, server tokens, or private keys in a Vite variable.
@@ -40,7 +41,7 @@ Check:
 - `GET /api/leaderboard/current` for live standings; and
 - `/api/megapot/*` for the same-origin Megapot Data API proxy.
 
-There is intentionally no readiness route that probes a Planet contract. Galaxy Pulse indexing runs only inside the leaderboard worker.
+There is intentionally no readiness route that probes a Planet contract. In production, Vercel Cron calls `/api/internal/leaderboard-worker` daily at 00:05 UTC with `CRON_SECRET`; the endpoint runs the same idempotent leaderboard worker used by `pnpm api:leaderboard-worker`.
 
 ## Purchase and generation troubleshooting
 

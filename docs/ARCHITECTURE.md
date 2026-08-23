@@ -52,7 +52,7 @@ The Vercel entrypoint `api/index.ts` delegates to `server/api/index.ts`, which m
 
 No active module signs vouchers, pins media, reads a Planet contract, projects Planet events, scans all tickets continuously, or writes transfer/accrual ledgers. The upgrade endpoint remains server-disabled because it does not yet verify a request-wallet signature.
 
-`server/api/leaderboardWorker.ts` is a separate scheduler/CLI entrypoint. When run, it finalizes completed UTC-day periods into `LeaderboardPeriod` and `LeaderboardEntry`; `pnpm api:server` and the Vercel function do not start it automatically.
+`server/api/leaderboardWorker.ts` is the scheduler entrypoint. The protected `/api/internal/leaderboard-worker` Vercel endpoint runs it from the daily production Cron; `pnpm api:leaderboard-worker` remains available for local/manual runs. It finalizes completed UTC-day periods into `LeaderboardPeriod` and `LeaderboardEntry`.
 
 ## Frontend boundaries
 

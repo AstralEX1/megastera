@@ -5,6 +5,8 @@ import {
   type BackendPlanetRouteDependencies,
 } from './backendPlanetRoutes.js';
 import { createLeaderboardRoutes } from './leaderboardRoutes.js';
+import { reportBackendError } from './errorDiagnostics.js';
+import { runLeaderboardFinalization } from './leaderboardWorker.js';
 import { createOperationalState } from './operations.js';
 import megapotProxy from '../proxy.js';
 
@@ -31,6 +33,22 @@ export function createApp(
   app.get('/api/planets/metrics', (c) =>
     c.json({ ok: true, service: 'api', operations: operations.snapshot() }),
   );
+  app.get('/api/internal/leaderboard-worker', async (c) => {
+    const cronSecret = process.env.CRON_SECRET?.trim();
+    if (!cronSecret || c.req.header('authorization') !== `Bearer ${cronSecret}`) {
+      return c.json({ error: 'Unauthorized.' }, 401);
+    }
+    try {
+      await runLeaderboardFinalization();
+      return c.json({ ok: true });
+    } catch (error) {
+      return c.json(
+        { error: 'Leaderboard worker failed.' },
+        500,
+        reportBackendError('GET /api/internal/leaderboard-worker', error),
+      );
+    }
+  });
   app.route('/', megapotProxy);
   app.route('/api', createBackendPlanetRoutes(backendPlanetOverrides));
   app.route('/api/leaderboard', createLeaderboardRoutes());
