@@ -31,6 +31,10 @@ describe('wallet mining refresh', () => {
             { planetType: 'void', modifierBps: 0 },
           ],
         },
+        achievements: [
+          { id: 'galactic-cartographer', current: 3, tiers: [3, 5, 10] },
+          { id: 'mineral-tycoon', current: 500, tiers: [500, 2_500, 25_000] },
+        ],
         planets: [{
           planetId: 'planet-1',
           planetType: 'Nebula',
@@ -58,6 +62,7 @@ describe('wallet mining refresh', () => {
         ownedPlanetCount: 0,
         effectiveMineralsPerDayMicros: '0',
         upgradesEnabled: false,
+        achievements: [],
         planets: [],
       },
     };

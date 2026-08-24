@@ -126,6 +126,49 @@ describe('backend Planet mining snapshots', () => {
     expect(snapshot.planets[0]).toMatchObject({ planetType: 'Nebula', sameTypeCount: 2, collectionBonusBps: 0 });
   });
 
+  it('derives achievement progress from the wallet mining snapshot', async () => {
+    const ownerAddress = '0x0000000000000000000000000000000000000001';
+    const prisma = {
+      backendPlanet: {
+        findMany: async () => [
+          {
+            id: 'legendary-ring',
+            ownerAddress,
+            planetType: 'Nebula',
+            rarity: 'Legendary',
+            baseMineralsPerDay: 25_000n,
+            upgradeLevel: 3,
+            generatedAt: new Date('2026-08-10T00:00:00.000Z'),
+          },
+          {
+            id: 'epic-moon',
+            ownerAddress,
+            planetType: 'Gaia',
+            rarity: 'Epic',
+            baseMineralsPerDay: 0n,
+            upgradeLevel: 0,
+            generatedAt: new Date('2026-08-10T00:00:00.000Z'),
+          },
+        ],
+      },
+    } as unknown as PrismaClient;
+
+    const snapshot = await getBackendWalletMiningSnapshot(
+      prisma,
+      ownerAddress,
+      new Date('2026-08-11T00:00:00.000Z'),
+    );
+
+    expect(snapshot.achievements).toEqual([
+      { id: 'galactic-cartographer', current: 2, tiers: [3, 5, 10] },
+      { id: 'rarity-hunter', current: 3, tiers: [1, 2, 3] },
+      { id: 'type-specialist', current: 1, tiers: [3, 5, 10] },
+      { id: 'mineral-tycoon', current: 25_000, tiers: [500, 2_500, 25_000] },
+      { id: 'planetary-architect', current: 1, tiers: [1, 5, 10] },
+      { id: 'planetary-empire', current: 2, tiers: [5, 10, 25] },
+    ]);
+  });
+
   it('applies the same-type bonus to every matching Planet in a wallet snapshot', async () => {
     const prisma = {
       backendPlanet: {

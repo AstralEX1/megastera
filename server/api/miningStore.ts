@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from './generated/prisma/client.js';
+import { calculateAchievements } from './achievements.js';
 import {
   calculateEffectiveMineralsPerDayMicros,
   calculateCollectionMining,
@@ -193,7 +194,7 @@ export async function getBackendWalletMiningSnapshot(
             : null,
         };
       });
-      return {
+      const snapshot = {
         ownerAddress: ownerAddress.toLowerCase(),
         asOf: asOf.toISOString(),
         ownedPlanetCount: snapshots.length,
@@ -203,6 +204,7 @@ export async function getBackendWalletMiningSnapshot(
         galaxyPulse: serializeCurrentGalaxyPulse(pulseRounds.at(-1) ?? null),
         planets: snapshots,
       };
+      return { ...snapshot, achievements: calculateAchievements(snapshot) };
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
   );
@@ -211,7 +213,15 @@ export async function getBackendWalletMiningSnapshot(
 async function getV1WalletMiningSnapshot(prisma: PrismaClient, ownerAddress: string, now: Date) {
   const planets = await prisma.backendPlanet.findMany({
     where: { ownerAddress: ownerAddress.toLowerCase(), status: 'READY' },
-    select: { id: true, ownerAddress: true, planetType: true, baseMineralsPerDay: true, generatedAt: true },
+    select: {
+      id: true,
+      ownerAddress: true,
+      planetType: true,
+      rarity: true,
+      baseMineralsPerDay: true,
+      upgradeLevel: true,
+      generatedAt: true,
+    },
     orderBy: [{ generatedAt: 'desc' }, { id: 'asc' }],
   });
   const calculations = calculateCollectionMining({ planets: planets as BackendMiningPlanetRow[], asOf: now });
@@ -224,17 +234,19 @@ async function getV1WalletMiningSnapshot(prisma: PrismaClient, ownerAddress: str
     effectiveMineralsPerDayMicros += calculated.effectiveMineralsPerDayMicros;
     return [{
       planetId: planet.id,
+      rarity: planet.rarity,
       baseMineralsPerDay: planet.baseMineralsPerDay.toString(),
       planetType: calculated.planetType,
       sameTypeCount: calculated.sameTypeCount,
       collectionBonusBps: calculated.collectionBonusBps,
+      upgradeLevel: planet.upgradeLevel,
       galaxyPulseBps: 0,
       effectiveMineralsPerDayMicros: calculated.effectiveMineralsPerDayMicros.toString(),
       earnedMicros: calculated.earnedMicros.toString(),
       activeSince: planet.generatedAt.toISOString(),
     }];
   });
-  return {
+  const snapshot = {
     ownerAddress,
     asOf: now.toISOString(),
     ownedPlanetCount: snapshots.length,
@@ -245,4 +257,5 @@ async function getV1WalletMiningSnapshot(prisma: PrismaClient, ownerAddress: str
     galaxyPulse: null,
     planets: snapshots,
   };
+  return { ...snapshot, achievements: calculateAchievements(snapshot) };
 }

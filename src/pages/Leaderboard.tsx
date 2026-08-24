@@ -5,7 +5,9 @@ import { FadeArc } from '@/components/common/FadeArc';
 import { PlanetIcon, TicketsIcon } from '@/components/icons/TicketsIcon';
 import { LeaderboardTable } from '@/components/leaderboard/LeaderboardTable';
 import { WalletRankCard } from '@/components/leaderboard/WalletRankCard';
+import { AchievementsPanel } from '@/components/planets/AchievementsPanel';
 import { useCurrentLeaderboard, useWalletLeaderboardPosition } from '@/hooks/useLeaderboard';
+import { useWalletMining } from '@/hooks/useWalletMining';
 
 const SEASON_END_AT = Date.parse('2026-08-28T23:59:00.000Z');
 
@@ -43,6 +45,7 @@ export function Leaderboard() {
   const { address } = useAccount();
   const current = useCurrentLeaderboard();
   const wallet = useWalletLeaderboardPosition(address);
+  const mining = useWalletMining(address);
   const data = current.data;
   const [now, setNow] = useState(() => Date.now());
   const [manualRefreshing, setManualRefreshing] = useState(false);
@@ -60,6 +63,7 @@ export function Leaderboard() {
       await Promise.all([
         current.refetch(),
         address ? wallet.refetch() : Promise.resolve(),
+        address ? mining.refetch() : Promise.resolve(),
       ]);
 
       const remaining = 500 - (Date.now() - startedAt);
@@ -156,7 +160,14 @@ export function Leaderboard() {
           <LeaderboardTable rows={data.rows} walletAddress={address} />
           <aside aria-label="Leaderboard details" className="space-y-5">
             {seasonOverview}
-            {address && wallet.data ? <WalletRankCard position={wallet.data} /> : null}
+            {address && wallet.data ? (
+              <>
+                <WalletRankCard position={wallet.data} />
+                {mining.data?.achievements.length ? (
+                  <AchievementsPanel achievements={mining.data.achievements} />
+                ) : null}
+              </>
+            ) : null}
           </aside>
         </div>
       )}

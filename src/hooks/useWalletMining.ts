@@ -26,6 +26,12 @@ export type GalaxyPulseSnapshot = {
   slots: Array<{ planetType: string; modifierBps: number }>;
 };
 
+export type AchievementProgress = {
+  id: string;
+  current: number;
+  tiers: number[];
+};
+
 export type WalletMiningSnapshot = {
   ownerAddress: `0x${string}`;
   asOf: string;
@@ -34,6 +40,7 @@ export type WalletMiningSnapshot = {
   effectiveMineralsPerDayMicros: string;
   upgradesEnabled: boolean;
   galaxyPulse: GalaxyPulseSnapshot | null;
+  achievements: AchievementProgress[];
   planets: PlanetMiningSnapshot[];
 };
 
@@ -162,6 +169,7 @@ export function parseWalletMiningSnapshot(value: unknown): WalletMiningSnapshot 
   const upgradesEnabled = mining.upgradesEnabled;
   if (typeof upgradesEnabled !== 'boolean') throw new Error('Wallet mining upgradesEnabled is malformed.');
   if (!Array.isArray(mining.planets)) throw new Error('Wallet mining planets is malformed.');
+  if (!Array.isArray(mining.achievements)) throw new Error('Wallet mining achievements is malformed.');
 
   return {
     ownerAddress: requiredAddress(mining.ownerAddress),
@@ -171,6 +179,17 @@ export function parseWalletMiningSnapshot(value: unknown): WalletMiningSnapshot 
     effectiveMineralsPerDayMicros: requiredMicros(mining.effectiveMineralsPerDayMicros, 'effectiveMineralsPerDayMicros'),
     upgradesEnabled,
     galaxyPulse: parseGalaxyPulse(mining.galaxyPulse),
+    achievements: mining.achievements.map((value) => {
+      const achievement = requiredObject(value, 'achievement');
+      if (!Array.isArray(achievement.tiers)) {
+        throw new Error('Wallet mining achievement tiers is malformed.');
+      }
+      return {
+        id: requiredString(achievement.id, 'achievement id'),
+        current: requiredInteger(achievement.current, 'achievement current', 0),
+        tiers: achievement.tiers.map((tier) => requiredInteger(tier, 'achievement tier', 1)),
+      };
+    }),
     planets: mining.planets.map((planet) => parsePlanet(planet, upgradesEnabled)),
   };
 }

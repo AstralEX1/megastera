@@ -4,13 +4,17 @@ import { act, cleanup, render, screen, waitFor, within } from '@testing-library/
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const refreshMocks = vi.hoisted(() => ({ current: vi.fn(), wallet: vi.fn() }));
+const refreshMocks = vi.hoisted(() => ({ current: vi.fn(), wallet: vi.fn(), mining: vi.fn() }));
 
 const state = vi.hoisted(() => ({
   account: { address: '0x2222222222222222222222222222222222222222' as `0x${string}` | undefined },
   error: undefined as Error | undefined,
   isFetching: false,
   isLoading: false,
+  achievements: [
+    { id: 'galactic-cartographer', current: 5, tiers: [3, 5, 10] },
+    { id: 'mineral-tycoon', current: 600, tiers: [500, 2_500, 25_000] },
+  ],
 }));
 
 const current = {
@@ -30,6 +34,23 @@ vi.mock('@/hooks/useLeaderboard', () => ({
   useCurrentLeaderboard: () => ({ data: current, isFetching: state.isFetching, isLoading: state.isLoading, error: state.error, refetch: refreshMocks.current }),
   useWalletLeaderboardPosition: () => ({ data: { period: current.period, asOf: current.asOf, row: current.rows[1], distanceToNextRankMicros: '6000000' }, isLoading: false, refetch: refreshMocks.wallet }),
 }));
+vi.mock('@/hooks/useWalletMining', () => ({
+  useWalletMining: () => ({
+    data: state.account.address ? {
+      ownerAddress: state.account.address,
+      asOf: current.asOf,
+      ownedPlanetCount: 2,
+      currentBalanceMicros: '19000000',
+      effectiveMineralsPerDayMicros: '8000000',
+      upgradesEnabled: true,
+      galaxyPulse: null,
+      achievements: state.achievements,
+      planets: [],
+    } : undefined,
+    isFetching: false,
+    refetch: refreshMocks.mining,
+  }),
+}));
 
 vi.stubGlobal('IntersectionObserver', class {
   observe() {}
@@ -47,6 +68,7 @@ describe('Leaderboard', () => {
     state.account = { address: '0x2222222222222222222222222222222222222222' };
     refreshMocks.current.mockReset().mockResolvedValue({ error: null });
     refreshMocks.wallet.mockReset().mockResolvedValue({ error: null });
+    refreshMocks.mining.mockReset().mockResolvedValue({ error: null });
   });
   afterEach(() => {
     cleanup();
@@ -86,6 +108,26 @@ describe('Leaderboard', () => {
     expect(container.querySelector('[data-mobile-standings]')).toHaveClass('md:hidden');
   });
 
+  it('places connected-wallet achievements directly below Your rank', async () => {
+    const user = userEvent.setup();
+    render(<Leaderboard />);
+
+    const details = screen.getByRole('complementary', { name: 'Leaderboard details' });
+    const rankCard = within(details).getByText('Your rank').closest('aside');
+    const panel = within(details).getByTestId('achievements-panel');
+    expect(rankCard?.nextElementSibling).toBe(panel);
+    expect(panel).not.toHaveAttribute('open');
+    expect(within(panel).getByText('3 / 6 stars')).toBeInTheDocument();
+
+    await user.click(within(panel).getByText('Achievements'));
+
+    expect(panel).toHaveAttribute('open');
+    expect(within(panel).getByRole('heading', { name: 'Diversity' })).toBeInTheDocument();
+    expect(within(panel).getByText('Galactic Cartographer')).toBeInTheDocument();
+    expect(within(panel).getByText('5 / 10')).toBeInTheDocument();
+    expect(within(panel).getByLabelText('2 of 3 stars earned')).toBeInTheDocument();
+  });
+
   it('keeps the season countdown compact and updates it every second', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-20T12:34:56.000Z'));
@@ -115,6 +157,7 @@ describe('Leaderboard', () => {
 
     expect(container.querySelectorAll('.count-up-text')).toHaveLength(8);
     expect(screen.queryByText('Your rank')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('achievements-panel')).not.toBeInTheDocument();
   });
 
   it('shows a visible refreshing state while the standings refetches', () => {
@@ -141,6 +184,7 @@ describe('Leaderboard', () => {
     expect(await screen.findByRole('button', { name: 'Refreshing leaderboard' })).toBeDisabled();
     expect(refreshMocks.current).toHaveBeenCalledTimes(1);
     expect(refreshMocks.wallet).toHaveBeenCalledTimes(1);
+    expect(refreshMocks.mining).toHaveBeenCalledTimes(1);
 
     resolveCurrent?.({ error: null });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled());

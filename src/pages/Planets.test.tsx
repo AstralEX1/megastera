@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
       settledAt: string;
       slots: Array<{ planetType: string; modifierBps: number }>;
     } | null,
+    achievements: [] as Array<{ id: string; current: number; tiers: number[] }>,
     planets: [] as Array<{
       planetId: string;
       planetType: string;
@@ -199,6 +200,7 @@ describe('backend My Planets', () => {
     mocks.mining.asOf = '2026-08-13T12:00:00.000Z';
     mocks.mining.upgradesEnabled = true;
     mocks.mining.galaxyPulse = null;
+    mocks.mining.achievements = [];
     mocks.round = undefined;
     mocks.planetsRefetch.mockReset();
     mocks.ticketRefetch.mockReset();
@@ -291,6 +293,18 @@ describe('backend My Planets', () => {
     expect(within(summary).getByTestId('summary-balance')).toBeInTheDocument();
     expect(screen.queryByText(/Every Megastera purchase/)).not.toBeInTheDocument();
     expect(screen.queryByText(/COLLECTION \/\s*2/)).not.toBeInTheDocument();
+  });
+
+  it('does not render achievements in My Planets', () => {
+    mocks.planets = [generatedRow(backendPlanet)];
+    mocks.mining.achievements = [
+      { id: 'galactic-cartographer', current: 5, tiers: [3, 5, 10] },
+      { id: 'mineral-tycoon', current: 600, tiers: [500, 2_500, 25_000] },
+    ];
+
+    render(<Planets onNavigate={vi.fn()} onViewPlanet={vi.fn()} />);
+
+    expect(screen.queryByTestId('achievements-panel')).not.toBeInTheDocument();
   });
 
   it('shows live spendable Mineral Balance anchored at the wallet snapshot asOf', () => {
