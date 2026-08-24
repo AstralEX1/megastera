@@ -128,6 +128,16 @@ describe('Leaderboard', () => {
     expect(within(panel).getByLabelText('2 of 3 stars earned')).toBeInTheDocument();
   });
 
+  it('keeps Your rank in normal flow when achievements are expanded', async () => {
+    const user = userEvent.setup();
+    render(<Leaderboard />);
+
+    const rankCard = screen.getByText('Your rank').closest('aside');
+    await user.click(screen.getByText('Achievements'));
+
+    expect(rankCard).not.toHaveClass('lg:sticky');
+  });
+
   it('keeps the season countdown compact and updates it every second', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-20T12:34:56.000Z'));

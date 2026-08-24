@@ -14,7 +14,7 @@ export function WalletRankCard({ position }: { position: WalletLeaderboardPositi
     </aside>
   );
   return (
-    <aside className="rounded-2xl border border-violet-400/60 bg-violet-500/10 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.35)] lg:sticky lg:top-28">
+    <aside className="rounded-2xl border border-violet-400/60 bg-violet-500/10 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
       <p className="telemetry text-violet-200">Your rank</p>
       <div className="mt-2 flex items-end justify-between gap-4">
         <p className="font-hud text-4xl font-bold text-[var(--text-primary)]">#{position.row.rank}</p>
