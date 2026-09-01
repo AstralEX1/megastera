@@ -7,12 +7,13 @@ import { ComingSoon } from './ComingSoon';
 afterEach(cleanup);
 
 describe('ComingSoon roadmap', () => {
-  it('presents the roadmap milestones and highlights the next update', () => {
+  it('presents the roadmap milestones and highlights the Season 1 Finale', () => {
     const { container } = render(<ComingSoon />);
 
     expect(screen.getByRole('heading', { name: 'Roadmap' })).toBeInTheDocument();
+    expect(screen.getAllByText('Season 1 Finale')).toHaveLength(2);
     expect(screen.getByRole('heading', { name: 'Genesis' })).toBeInTheDocument();
-    expect(screen.getByText('Completed')).toBeInTheDocument();
+    expect(screen.getAllByText('Completed')).toHaveLength(2);
     expect(screen.getByRole('heading', { name: 'Mid-Season 1 Update' })).toBeInTheDocument();
     expect(screen.getByText('Upcoming')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Season 1 Finale' })).toBeInTheDocument();
@@ -22,9 +23,12 @@ describe('ComingSoon roadmap', () => {
     expect(screen.getByText('Minerals Become an In-Game Currency')).toBeInTheDocument();
     expect(screen.getByText('Planet Upgrades')).toBeInTheDocument();
     expect(screen.getByText('Mineral Rewards Based on Ticket Results')).toBeInTheDocument();
-    expect(container.querySelector('[data-roadmap-current="true"]')).toBeInTheDocument();
-    expect(container.querySelectorAll('[data-roadmap-completed-item="true"]')).toHaveLength(3);
-    expect(container.querySelectorAll('[data-roadmap-future="true"]')).toHaveLength(3);
+    const current = container.querySelector('[data-roadmap-current="true"]');
+    expect(current).toHaveTextContent('Season 1 Finale');
+    expect(current).toHaveTextContent('Megapot Ticket Rewards for the Top 3');
+    expect(current).toHaveTextContent('Unique 1/1 NFT Planets for the Top 5');
+    expect(container.querySelectorAll('[data-roadmap-completed-item="true"]')).toHaveLength(6);
+    expect(container.querySelectorAll('[data-roadmap-future="true"]')).toHaveLength(2);
   });
 
   it('uses restrained React Bits-inspired ambient motion without roadmap artwork or hover spotlight', () => {

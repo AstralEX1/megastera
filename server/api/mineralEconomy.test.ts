@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   calculateCollectionProduction,
   calculateConstantRateSegment,
+  calculateHistoricalProduction,
   calculateHistoricalPlanetProduction,
   calculateProductionSegments,
   collectionBonusBpsAt,
@@ -211,6 +212,25 @@ describe('Minerals Economy v2 temporal calculations', () => {
       to: new Date('2026-08-11T00:00:00.000Z'),
       anchor: ANCHOR,
     })).toBe(0n);
+  });
+
+  it('stops historical production at the Season 1 deadline', () => {
+    const from = new Date('2026-08-28T23:58:00.000Z');
+    const planet: MineralCollectionPlanet = {
+      id: 'season-one-final-minute',
+      ownerAddress: '0xabc',
+      planetType: 'Gaia',
+      baseMineralsPerDay: 86_400n,
+      activatedAt: from,
+    };
+
+    expect(calculateHistoricalProduction({
+      planets: [planet],
+      purchases: [],
+      from,
+      to: new Date('2026-08-29T00:00:00.000Z'),
+      anchor: from,
+    })).toBe(60_000_000n);
   });
 
   it('activates collection bonuses at the historical third activation', () => {

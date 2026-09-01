@@ -262,6 +262,24 @@ describe('backend Planet routes', () => {
     expect(response.status).toBe(403);
   });
 
+  it('returns a domain error while mineral production is paused', async () => {
+    const { app, purchaseUpgrade } = makeUpgradeApp();
+    purchaseUpgrade.mockRejectedValue(new Error('Mineral production is paused.'));
+
+    const response = await app.request(`${SIWE_ORIGIN}/api/planets/planet-1/upgrade`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: await sessionCookie(),
+        origin: SIWE_ORIGIN,
+      },
+      body: JSON.stringify({ targetLevel: 1, expectedAddress: proof.recipient }),
+    });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: 'Mineral production is paused.' });
+  });
+
   it('passes only the authenticated session wallet into an owner upgrade', async () => {
     const { app, assertPulseFresh, purchaseUpgrade } = makeUpgradeApp();
 

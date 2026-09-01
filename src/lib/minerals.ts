@@ -3,7 +3,9 @@ const MILLISECONDS_PER_DAY = 86_400_000n;
 
 export function formatMinerals(micros: bigint, maximumFractionDigits = 2): string {
   if (micros < 0n) throw new Error('Mineral score cannot be negative.');
-  const whole = micros / MINERAL_SCALE;
+  const whole = maximumFractionDigits <= 0
+    ? (micros + MINERAL_SCALE / 2n) / MINERAL_SCALE
+    : micros / MINERAL_SCALE;
   const groupedWhole = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   if (maximumFractionDigits <= 0) return groupedWhole;
   const fraction = (micros % MINERAL_SCALE)

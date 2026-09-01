@@ -1,212 +1,110 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const refreshMocks = vi.hoisted(() => ({ current: vi.fn(), wallet: vi.fn(), mining: vi.fn() }));
+const connectedAddress = '0x76ff6f88f58e083b88a80b1764ae7002e303d1a6' as const;
 
-const state = vi.hoisted(() => ({
-  account: { address: '0x2222222222222222222222222222222222222222' as `0x${string}` | undefined },
-  error: undefined as Error | undefined,
-  isFetching: false,
-  isLoading: false,
-  achievements: [
-    { id: 'galactic-cartographer', current: 5, tiers: [3, 5, 10] },
-    { id: 'mineral-tycoon', current: 600, tiers: [500, 2_500, 25_000] },
-  ],
-}));
-
-const current = {
-  period: { id: '2026-08-12', startsAt: '2026-08-12T00:00:00.000Z', endsAt: '2026-08-13T00:00:00.000Z' },
-  asOf: '2026-08-12T12:00:00.000Z',
-  total: 2,
-  offset: 0,
-  limit: 50,
-  rows: [
-    { rank: 1, walletAddress: '0x1111111111111111111111111111111111111111', scoreMicros: '25000000', effectiveMineralsPerDayMicros: '12000000' },
-    { rank: 2, walletAddress: '0x2222222222222222222222222222222222222222', scoreMicros: '19000000', effectiveMineralsPerDayMicros: '8000000' },
-  ],
-};
-
-vi.mock('wagmi', () => ({ useAccount: () => state.account }));
+vi.mock('wagmi', () => ({ useAccount: () => ({ address: connectedAddress }) }));
 vi.mock('@/hooks/useLeaderboard', () => ({
-  useCurrentLeaderboard: () => ({ data: current, isFetching: state.isFetching, isLoading: state.isLoading, error: state.error, refetch: refreshMocks.current }),
-  useWalletLeaderboardPosition: () => ({ data: { period: current.period, asOf: current.asOf, row: current.rows[1], distanceToNextRankMicros: '6000000' }, isLoading: false, refetch: refreshMocks.wallet }),
+  useCurrentLeaderboard: () => ({
+    data: {
+      period: {
+        id: 'live',
+        startsAt: '2026-09-01T00:00:00.000Z',
+        endsAt: '2026-09-02T00:00:00.000Z',
+      },
+      asOf: '2026-09-01T12:00:00.000Z',
+      total: 1,
+      offset: 0,
+      limit: 50,
+      rows: [
+        {
+          rank: 1,
+          walletAddress: connectedAddress,
+          scoreMicros: '999999999999',
+          effectiveMineralsPerDayMicros: '999999999999',
+        },
+      ],
+    },
+    isFetching: false,
+    isLoading: false,
+    error: undefined,
+    refetch: vi.fn(),
+  }),
+  useWalletLeaderboardPosition: () => ({ data: undefined, refetch: vi.fn() }),
 }));
 vi.mock('@/hooks/useWalletMining', () => ({
-  useWalletMining: () => ({
-    data: state.account.address ? {
-      ownerAddress: state.account.address,
-      asOf: current.asOf,
-      ownedPlanetCount: 2,
-      currentBalanceMicros: '19000000',
-      effectiveMineralsPerDayMicros: '8000000',
-      upgradesEnabled: true,
-      galaxyPulse: null,
-      achievements: state.achievements,
-      planets: [],
-    } : undefined,
-    isFetching: false,
-    refetch: refreshMocks.mining,
-  }),
+  useWalletMining: () => ({ data: undefined, refetch: vi.fn() }),
 }));
-
-vi.stubGlobal('IntersectionObserver', class {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-});
+vi.stubGlobal(
+  'IntersectionObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  },
+);
 
 import { Leaderboard } from './Leaderboard';
 
-describe('Leaderboard', () => {
-  beforeEach(() => {
-    state.error = undefined;
-    state.isFetching = false;
-    state.isLoading = false;
-    state.account = { address: '0x2222222222222222222222222222222222222222' };
-    refreshMocks.current.mockReset().mockResolvedValue({ error: null });
-    refreshMocks.wallet.mockReset().mockResolvedValue({ error: null });
-    refreshMocks.mining.mockReset().mockResolvedValue({ error: null });
-  });
-  afterEach(() => {
-    cleanup();
-    vi.useRealTimers();
-  });
+describe('Season 1 leaderboard results', () => {
+  afterEach(cleanup);
 
-  it('shows the FadeArc loading state during the initial standings load', () => {
-    state.isLoading = true;
-
+  it('shows five prize places with tickets for the top three and NFT Planets for all five', () => {
     render(<Leaderboard />);
 
-    expect(screen.getByRole('status', { name: 'Loading leaderboard' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Loading leaderboard' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Season 1 results' })).toBeInTheDocument();
+    const winners = screen.getByRole('region', { name: 'Winners' });
+    const podium = within(winners).getByRole('list', { name: 'Top three podium' });
+    const podiumPlaces = within(podium).getAllByRole('listitem');
+    expect(podiumPlaces).toHaveLength(3);
+    expect(within(podiumPlaces[0]).getByRole('article', { name: '1st place' })).toBeInTheDocument();
+    expect(within(podiumPlaces[1]).getByRole('article', { name: '2nd place' })).toBeInTheDocument();
+    expect(within(podiumPlaces[2]).getByRole('article', { name: '3rd place' })).toBeInTheDocument();
+
+    const nftWinners = within(winners).getByRole('list', { name: 'NFT winners' });
+    expect(within(nftWinners).getAllByRole('listitem')).toHaveLength(2);
+
+    const places = within(winners).getAllByRole('article');
+    expect(places).toHaveLength(5);
+    expect(places[0]).toHaveTextContent('0x27a2…9324');
+    expect(places[0]).toHaveTextContent('18 Megapot Tickets');
+    expect(places[0]).toHaveTextContent('1/1 NFT Planet');
+    expect(places[1]).toHaveTextContent('0x76ff…d1a6');
+    expect(places[1]).toHaveTextContent('12 Megapot Tickets');
+    expect(places[1]).toHaveTextContent('1/1 NFT Planet');
+    expect(places[2]).toHaveTextContent('0x64fb…d346');
+    expect(places[2]).toHaveTextContent('6 Megapot Tickets');
+    expect(places[2]).toHaveTextContent('1/1 NFT Planet');
+    expect(places[3]).toHaveTextContent('0x4390…743d');
+    expect(places[3]).toHaveTextContent('1/1 NFT Planet');
+    expect(places[3]).not.toHaveTextContent('Megapot Tickets');
+    expect(places[4]).toHaveTextContent('0x3f84…cce7');
+    expect(places[4]).toHaveTextContent('1/1 NFT Planet');
+    expect(places[4]).not.toHaveTextContent('Megapot Tickets');
+
+    expect(screen.getAllByText('1/1 NFT Planet')).toHaveLength(5);
+    expect(screen.getByText('Mint page will be live soon')).toBeInTheDocument();
+    expect(screen.queryByText(/awarded|will receive/i)).not.toBeInTheDocument();
   });
 
-  it('shows live standings and the connected wallet position', () => {
+  it('renders the complete locked snapshot without live controls', () => {
     const { container } = render(<Leaderboard />);
 
-    expect(screen.getByRole('heading', { name: 'Leaderboard' })).toBeInTheDocument();
-    expect(screen.queryByText(/Current lifetime mining/)).not.toBeInTheDocument();
-    expect(screen.getByText('Active players').parentElement).toHaveTextContent('2');
-    const details = screen.getByRole('complementary', { name: 'Leaderboard details' });
-    const seasonOverview = within(details).getByRole('region', { name: 'Season overview' });
-    expect(seasonOverview).toHaveTextContent('Megapot Tickets');
-    expect(seasonOverview).toHaveTextContent('(USDC)');
-    expect(seasonOverview).toHaveTextContent('1/1 NFT Planets');
-    expect(seasonOverview.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(2);
-    expect(screen.queryByText('LIVE MINERAL SCORE')).not.toBeInTheDocument();
-    expect(screen.queryByText('LIVE · GENERATED AT + BASE RATE')).not.toBeInTheDocument();
-    expect(screen.queryByText(/As of Aug 12/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Last refresh: .* ago/)).toBeInTheDocument();
-    expect(container.querySelectorAll('.count-up-text')).toHaveLength(10);
-    expect(screen.getByText('Your rank')).toBeInTheDocument();
-    expect(screen.getByText(/to next rank/)).toBeInTheDocument();
-    expect(screen.queryByRole('progressbar', { name: 'Daily snapshot progress' })).not.toBeInTheDocument();
-    expect(container.querySelector('[data-wallet-row="true"]')).toBeInTheDocument();
-    expect(container.querySelector('[data-mobile-standings]')).toHaveClass('md:hidden');
-  });
-
-  it('places connected-wallet achievements directly below Your rank', async () => {
-    const user = userEvent.setup();
-    render(<Leaderboard />);
-
-    const details = screen.getByRole('complementary', { name: 'Leaderboard details' });
-    const rankCard = within(details).getByText('Your rank').closest('aside');
-    const panel = within(details).getByTestId('achievements-panel');
-    expect(rankCard?.nextElementSibling).toBe(panel);
-    expect(panel).not.toHaveAttribute('open');
-    expect(within(panel).getByText('3 / 6 stars')).toBeInTheDocument();
-
-    await user.click(within(panel).getByText('Achievements'));
-
-    expect(panel).toHaveAttribute('open');
-    expect(within(panel).getByRole('heading', { name: 'Diversity' })).toBeInTheDocument();
-    expect(within(panel).getByText('Galactic Cartographer')).toBeInTheDocument();
-    expect(within(panel).getByText('5 / 10')).toBeInTheDocument();
-    expect(within(panel).getByLabelText('2 of 3 stars earned')).toBeInTheDocument();
-  });
-
-  it('keeps Your rank in normal flow when achievements are expanded', async () => {
-    const user = userEvent.setup();
-    render(<Leaderboard />);
-
-    const rankCard = screen.getByText('Your rank').closest('aside');
-    await user.click(screen.getByText('Achievements'));
-
-    expect(rankCard).not.toHaveClass('lg:sticky');
-  });
-
-  it('keeps the season countdown compact and updates it every second', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-08-20T12:34:56.000Z'));
-
-    render(<Leaderboard />);
-
-    const timer = screen.getByRole('timer', { name: 'Season ends in' });
-    expect(timer).toHaveTextContent('08d 11h 24m 04s');
-
-    act(() => vi.advanceTimersByTime(1000));
-
-    expect(timer).toHaveTextContent('08d 11h 24m 03s');
-  });
-
-  it('shows the ended state after the season deadline', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-08-29T00:00:00.000Z'));
-
-    render(<Leaderboard />);
-
-    expect(screen.getByRole('timer', { name: 'Season ends in' })).toHaveTextContent('Season ended');
-  });
-
-  it('keeps the public page useful when no wallet is connected', () => {
-    state.account = { address: undefined };
-    const { container } = render(<Leaderboard />);
-
-    expect(container.querySelectorAll('.count-up-text')).toHaveLength(8);
+    expect(screen.getByRole('heading', { name: 'Leaderboard snapshot' })).toBeInTheDocument();
+    expect(screen.getByText('2026-08-28 23:59 UTC')).toBeInTheDocument();
+    expect(screen.getByText('48 players')).toBeInTheDocument();
+    const rows = screen.getAllByRole('row');
+    expect(rows).toHaveLength(49);
+    expect(rows[1]).toHaveTextContent('#1');
+    expect(rows[1]).toHaveTextContent('0x27a2…9324');
+    expect(rows[1]).toHaveTextContent('14,799');
+    expect(rows[1]).not.toHaveTextContent('14,798.690309');
+    expect(container.querySelectorAll('[data-wallet-row="true"]')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /refresh/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Active players')).not.toBeInTheDocument();
+    expect(screen.queryByText('Per day')).not.toBeInTheDocument();
     expect(screen.queryByText('Your rank')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('achievements-panel')).not.toBeInTheDocument();
-  });
-
-  it('shows a visible refreshing state while the standings refetches', () => {
-    state.isFetching = true;
-
-    render(<Leaderboard />);
-
-    const refreshButton = screen.getByRole('button', { name: 'Refreshing leaderboard' });
-    expect(refreshButton).toBeDisabled();
-    expect(refreshButton).toHaveAttribute('aria-busy', 'true');
-    expect(screen.getByText('Refreshing…')).toBeInTheDocument();
-  });
-
-  it('refreshes both standings and wallet data when Refresh is clicked', async () => {
-    const user = userEvent.setup();
-    let resolveCurrent: ((value: { error: null }) => void) | undefined;
-    refreshMocks.current.mockImplementation(() => new Promise((resolve) => {
-      resolveCurrent = resolve;
-    }));
-
-    render(<Leaderboard />);
-    await user.click(screen.getByRole('button', { name: 'Refresh' }));
-
-    expect(await screen.findByRole('button', { name: 'Refreshing leaderboard' })).toBeDisabled();
-    expect(refreshMocks.current).toHaveBeenCalledTimes(1);
-    expect(refreshMocks.wallet).toHaveBeenCalledTimes(1);
-    expect(refreshMocks.mining).toHaveBeenCalledTimes(1);
-
-    resolveCurrent?.({ error: null });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled());
-  });
-
-  it('offers a retryable backend error instead of the placeholder page', () => {
-    state.error = new Error('offline');
-    render(<Leaderboard />);
-
-    expect(screen.getByRole('heading', { name: 'Leaderboard' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Season overview' })).toBeInTheDocument();
-    expect(screen.getByText('Leaderboard unavailable')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 });

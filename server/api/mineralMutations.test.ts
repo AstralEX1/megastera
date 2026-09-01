@@ -10,6 +10,7 @@ const OWNER = '0x1111111111111111111111111111111111111111';
 const OTHER = '0x2222222222222222222222222222222222222222';
 const CUTOVER = new Date('2026-08-20T00:00:00.000Z');
 const PURCHASED_AT = new Date('2026-08-21T00:00:00.000Z');
+const SEASON_ONE_ENDED_AT = new Date('2026-08-28T23:59:00.000Z');
 
 function makePlanet() {
   return {
@@ -165,6 +166,59 @@ describe('mineral upgrade mutations', () => {
 
     expect(second.balanceMicros).toBe(continuous.balanceMicros);
     expect(second.balanceMicros).toBe(1_047_573n);
+  });
+
+  it('settles no later than the Season 1 deadline', async () => {
+    const fixture = makePrisma({ account: { balanceMicros: 0n } });
+
+    const settled = await settleMineralAccount({
+      prisma: fixture.tx as never,
+      account: fixture.account,
+      planets: [makePlanet()],
+      purchases: [],
+      settledAt: new Date('2026-08-29T00:00:00.000Z'),
+      anchor: CUTOVER,
+    });
+
+    expect(settled.balanceMicros).toBe(8_999_305n);
+    expect(settled.lastSettledAt).toEqual(SEASON_ONE_ENDED_AT);
+  });
+
+  it('leaves a late persisted settlement unchanged after the pause', async () => {
+    const lateSettlement = new Date('2026-08-30T00:00:00.000Z');
+    const fixture = makePrisma({
+      account: { balanceMicros: 99_000_000n, lastSettledAt: lateSettlement },
+    });
+
+    const settled = await settleMineralAccount({
+      prisma: fixture.tx as never,
+      account: fixture.account,
+      planets: [makePlanet()],
+      purchases: [],
+      settledAt: new Date('2026-09-01T00:00:00.000Z'),
+      anchor: CUTOVER,
+    });
+
+    expect(settled.lastSettledAt).toEqual(lateSettlement);
+    expect(settled.balanceMicros).toBe(99_000_000n);
+    expect(fixture.tx.mineralAccount.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects new upgrades after the Season 1 deadline without economic writes', async () => {
+    const fixture = makePrisma({ clockAt: new Date('2026-08-29T00:00:00.000Z') });
+
+    await expect(
+      purchasePlanetUpgrade(fixture.prisma, {
+        authenticatedWalletAddress: OWNER,
+        planetId: 'planet-1',
+        targetLevel: 1,
+        cutoverAt: CUTOVER,
+      }),
+    ).rejects.toThrow('Mineral production is paused');
+
+    expect(fixture.tx.mineralAccount.update).not.toHaveBeenCalled();
+    expect(fixture.tx.backendPlanet.update).not.toHaveBeenCalled();
+    expect(fixture.tx.planetUpgradePurchase.create).not.toHaveBeenCalled();
   });
 
   it('leaves account, Planet, and purchase unchanged when funds are insufficient', async () => {

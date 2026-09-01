@@ -19,7 +19,7 @@ describe('primary navigation', () => {
     expect(screen.queryAllByRole('button', { name: 'Ticket status' })).toHaveLength(0);
   });
 
-  it('labels the roadmap destination as Coming Soon in desktop and mobile navigation', () => {
+  it('labels the roadmap destination as Season 1 Finale in desktop and mobile navigation', () => {
     const onSelect = vi.fn();
     render(
       <>
@@ -28,6 +28,7 @@ describe('primary navigation', () => {
       </>,
     );
 
-    expect(screen.getAllByRole('button', { name: 'Coming Soon' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Season 1 Finale' })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Coming Soon' })).not.toBeInTheDocument();
   });
 });

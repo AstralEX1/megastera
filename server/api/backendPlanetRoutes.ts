@@ -336,6 +336,7 @@ export function createBackendPlanetRoutes(
         message === 'Insufficient mineral balance.' ||
         message === 'Mineral economy is disabled.' ||
         message === 'Mineral economy is not active yet.' ||
+        message === 'Mineral production is paused.' ||
         message === 'Planet is not ready for upgrades.' ||
         message === 'Upgrade target must be the next Planet level.'
       ) return c.json({ error: message }, 422);

@@ -12,8 +12,10 @@ import {
   rankLeaderboardRows,
 } from './leaderboard.js';
 import {
+  capMineralProductionAt,
   calculateHistoricalProduction,
   galaxyPulseBpsAt,
+  isMineralProductionPaused,
   upgradeBonusBpsAt,
   type GalaxyPulseMiningRound,
   type MineralCollectionPlanet,
@@ -112,8 +114,10 @@ export function calculateLeaderboardRows(input: {
   asOf: Date;
   planets: readonly LifetimeLeaderboardPlanet[];
 }): RankedLeaderboardRow[] {
-  const period = input.period ?? getLeaderboardPeriod(input.asOf);
-  const cutoff = new Date(Math.min(input.asOf.getTime(), period.endsAt.getTime()));
+  const asOf = capMineralProductionAt(input.asOf);
+  const period = input.period ?? getLeaderboardPeriod(asOf);
+  const cutoff = new Date(Math.min(asOf.getTime(), period.endsAt.getTime()));
+  const productionPaused = isMineralProductionPaused(input.asOf);
   const scoreByWallet = new Map<string, bigint>();
   const rateByWallet = new Map<string, bigint>();
   const eligiblePlanets = input.planets.filter(
@@ -152,7 +156,7 @@ export function calculateLeaderboardRows(input: {
     [...scoreByWallet].map(([walletAddress, scoreMicros]) => ({
       walletAddress,
       scoreMicros,
-      effectiveMineralsPerDayMicros: rateByWallet.get(walletAddress) ?? 0n,
+      effectiveMineralsPerDayMicros: productionPaused ? 0n : rateByWallet.get(walletAddress) ?? 0n,
     })),
   );
 }
@@ -162,6 +166,8 @@ export function calculateLiveLeaderboardRows(input: {
   asOf: Date;
   planets: readonly LiveLeaderboardPlanet[];
 }): RankedLeaderboardRow[] {
+  const asOf = capMineralProductionAt(input.asOf);
+  const productionPaused = isMineralProductionPaused(input.asOf);
   const scoreByWallet = new Map<string, bigint>();
   const rateByWallet = new Map<string, bigint>();
   const eligiblePlanets = input.planets.filter(
@@ -169,16 +175,16 @@ export function calculateLiveLeaderboardRows(input: {
       planet.baseMineralsPerDay !== null &&
       planet.baseMineralsPerDay > 0n &&
       planet.ownerAddress.toLowerCase() !== ZERO_ADDRESS &&
-      planet.generatedAt.getTime() <= input.asOf.getTime(),
+      planet.generatedAt.getTime() <= asOf.getTime(),
   );
-  const collectionResults = getCollectionMiningResults(eligiblePlanets, input.asOf);
+  const collectionResults = getCollectionMiningResults(eligiblePlanets, asOf);
 
   for (const planet of eligiblePlanets) {
     const collection = collectionResults.get(planet.id);
     const score = collection?.earnedMicros ?? calculateLifetimeMinerals({
       baseMineralsPerDay: planet.baseMineralsPerDay,
       mintedAt: planet.generatedAt,
-      asOf: input.asOf,
+      asOf,
     });
     if (score > 0n) addToMap(scoreByWallet, planet.ownerAddress, score);
     addToMap(
@@ -192,7 +198,7 @@ export function calculateLiveLeaderboardRows(input: {
     [...scoreByWallet].map(([walletAddress, scoreMicros]) => ({
       walletAddress,
       scoreMicros,
-      effectiveMineralsPerDayMicros: rateByWallet.get(walletAddress) ?? 0n,
+      effectiveMineralsPerDayMicros: productionPaused ? 0n : rateByWallet.get(walletAddress) ?? 0n,
     })),
   );
 }
@@ -222,8 +228,10 @@ export function calculatePostCutoverLeaderboardRows(input: {
 }): RankedLeaderboardRow[] {
   if (!Number.isFinite(input.cutoverAt.getTime()))
     throw new Error('Mineral economy cutover timestamp is invalid.');
-  const period = input.period ?? getLeaderboardPeriod(input.asOf);
-  const cutoff = new Date(Math.min(input.asOf.getTime(), period.endsAt.getTime()));
+  const asOf = capMineralProductionAt(input.asOf);
+  const period = input.period ?? getLeaderboardPeriod(asOf);
+  const cutoff = new Date(Math.min(asOf.getTime(), period.endsAt.getTime()));
+  const productionPaused = isMineralProductionPaused(input.asOf);
   const includeEventsAtAsOf = input.includeEventsAtAsOf === true;
   if (cutoff.getTime() < input.cutoverAt.getTime())
     throw new Error('Post-cutover leaderboard timestamp cannot be before cutover.');
@@ -320,7 +328,7 @@ export function calculatePostCutoverLeaderboardRows(input: {
     [...scoreByWallet].map(([walletAddress, scoreMicros]) => ({
       walletAddress,
       scoreMicros,
-      effectiveMineralsPerDayMicros: rateByWallet.get(walletAddress) ?? 0n,
+      effectiveMineralsPerDayMicros: productionPaused ? 0n : rateByWallet.get(walletAddress) ?? 0n,
     })),
   );
 }
@@ -378,23 +386,25 @@ async function getLiveLeaderboardSnapshot(
     options.mineralEconomyCutoverAt,
   );
   if (resolution.state === 'V1') {
+    const asOf = capMineralProductionAt(now);
     const planets = await prisma.backendPlanet.findMany({
       where: { status: 'READY', baseMineralsPerDay: { gt: 0n } },
       select: { id: true, ownerAddress: true, planetType: true, baseMineralsPerDay: true, generatedAt: true },
     });
-    return { asOf: now, rows: calculateLiveLeaderboardRows({ asOf: now, planets }) };
+    return { asOf, rows: calculateLiveLeaderboardRows({ asOf, planets }) };
   }
 
   return prisma.$transaction(
     async (transaction) => {
       const hasPostgresClock = typeof transaction.$queryRaw === 'function';
-      const asOf = hasPostgresClock
+      const observedAt = hasPostgresClock
         ? await getPostgresClockTimestamp(transaction)
         : now;
+      const asOf = capMineralProductionAt(observedAt);
       const transactionResolution = await resolveMineralEconomyForOperation(
         transaction,
         options.mineralEconomyCutoverAt,
-        asOf,
+        observedAt,
       );
       // Unit-only Prisma doubles lack PostgreSQL's clock; production clients require a persisted row.
       const cutoverAt = transactionResolution.state === 'V2' || !hasPostgresClock || !transaction.mineralEconomyCutover

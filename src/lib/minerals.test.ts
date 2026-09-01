@@ -7,6 +7,12 @@ describe('formatMinerals', () => {
     expect(formatMinerals(12_345_678n)).toBe('12.34');
     expect(formatMinerals(9_007_199_254_740_993_000_000n)).toBe('9,007,199,254,740,993');
   });
+
+  it('rounds to the nearest whole mineral when no fraction digits are requested', () => {
+    expect(formatMinerals(12_499_999n, 0)).toBe('12');
+    expect(formatMinerals(12_500_000n, 0)).toBe('13');
+    expect(formatMinerals(14_798_690_309n, 0)).toBe('14,799');
+  });
 });
 
 describe('interpolateMinerals', () => {

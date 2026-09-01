@@ -191,6 +191,34 @@ describe('live leaderboard', () => {
     ).rejects.toThrow('configured mineral economy cutover is not persisted');
   });
 
+  it('freezes the public leaderboard at the Season 1 deadline', async () => {
+    const prisma = {
+      backendPlanet: {
+        findMany: vi.fn().mockResolvedValue([{
+          id: 'final-minute',
+          ownerAddress: ADDRESS_A,
+          planetType: 'Gaia',
+          baseMineralsPerDay: 86_400n,
+          generatedAt: new Date('2026-08-28T23:58:00.000Z'),
+        }]),
+      },
+    } as unknown as PrismaClient;
+
+    const result = await getCurrentLeaderboard(
+      prisma,
+      new Date('2026-08-31T00:00:00.000Z'),
+      { offset: 0, limit: 50 },
+    );
+
+    expect(result.asOf).toEqual(new Date('2026-08-28T23:59:00.000Z'));
+    expect(result.rows).toEqual([{
+      rank: 1,
+      walletAddress: ADDRESS_A,
+      scoreMicros: 60_000_000n,
+      effectiveMineralsPerDayMicros: 0n,
+    }]);
+  });
+
   it('shows a spend immediately after the next leaderboard read', async () => {
     const purchases: Array<Record<string, unknown>> = [];
     const findMany = vi.fn().mockImplementation(async () => [

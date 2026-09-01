@@ -1,4 +1,3 @@
-import CountUp from '@/components/common/CountUp';
 import type { LeaderboardRow } from '@/hooks/useLeaderboard';
 import { formatMinerals } from '@/lib/minerals';
 
@@ -8,10 +7,6 @@ function shortAddress(address: string) {
 
 function isWallet(row: LeaderboardRow, walletAddress?: string) {
   return !!walletAddress && row.walletAddress.toLowerCase() === walletAddress.toLowerCase();
-}
-
-function toMineralNumber(micros: string) {
-  return Number(formatMinerals(BigInt(micros)).replaceAll(',', ''));
 }
 
 type RankTier = 'gold' | 'silver' | 'bronze' | 'quiet' | 'ordinary';
@@ -53,25 +48,64 @@ function RankBadge({ rank }: { rank: number }) {
   );
 }
 
-export function LeaderboardTable({ rows, walletAddress }: { rows: LeaderboardRow[]; walletAddress?: string }) {
+type LeaderboardTableProps = {
+  rows: LeaderboardRow[];
+  walletAddress?: string;
+  maximumFractionDigits?: number;
+  showRate?: boolean;
+};
+
+export function LeaderboardTable({
+  rows,
+  walletAddress,
+  maximumFractionDigits = 2,
+  showRate = true,
+}: LeaderboardTableProps) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-      <table className="hidden w-full table-fixed md:table">
-        <thead className="border-b border-[var(--border)] bg-[var(--surface-raised)] text-left telemetry text-[var(--text-secondary)]">
-          <tr><th className="w-20 px-4 py-3">Rank</th><th className="px-4 py-3">Wallet</th><th className="px-4 py-3 text-right">Minerals</th><th className="px-4 py-3 text-right">Per day</th></tr>
+    <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+      <table aria-label="Leaderboard standings" className="hidden w-full table-fixed md:table">
+        <thead className="border-b border-[var(--border)] bg-[var(--surface-raised)] text-left font-medium telemetry text-[var(--text-secondary)]">
+          <tr className="h-14">
+            <th className="w-20 px-4">Rank</th>
+            <th className="px-4">Wallet</th>
+            <th className="px-4 text-right">Minerals</th>
+            {showRate ? <th className="px-4 text-right">Per day</th> : null}
+          </tr>
         </thead>
         <tbody>
           {rows.map((row) => {
             const own = isWallet(row, walletAddress);
             const tier = rankTier(row.rank);
-            const score = toMineralNumber(row.scoreMicros);
-            const perDay = toMineralNumber(row.effectiveMineralsPerDayMicros);
+            const score = formatMinerals(BigInt(row.scoreMicros), maximumFractionDigits);
+            const perDay = formatMinerals(
+              BigInt(row.effectiveMineralsPerDayMicros),
+              maximumFractionDigits,
+            );
             return (
-              <tr key={row.walletAddress} data-wallet-row={own ? 'true' : undefined} data-rank-tier={tier} className={`border-b border-[var(--border)] last:border-0 ${RANK_ROW_CLASSES[tier]} ${own ? 'bg-violet-500/10' : ''}`}>
-                <td className="px-4 py-4"><RankBadge rank={row.rank} /></td>
-                <td className="px-4 py-4 font-mono text-sm text-[var(--text-secondary)]" title={row.walletAddress}>{shortAddress(row.walletAddress)}{own ? <span className="ml-2 text-violet-300">You</span> : null}</td>
-                <td className="px-4 py-4 text-right font-hud font-bold text-[var(--text-primary)]"><CountUp to={score} separator="," duration={0.5} className="count-up-text" /></td>
-                <td className="px-4 py-4 text-right font-mono text-sm text-[var(--text-secondary)]"><CountUp to={perDay} separator="," duration={0.5} className="count-up-text" /></td>
+              <tr
+                key={row.walletAddress}
+                data-wallet-row={own ? 'true' : undefined}
+                data-rank-tier={tier}
+                className={`h-[52px] border-b border-[var(--border)] last:border-0 ${RANK_ROW_CLASSES[tier]} ${own ? 'bg-violet-500/10' : ''}`}
+              >
+                <td className="px-4 py-2">
+                  <RankBadge rank={row.rank} />
+                </td>
+                <td
+                  className="px-4 py-2 font-mono text-sm text-[var(--text-secondary)]"
+                  title={row.walletAddress}
+                >
+                  {shortAddress(row.walletAddress)}
+                  {own ? <span className="ml-2 text-violet-300">You</span> : null}
+                </td>
+                <td className="px-4 py-2 text-right font-hud font-bold tabular-nums text-[var(--text-primary)]">
+                  {score}
+                </td>
+                {showRate ? (
+                  <td className="px-4 py-2 text-right font-mono text-sm tabular-nums text-[var(--text-secondary)]">
+                    {perDay}
+                  </td>
+                ) : null}
               </tr>
             );
           })}
@@ -81,16 +115,33 @@ export function LeaderboardTable({ rows, walletAddress }: { rows: LeaderboardRow
         {rows.map((row) => {
           const own = isWallet(row, walletAddress);
           const tier = rankTier(row.rank);
-          const score = toMineralNumber(row.scoreMicros);
-          const perDay = toMineralNumber(row.effectiveMineralsPerDayMicros);
+          const score = formatMinerals(BigInt(row.scoreMicros), maximumFractionDigits);
+          const perDay = formatMinerals(
+            BigInt(row.effectiveMineralsPerDayMicros),
+            maximumFractionDigits,
+          );
           return (
-            <article key={row.walletAddress} data-wallet-row={own ? 'true' : undefined} data-rank-tier={tier} className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 p-4 ${RANK_ROW_CLASSES[tier]} ${own ? 'bg-violet-500/10' : ''}`}>
+            <article
+              key={row.walletAddress}
+              data-wallet-row={own ? 'true' : undefined}
+              data-rank-tier={tier}
+              className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 p-4 ${RANK_ROW_CLASSES[tier]} ${own ? 'bg-violet-500/10' : ''}`}
+            >
               <RankBadge rank={row.rank} />
               <span className="min-w-0 truncate font-mono text-xs text-[var(--text-secondary)]">
                 {shortAddress(row.walletAddress)}
                 {own ? <span className="ml-2 text-violet-300">You</span> : null}
               </span>
-              <div className="text-right"><p className="font-hud font-bold text-[var(--text-primary)]"><CountUp to={score} separator="," duration={0.5} className="count-up-text" /></p><p className="font-mono text-[11px] text-[var(--text-secondary)]">+<CountUp to={perDay} separator="," duration={0.5} className="count-up-text" />/day</p></div>
+              <div className="text-right">
+                <p className="font-hud font-bold tabular-nums text-[var(--text-primary)]">
+                  {score}
+                </p>
+                {showRate ? (
+                  <p className="font-mono text-[11px] tabular-nums text-[var(--text-secondary)]">
+                    +{perDay}/day
+                  </p>
+                ) : null}
+              </div>
             </article>
           );
         })}

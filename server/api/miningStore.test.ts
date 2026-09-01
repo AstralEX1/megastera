@@ -414,4 +414,62 @@ describe('backend Planet mining snapshots', () => {
       upgradeBonusBps: 2500,
     });
   });
+
+  it('returns a paused wallet snapshot at the Season 1 deadline', async () => {
+    const cutoverAt = new Date('2026-08-20T00:00:00.000Z');
+    const ownerAddress = '0x0000000000000000000000000000000000000001';
+    const transaction = {
+      backendPlanet: {
+        findMany: vi.fn().mockResolvedValue([{
+          id: 'paused-planet',
+          ownerAddress,
+          planetType: 'Gaia',
+          planetName: 'Paused Planet',
+          seed: `0x${'11'.repeat(32)}`,
+          traitsHash: `0x${'22'.repeat(32)}`,
+          generatorVersion: 1,
+          terrain: 'Plains',
+          rarity: 'Common',
+          satelliteCount: 0,
+          hasRing: false,
+          baseMineralsPerDay: 1n,
+          upgradeLevel: 2,
+          upgradeBonusBps: 2_500,
+          generatedAt: cutoverAt,
+        }]),
+      },
+      mineralAccount: {
+        findUnique: vi.fn().mockResolvedValue({
+          ownerAddress,
+          balanceMicros: 99_000_000n,
+          lastSettledAt: new Date('2026-08-30T00:00:00.000Z'),
+        }),
+      },
+      planetUpgradePurchase: { findMany: vi.fn().mockResolvedValue([]) },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof transaction) => unknown) => callback(transaction)),
+    } as unknown as PrismaClient;
+
+    const snapshot = await getBackendWalletMiningSnapshot(
+      prisma,
+      ownerAddress,
+      new Date('2026-08-31T00:00:00.000Z'),
+      { mineralEconomyCutoverAt: cutoverAt, mineralUpgradesEnabled: true },
+    );
+
+    expect(snapshot).toMatchObject({
+      asOf: '2026-08-28T23:59:00.000Z',
+      currentBalanceMicros: '8999305',
+      effectiveMineralsPerDayMicros: '0',
+      upgradesEnabled: false,
+    });
+    expect(snapshot.planets[0]).toMatchObject({
+      planetId: 'paused-planet',
+      effectiveMineralsPerDayMicros: '0',
+      earnedMicros: '8999305',
+      upgradeLevel: 0,
+      upgradeBonusBps: 0,
+    });
+  });
 });

@@ -4,6 +4,8 @@ import {
 } from './collectionMining.js';
 
 export const MILLISECONDS_PER_DAY = 86_400_000n;
+export const MINERAL_PRODUCTION_PAUSED_AT = '2026-08-28T23:59:00.000Z';
+const MINERAL_PRODUCTION_PAUSED_AT_MS = Date.parse(MINERAL_PRODUCTION_PAUSED_AT);
 
 export type MineralProductionSegment = {
   from: Date;
@@ -24,6 +26,7 @@ export type MineralUpgradePurchase = {
   planetId: string;
   targetLevel: number;
   bonusBpsAfter: number;
+  costMicros?: bigint;
   purchasedAt: Date;
 };
 
@@ -42,6 +45,16 @@ function timestamp(value: Date, name: string): number {
   const milliseconds = value.getTime();
   if (!Number.isFinite(milliseconds)) throw new Error(`${name} timestamp is invalid.`);
   return milliseconds;
+}
+
+export function capMineralProductionAt(value: Date): Date {
+  return timestamp(value, 'Mineral production') <= MINERAL_PRODUCTION_PAUSED_AT_MS
+    ? value
+    : new Date(MINERAL_PRODUCTION_PAUSED_AT_MS);
+}
+
+export function isMineralProductionPaused(value: Date): boolean {
+  return timestamp(value, 'Mineral production') >= MINERAL_PRODUCTION_PAUSED_AT_MS;
 }
 
 function assertNonNegative(name: string, value: bigint): void {
@@ -148,10 +161,11 @@ export function calculateCollectionProduction(input: {
   anchor: Date;
 }): bigint {
   const fromMilliseconds = timestamp(input.from, 'Production start');
-  const toMilliseconds = timestamp(input.to, 'Production end');
-  if (toMilliseconds < fromMilliseconds) {
+  const requestedToMilliseconds = timestamp(input.to, 'Production end');
+  if (requestedToMilliseconds < fromMilliseconds) {
     throw new Error('Production interval cannot end before it starts.');
   }
+  const toMilliseconds = Math.min(requestedToMilliseconds, MINERAL_PRODUCTION_PAUSED_AT_MS);
   const activatedAt = timestamp(activationAt(input.planet), `Planet ${input.planet.id} activation`);
   if (!input.anchor) throw new Error('Production anchor is required.');
   const startMilliseconds = Math.max(fromMilliseconds, activatedAt);
@@ -192,17 +206,17 @@ export function calculateCollectionProduction(input: {
       activeBonusBps,
     ),
     from: cursor,
-    to: input.to,
+    to: new Date(toMilliseconds),
     anchor,
   });
   return total;
 }
 
-export function upgradeBonusBpsAt(
+export function upgradeStateAt(
   purchases: readonly MineralUpgradePurchase[],
   planetId: string,
   atMilliseconds: number,
-): number {
+): { level: number; bonusBps: number } {
   let bonusBps = 0;
   let latestPurchaseAt = Number.NEGATIVE_INFINITY;
   let latestTargetLevel = -1;
@@ -222,7 +236,15 @@ export function upgradeBonusBpsAt(
       bonusBps = purchase.bonusBpsAfter;
     }
   }
-  return bonusBps;
+  return { level: Math.max(0, latestTargetLevel), bonusBps };
+}
+
+export function upgradeBonusBpsAt(
+  purchases: readonly MineralUpgradePurchase[],
+  planetId: string,
+  atMilliseconds: number,
+): number {
+  return upgradeStateAt(purchases, planetId, atMilliseconds).bonusBps;
 }
 
 export function galaxyPulseBpsAt(
@@ -255,10 +277,11 @@ export function calculateHistoricalPlanetProduction(input: {
   anchor: Date;
 }): bigint {
   const fromMilliseconds = timestamp(input.from, 'Production start');
-  const toMilliseconds = timestamp(input.to, 'Production end');
-  if (toMilliseconds < fromMilliseconds) {
+  const requestedToMilliseconds = timestamp(input.to, 'Production end');
+  if (requestedToMilliseconds < fromMilliseconds) {
     throw new Error('Production interval cannot end before it starts.');
   }
+  const toMilliseconds = Math.min(requestedToMilliseconds, MINERAL_PRODUCTION_PAUSED_AT_MS);
   if (!input.anchor) throw new Error('Production anchor is required.');
   const activatedAt = timestamp(activationAt(input.planet), `Planet ${input.planet.id} activation`);
   const startMilliseconds = Math.max(fromMilliseconds, activatedAt);
@@ -313,7 +336,7 @@ export function calculateHistoricalPlanetProduction(input: {
       activeBonusBps + activeUpgradeBonusBps + activePulseBps,
     ),
     from: cursor,
-    to: input.to,
+    to: new Date(toMilliseconds),
     anchor: input.anchor,
   });
   return total;

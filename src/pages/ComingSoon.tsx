@@ -19,8 +19,8 @@ const midSeason = [
 
 const finale = [
   'Final Leaderboard Snapshot',
-  'USDC Rewards for Top Players',
-  'Unique 1/1 NFT Planets for the Top 10',
+  'Megapot Ticket Rewards for the Top 3',
+  'Unique 1/1 NFT Planets for the Top 5',
 ] as const;
 
 const stellarExpansion = [
@@ -158,7 +158,7 @@ export function ComingSoon() {
         <header className="border-b border-[var(--border)] pb-6">
           <span className="telemetry text-[var(--accent)]">
             <DecryptedText
-              text="Coming Soon"
+              text="Season 1 Finale"
               className="text-[var(--accent)]"
               encryptedClassName="text-[var(--text-secondary)]"
             />
@@ -194,14 +194,30 @@ export function ComingSoon() {
           </FadeContent>
 
           <FadeContent delay={0.03} duration={0.5}>
-            <section className="relative grid grid-cols-[32px_minmax(0,1fr)] gap-5 pb-10" data-roadmap-current="true">
-              <TimelineNode tone="current" nodeRef={currentNodeRef}>◆</TimelineNode>
-              <div className="rounded-2xl border border-[var(--accent)]/75 bg-[linear-gradient(145deg,rgba(174,185,255,0.08),rgba(9,10,18,0.92)_48%)] p-5 shadow-[0_0_40px_rgba(174,185,255,0.08)] sm:p-6">
-                <span className="telemetry text-[var(--accent)]">Next Update</span>
-                <h2 className="mt-2 font-hud text-2xl font-bold tracking-[-0.035em] text-[var(--text-primary)]">
+            <section className="relative grid grid-cols-[32px_minmax(0,1fr)] gap-5 pb-10">
+              <TimelineNode tone="done">✓</TimelineNode>
+              <div className="pt-0.5">
+                <span className="telemetry text-[var(--success)]">Completed</span>
+                <h2 className="mt-2 font-hud text-xl font-semibold text-[var(--text-primary)]">
                   Mid-Season 1 Update
                 </h2>
-                <RoadmapList items={midSeason} />
+                <RoadmapList items={midSeason} muted completed />
+              </div>
+            </section>
+          </FadeContent>
+
+          <FadeContent duration={0.52}>
+            <section
+              className="relative grid grid-cols-[32px_minmax(0,1fr)] gap-5 pb-10"
+              data-roadmap-current="true"
+            >
+              <TimelineNode tone="current" nodeRef={currentNodeRef}>◆</TimelineNode>
+              <div className="rounded-2xl border border-[var(--accent)]/75 bg-[linear-gradient(145deg,rgba(174,185,255,0.08),rgba(9,10,18,0.92)_48%)] p-5 shadow-[0_0_40px_rgba(174,185,255,0.08)] sm:p-6">
+                <span className="telemetry text-[var(--accent)]">Current Stage</span>
+                <h2 className="mt-2 font-hud text-2xl font-bold tracking-[-0.035em] text-[var(--text-primary)]">
+                  Season 1 Finale
+                </h2>
+                <RoadmapList items={finale} />
               </div>
             </section>
           </FadeContent>
@@ -214,22 +230,6 @@ export function ComingSoon() {
               <span aria-hidden="true" className="h-px flex-1 bg-gradient-to-r from-[var(--border)] via-[var(--border)] to-transparent" />
             </div>
           </div>
-
-          <FadeContent duration={0.52}>
-            <section
-              className="relative grid grid-cols-[32px_minmax(0,1fr)] gap-5 pb-10"
-              data-roadmap-future="true"
-            >
-              <TimelineNode tone="future">01</TimelineNode>
-              <div className={futureCardClass}>
-                <span className="telemetry text-[rgba(150,154,173,0.78)]">Season 1</span>
-                <h2 className="mt-2 font-hud text-2xl font-semibold tracking-[-0.035em] text-[rgba(244,247,255,0.78)]">
-                  Season 1 Finale
-                </h2>
-                <RoadmapList items={finale} future />
-              </div>
-            </section>
-          </FadeContent>
 
           <FadeContent duration={0.52}>
             <section

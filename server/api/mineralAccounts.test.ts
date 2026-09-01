@@ -54,6 +54,32 @@ describe('MineralAccount initialization', () => {
     })).toBe(2_500_000n);
   });
 
+  it('reconstructs the cutoff balance when the persisted account settled later', () => {
+    expect(calculateCurrentMineralBalanceMicros({
+      account: {
+        balanceMicros: 99_000_000n,
+        lastSettledAt: new Date('2026-08-30T00:00:00.000Z'),
+      },
+      openingBalanceMicros: 500_000n,
+      cutoverAt: CUTOVER,
+      asOf: new Date('2026-09-01T00:00:00.000Z'),
+      planets: [{
+        id: 'late-account',
+        ownerAddress: OWNER,
+        planetType: 'Gaia',
+        baseMineralsPerDay: 0n,
+        generatedAt: CUTOVER,
+      }],
+      purchases: [{
+        planetId: 'late-account',
+        targetLevel: 1,
+        bonusBpsAfter: 1_000,
+        costMicros: 200_000n,
+        purchasedAt: new Date('2026-08-21T00:00:00.000Z'),
+      }],
+    })).toBe(300_000n);
+  });
+
   it('rejects a missing account when spending history exists', () => {
     expect(() => calculateCurrentMineralBalanceMicros({
       account: null,

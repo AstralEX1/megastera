@@ -1,6 +1,8 @@
 import { type CollectionMiningPlanet, calculateCollectionMining } from './collectionMining.js';
 import {
+  capMineralProductionAt,
   calculateHistoricalProduction,
+  isMineralProductionPaused,
   type GalaxyPulseMiningRound,
   type MineralCollectionPlanet,
   type MineralUpgradePurchase,
@@ -235,7 +237,8 @@ export function calculateCurrentMineralBalanceMicros(input: {
 }): bigint {
   assertCutover(input.cutoverAt);
   assertTimestamp(input.asOf, 'Current balance');
-  if (input.asOf < input.cutoverAt) {
+  const asOf = capMineralProductionAt(input.asOf);
+  if (asOf < input.cutoverAt) {
     throw new Error('Current balance timestamp cannot be before mineral economy cutover.');
   }
   if (!input.account && input.purchases.length > 0) {
@@ -246,15 +249,27 @@ export function calculateCurrentMineralBalanceMicros(input: {
   if (from < input.cutoverAt) {
     throw new Error('Account settlement timestamp cannot be before mineral economy cutover.');
   }
+  const reconstructAtCutoff = from > asOf;
   const producedMicros = calculateHistoricalProduction({
     planets: input.planets,
     purchases: input.purchases,
-    from,
-    to: input.asOf,
+    from: reconstructAtCutoff ? input.cutoverAt : from,
+    to: asOf,
     anchor: input.cutoverAt,
     pulseRounds: input.pulseRounds,
   });
-  const balanceMicros = (input.account?.balanceMicros ?? input.openingBalanceMicros) + producedMicros;
+  const purchaseCostsMicros = reconstructAtCutoff
+    ? input.purchases.reduce((total, purchase) => {
+        if (purchase.purchasedAt > asOf) return total;
+        if (purchase.costMicros === undefined) {
+          throw new Error('Cutoff balance reconstruction requires upgrade purchase costs.');
+        }
+        return total + purchase.costMicros;
+      }, 0n)
+    : 0n;
+  const balanceMicros = reconstructAtCutoff
+    ? input.openingBalanceMicros + producedMicros - purchaseCostsMicros
+    : (input.account?.balanceMicros ?? input.openingBalanceMicros) + producedMicros;
   if (balanceMicros < 0n) throw new Error('Mineral balance cannot be negative.');
   return balanceMicros;
 }
@@ -475,28 +490,30 @@ export async function settleMineralAccount(input: {
 }) {
   assertTimestamp(input.settledAt, 'Settlement');
   assertTimestamp(input.account.lastSettledAt, 'Account settlement');
-  if (input.settledAt < input.account.lastSettledAt) {
+  const settledAt = capMineralProductionAt(input.settledAt);
+  if (settledAt < input.account.lastSettledAt) {
+    if (isMineralProductionPaused(input.settledAt)) return input.account;
     throw new Error('Settlement timestamp cannot move backwards.');
   }
   const pulseRounds = input.pulseRounds ?? (input.prisma.galaxyPulseRound
-    ? await loadGalaxyPulseRounds(input.prisma, input.settledAt)
+    ? await loadGalaxyPulseRounds(input.prisma, settledAt)
     : []);
   const producedMicros = calculateHistoricalProduction({
     planets: input.planets,
     purchases: input.purchases,
     from: input.account.lastSettledAt,
-    to: input.settledAt,
+    to: settledAt,
     anchor: input.anchor,
     pulseRounds,
   });
-  if (producedMicros === 0n && input.settledAt.getTime() === input.account.lastSettledAt.getTime()) {
+  if (producedMicros === 0n && settledAt.getTime() === input.account.lastSettledAt.getTime()) {
     return { ...input.account, balanceMicros: input.account.balanceMicros };
   }
   const balanceMicros = input.account.balanceMicros + producedMicros;
   if (balanceMicros < 0n) throw new Error('Mineral balance cannot be negative.');
   const updated = await input.prisma.mineralAccount.update({
     where: { ownerAddress: normalizeOwner(input.account.ownerAddress) },
-    data: { balanceMicros, lastSettledAt: input.settledAt },
+    data: { balanceMicros, lastSettledAt: settledAt },
   });
   return updated;
 }
@@ -595,6 +612,7 @@ export async function purchasePlanetUpgrade(
     if (resolution.state === 'STAGED_V2') throw new Error('Mineral economy is not active yet.');
     const cutoverAt = resolution.cutoverAt;
     if (!cutoverAt) throw new Error('Mineral economy is disabled.');
+    if (isMineralProductionPaused(purchasedAt)) throw new Error('Mineral production is paused.');
     const account = await ensureAndLockMineralAccount(transaction, ownerAddress, cutoverAt);
     const planet = await lockPlanet(transaction, input.planetId);
     if (!planet) throw new Error('Planet not found.');

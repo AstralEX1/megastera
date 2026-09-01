@@ -6,9 +6,12 @@ import {
   type CollectionMiningPlanet,
 } from './collectionMining.js';
 import {
+  capMineralProductionAt,
   calculateHistoricalPlanetProduction,
   collectionBonusBpsAt,
   galaxyPulseBpsAt,
+  isMineralProductionPaused,
+  upgradeStateAt,
   type MineralCollectionPlanet,
   type MineralUpgradePurchase,
 } from './mineralEconomy.js';
@@ -43,11 +46,12 @@ export async function getBackendWalletMiningSnapshot(
   return prisma.$transaction(
     async (transaction) => {
       const hasPostgresClock = typeof transaction.$queryRaw === 'function';
-      let asOf = hasPostgresClock ? await getPostgresClockTimestamp(transaction) : now;
+      const observedAt = hasPostgresClock ? await getPostgresClockTimestamp(transaction) : now;
+      let asOf = capMineralProductionAt(observedAt);
       const transactionResolution = await resolveMineralEconomyForOperation(
         transaction,
         options.mineralEconomyCutoverAt,
-        asOf,
+        observedAt,
       );
       // Unit-only Prisma doubles lack PostgreSQL's clock; production clients require a persisted row.
       const cutoverAt = transactionResolution.state === 'V2' || !hasPostgresClock || !transaction.mineralEconomyCutover
@@ -64,7 +68,7 @@ export async function getBackendWalletMiningSnapshot(
         where: { ownerAddress: ownerAddress.toLowerCase() },
       });
       if (!hasPostgresClock && account?.lastSettledAt && account.lastSettledAt > asOf) {
-        asOf = account.lastSettledAt;
+        asOf = capMineralProductionAt(account.lastSettledAt);
       }
       if (asOf < cutoverAt) {
         return getV1WalletMiningSnapshot(
@@ -102,7 +106,7 @@ export async function getBackendWalletMiningSnapshot(
       const purchaseRows = await transaction.planetUpgradePurchase.findMany({
         where: { walletAddress: ownerAddress.toLowerCase(), purchasedAt: { lte: asOf } },
         orderBy: [{ purchasedAt: 'asc' }, { id: 'asc' }],
-        select: { planetId: true, targetLevel: true, bonusBpsAfter: true, purchasedAt: true },
+        select: { planetId: true, targetLevel: true, bonusBpsAfter: true, costMicros: true, purchasedAt: true },
       });
       const purchases = purchaseRows.filter((purchase) => purchase.purchasedAt.getTime() <= asOf.getTime()) as MineralUpgradePurchase[];
       const openingPlanets = economyPlanets.filter((planet) => planet.generatedAt && planet.generatedAt <= cutoverAt);
@@ -129,6 +133,7 @@ export async function getBackendWalletMiningSnapshot(
         planets: openingPlanets as BackendMiningPlanetRow[],
         asOf: cutoverAt,
       });
+      const productionPaused = isMineralProductionPaused(observedAt);
       let effectiveMineralsPerDayMicros = 0n;
       const snapshots = activePlanets.map((planet) => {
         const collectionBonusBps = collectionBonusBpsAt(economyPlanets, asOf, planet);
@@ -138,12 +143,17 @@ export async function getBackendWalletMiningSnapshot(
             candidate.planetType === planet.planetType &&
             candidate.generatedAt && candidate.generatedAt.getTime() <= asOf.getTime(),
         ).length;
-        const upgradeBonusBps = planet.upgradeBonusBps;
+        const { level: upgradeLevel, bonusBps: upgradeBonusBps } = upgradeStateAt(
+          purchases,
+          planet.id,
+          asOf.getTime(),
+        );
         const galaxyPulseBps = galaxyPulseBpsAt(pulseRounds, planet.planetType, asOf.getTime());
-        const effectiveRate = calculateEffectiveMineralsPerDayMicros(
+        const liveRate = calculateEffectiveMineralsPerDayMicros(
           planet.baseMineralsPerDay,
           collectionBonusBps + upgradeBonusBps + galaxyPulseBps,
         );
+        const effectiveRate = productionPaused ? 0n : liveRate;
         effectiveMineralsPerDayMicros += effectiveRate;
         const preCutoverEarned = preCutoverCalculations.get(planet.id)?.earnedMicros ?? 0n;
         const postCutoverEarned = calculateHistoricalPlanetProduction({
@@ -159,8 +169,8 @@ export async function getBackendWalletMiningSnapshot(
         try {
           nextUpgrade = getNextMineralUpgrade({
             baseMineralsPerDay: planet.baseMineralsPerDay,
-            upgradeLevel: planet.upgradeLevel,
-            upgradeBonusBps: planet.upgradeBonusBps,
+            upgradeLevel,
+            upgradeBonusBps,
           });
         } catch (error) {
           if (!(error instanceof Error) || !error.message.includes('bonus delta')) throw error;
@@ -179,8 +189,8 @@ export async function getBackendWalletMiningSnapshot(
           planetType: planet.planetType,
           sameTypeCount,
           collectionBonusBps,
-          upgradeLevel: planet.upgradeLevel,
-          upgradeBonusBps: planet.upgradeBonusBps,
+          upgradeLevel,
+          upgradeBonusBps,
           galaxyPulseBps,
           effectiveMineralsPerDayMicros: effectiveRate.toString(),
           earnedMicros: (preCutoverEarned + postCutoverEarned).toString(),
@@ -200,7 +210,7 @@ export async function getBackendWalletMiningSnapshot(
         ownedPlanetCount: snapshots.length,
         currentBalanceMicros: currentBalanceMicros.toString(),
         effectiveMineralsPerDayMicros: effectiveMineralsPerDayMicros.toString(),
-        upgradesEnabled: options.mineralUpgradesEnabled === true,
+        upgradesEnabled: options.mineralUpgradesEnabled === true && !productionPaused,
         galaxyPulse: serializeCurrentGalaxyPulse(pulseRounds.at(-1) ?? null),
         planets: snapshots,
       };
@@ -211,6 +221,8 @@ export async function getBackendWalletMiningSnapshot(
 }
 
 async function getV1WalletMiningSnapshot(prisma: PrismaClient, ownerAddress: string, now: Date) {
+  const asOf = capMineralProductionAt(now);
+  const productionPaused = isMineralProductionPaused(now);
   const planets = await prisma.backendPlanet.findMany({
     where: { ownerAddress: ownerAddress.toLowerCase(), status: 'READY' },
     select: {
@@ -224,14 +236,15 @@ async function getV1WalletMiningSnapshot(prisma: PrismaClient, ownerAddress: str
     },
     orderBy: [{ generatedAt: 'desc' }, { id: 'asc' }],
   });
-  const calculations = calculateCollectionMining({ planets: planets as BackendMiningPlanetRow[], asOf: now });
+  const calculations = calculateCollectionMining({ planets: planets as BackendMiningPlanetRow[], asOf });
   let earnedMicros = 0n;
   let effectiveMineralsPerDayMicros = 0n;
   const snapshots = planets.flatMap((planet) => {
     const calculated = calculations.get(planet.id);
     if (!calculated) return [];
     earnedMicros += calculated.earnedMicros;
-    effectiveMineralsPerDayMicros += calculated.effectiveMineralsPerDayMicros;
+    const effectiveRate = productionPaused ? 0n : calculated.effectiveMineralsPerDayMicros;
+    effectiveMineralsPerDayMicros += effectiveRate;
     return [{
       planetId: planet.id,
       rarity: planet.rarity,
@@ -241,14 +254,14 @@ async function getV1WalletMiningSnapshot(prisma: PrismaClient, ownerAddress: str
       collectionBonusBps: calculated.collectionBonusBps,
       upgradeLevel: planet.upgradeLevel,
       galaxyPulseBps: 0,
-      effectiveMineralsPerDayMicros: calculated.effectiveMineralsPerDayMicros.toString(),
+      effectiveMineralsPerDayMicros: effectiveRate.toString(),
       earnedMicros: calculated.earnedMicros.toString(),
       activeSince: planet.generatedAt.toISOString(),
     }];
   });
   const snapshot = {
     ownerAddress,
-    asOf: now.toISOString(),
+    asOf: asOf.toISOString(),
     ownedPlanetCount: snapshots.length,
     earnedMicros: earnedMicros.toString(),
     currentBalanceMicros: earnedMicros.toString(),
