@@ -13,6 +13,7 @@ export type LeaderboardRow = {
   walletAddress: `0x${string}`;
   scoreMicros: string;
   effectiveMineralsPerDayMicros: string;
+  achievementStars?: number;
 };
 
 export type LeaderboardPage = {
@@ -43,7 +44,9 @@ export function fetchCurrentLeaderboard(offset = 0, limit = 50): Promise<Leaderb
   return readJson(`/api/leaderboard/current?offset=${offset}&limit=${limit}`, 'Leaderboard');
 }
 
-export function fetchWalletLeaderboardPosition(address: `0x${string}`): Promise<WalletLeaderboardPosition> {
+export function fetchWalletLeaderboardPosition(
+  address: `0x${string}`,
+): Promise<WalletLeaderboardPosition> {
   return readJson(`/api/leaderboard/current/${address}`, 'Wallet leaderboard position');
 }
 

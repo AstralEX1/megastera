@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LeaderboardRow } from '@/hooks/useLeaderboard';
 import { LeaderboardTable } from './LeaderboardTable';
@@ -30,16 +30,53 @@ describe('LeaderboardTable', () => {
     );
 
     const expectedTiers = new Map<string, [string, string, string | null]>([
-      ['1', ['gold', 'border-[var(--warning)]', 'bg-[linear-gradient(90deg,rgba(255,184,77,0.08),transparent)]']],
-      ['2', ['silver', 'border-[var(--text-secondary)]', 'bg-[linear-gradient(90deg,rgba(150,154,173,0.06),transparent)]']],
-      ['3', ['bronze', 'border-[#c58b62]', 'bg-[linear-gradient(90deg,rgba(197,139,98,0.06),transparent)]']],
-      ['4', ['quiet', 'border-[var(--border-strong)]', 'bg-[linear-gradient(90deg,rgba(150,154,173,0.04),transparent)]']],
-      ['5', ['quiet', 'border-[var(--border-strong)]', 'bg-[linear-gradient(90deg,rgba(150,154,173,0.04),transparent)]']],
+      [
+        '1',
+        [
+          'gold',
+          'border-[var(--warning)]',
+          'bg-[linear-gradient(90deg,rgba(255,184,77,0.08),transparent)]',
+        ],
+      ],
+      [
+        '2',
+        [
+          'silver',
+          'border-[var(--text-secondary)]',
+          'bg-[linear-gradient(90deg,rgba(150,154,173,0.06),transparent)]',
+        ],
+      ],
+      [
+        '3',
+        [
+          'bronze',
+          'border-[#c58b62]',
+          'bg-[linear-gradient(90deg,rgba(197,139,98,0.06),transparent)]',
+        ],
+      ],
+      [
+        '4',
+        [
+          'quiet',
+          'border-[var(--border-strong)]',
+          'bg-[linear-gradient(90deg,rgba(150,154,173,0.04),transparent)]',
+        ],
+      ],
+      [
+        '5',
+        [
+          'quiet',
+          'border-[var(--border-strong)]',
+          'bg-[linear-gradient(90deg,rgba(150,154,173,0.04),transparent)]',
+        ],
+      ],
       ['6', ['ordinary', 'border-transparent', null]],
     ]);
 
     const desktopRows = [...container.querySelectorAll('tbody tr')] as HTMLElement[];
-    const mobileRows = [...container.querySelectorAll('[data-mobile-standings] article')] as HTMLElement[];
+    const mobileRows = [
+      ...container.querySelectorAll('[data-mobile-standings] article'),
+    ] as HTMLElement[];
 
     for (const [rank, [tier, badgeClass, rowClass]] of expectedTiers) {
       const badges = [...container.querySelectorAll(`[data-rank="${rank}"]`)] as HTMLElement[];
@@ -50,7 +87,9 @@ describe('LeaderboardTable', () => {
       });
 
       for (const rowsForViewport of [desktopRows, mobileRows]) {
-        const row = rowsForViewport.find((candidate) => candidate.querySelector(`[data-rank="${rank}"]`));
+        const row = rowsForViewport.find((candidate) =>
+          candidate.querySelector(`[data-rank="${rank}"]`),
+        );
         expect(row).toBeDefined();
         if (rowClass) {
           expect(row).toHaveClass(rowClass);
@@ -68,5 +107,17 @@ describe('LeaderboardTable', () => {
       expect(row).toHaveClass('bg-[linear-gradient(90deg,rgba(197,139,98,0.06),transparent)]');
       expect(row).toHaveTextContent('You');
     });
+  });
+
+  it('shows achievement stars beside the leaderboard score when the snapshot provides them', () => {
+    const rowsWithStars = rows.map((row) => ({
+      ...row,
+      achievementStars: 10 + row.rank,
+    }));
+
+    render(<LeaderboardTable rows={rowsWithStars} />);
+
+    expect(screen.getByRole('columnheader', { name: 'Stars' })).toBeInTheDocument();
+    expect(screen.getAllByLabelText('11 achievement stars')).toHaveLength(2);
   });
 });

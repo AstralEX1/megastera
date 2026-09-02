@@ -48,6 +48,19 @@ function RankBadge({ rank }: { rank: number }) {
   );
 }
 
+function AchievementStars({ count }: { count: number }) {
+  return (
+    <span
+      role="img"
+      aria-label={`${count} achievement stars`}
+      className="inline-flex items-center justify-end gap-1 font-mono text-sm font-semibold tabular-nums text-amber-300"
+    >
+      <span aria-hidden="true">★</span>
+      {count}
+    </span>
+  );
+}
+
 type LeaderboardTableProps = {
   rows: LeaderboardRow[];
   walletAddress?: string;
@@ -61,6 +74,8 @@ export function LeaderboardTable({
   maximumFractionDigits = 2,
   showRate = true,
 }: LeaderboardTableProps) {
+  const showAchievementStars = rows.some((row) => row.achievementStars !== undefined);
+
   return (
     <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
       <table aria-label="Leaderboard standings" className="hidden w-full table-fixed md:table">
@@ -69,6 +84,7 @@ export function LeaderboardTable({
             <th className="w-20 px-4">Rank</th>
             <th className="px-4">Wallet</th>
             <th className="px-4 text-right">Minerals</th>
+            {showAchievementStars ? <th className="w-24 px-4 text-right">Stars</th> : null}
             {showRate ? <th className="px-4 text-right">Per day</th> : null}
           </tr>
         </thead>
@@ -101,6 +117,15 @@ export function LeaderboardTable({
                 <td className="px-4 py-2 text-right font-hud font-bold tabular-nums text-[var(--text-primary)]">
                   {score}
                 </td>
+                {showAchievementStars ? (
+                  <td className="px-4 py-2 text-right">
+                    {row.achievementStars === undefined ? (
+                      <span className="text-[var(--text-muted)]">-</span>
+                    ) : (
+                      <AchievementStars count={row.achievementStars} />
+                    )}
+                  </td>
+                ) : null}
                 {showRate ? (
                   <td className="px-4 py-2 text-right font-mono text-sm tabular-nums text-[var(--text-secondary)]">
                     {perDay}
@@ -136,6 +161,11 @@ export function LeaderboardTable({
                 <p className="font-hud font-bold tabular-nums text-[var(--text-primary)]">
                   {score}
                 </p>
+                {row.achievementStars === undefined ? null : (
+                  <p className="mt-0.5">
+                    <AchievementStars count={row.achievementStars} />
+                  </p>
+                )}
                 {showRate ? (
                   <p className="font-mono text-[11px] tabular-nums text-[var(--text-secondary)]">
                     +{perDay}/day
