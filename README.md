@@ -7,11 +7,14 @@
     <a href="https://x.com/AstralEX163/status/2088334372063654047"><img src="https://img.shields.io/badge/Watch-Game_Review-1DA1F2?style=for-the-badge" alt="Watch the Megastera game review" /></a>
     <a href="https://x.com/megapot/status/2092721588269396189"><img src="https://img.shields.io/badge/INCO%20%C3%97%20MEGAPOT%20GAME%20JAM-MEGAPOT%20TRACK%20%C2%B7%201ST%20PLACE-8D6B13?style=for-the-badge&labelColor=171923" alt="Megapot Track 1st Place — Inco × Megapot Summer Game Jam" /></a>
   </p>
-  <img
-    src="https://github.com/user-attachments/assets/8bcd7b58-bec4-4e94-aaff-05c377cf35e3"
-    alt="A procedurally generated Megastera Planet"
-    width="281"
-  />
+  <a href="docs/media/megastera-trailer.mp4">
+    <img
+      src="docs/media/megastera-trailer-preview.gif"
+      alt="Megastera trailer: buy a Megapot ticket, reveal a Planet, and build your collection. Click to watch with sound."
+      width="720"
+    />
+  </a>
+  <p><a href="docs/media/megastera-trailer.mp4">▶ Watch the trailer with sound</a> · 11 seconds · 1080p</p>
 </div>
 
 Megastera is a live space tycoon on Base where every eligible Megapot ticket becomes persistent game progression. The ticket still enters the real Megapot drawing; its confirmed onchain receipt also generates a unique Planet that mines minerals, can be upgraded, reacts to future drawings, and competes on the seasonal leaderboard.
