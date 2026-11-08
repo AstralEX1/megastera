@@ -14,7 +14,6 @@
       width="720"
     />
   </a>
-  <p><a href="docs/media/megastera-trailer.mp4">▶ Watch the trailer with sound</a> · 11 seconds · 1080p</p>
 </div>
 
 Megastera is a live space tycoon on Base where every eligible Megapot ticket becomes persistent game progression. The ticket still enters the real Megapot drawing; its confirmed onchain receipt also generates a unique Planet that mines minerals, can be upgraded, reacts to future drawings, and competes on the seasonal leaderboard.
