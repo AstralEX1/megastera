@@ -1,12 +1,11 @@
 <div align="center">
+  <a href="https://x.com/megapot/status/2092721588269396189"><img src="https://img.shields.io/badge/%F0%9F%A5%87%201st%20place-Megapot%20Track%20%C2%B7%20Inco%20%C3%97%20Megapot%20Game%20Jam-8D6B13?style=for-the-badge&labelColor=171923" alt="1st place, Megapot Track, Inco × Megapot Summer Game Jam" /></a>
   <h1>Megastera</h1>
   <p><strong>One Megapot ticket. Two outcomes: a shot at the jackpot and a Planet that keeps playing.</strong></p>
   <p>
     <a href="https://megastera.vercel.app"><img src="https://img.shields.io/badge/Play-Megastera-6C5CE7?style=for-the-badge" alt="Play Megastera" /></a>
     <a href="https://x.com/MegasteraGame"><img src="https://img.shields.io/badge/Follow-@MegasteraGame-000000?style=for-the-badge&logo=x&logoColor=white" alt="Follow Megastera on X" /></a>
-    <a href="https://x.com/AstralEX163/status/2088334372063654047"><img src="https://img.shields.io/badge/Watch-Game_Review-1DA1F2?style=for-the-badge" alt="Watch the Megastera game review" /></a>
-    <a href="https://x.com/megapot/status/2092721588269396189"><img src="https://img.shields.io/badge/INCO%20%C3%97%20MEGAPOT%20GAME%20JAM-MEGAPOT%20TRACK%20%C2%B7%201ST%20PLACE-8D6B13?style=for-the-badge&labelColor=171923" alt="Megapot Track 1st Place — Inco × Megapot Summer Game Jam" /></a>
-  </p>
+    <a href="https://x.com/AstralEX163/status/2088334372063654047"><img src="https://img.shields.io/badge/Watch-Game_Review-1DA1F2?style=for-the-badge" alt="Watch the Megastera game review" /></a>  </p>
   <a href="docs/media/megastera-trailer.mp4">
     <img
       src="docs/media/megastera-trailer-preview.gif"
